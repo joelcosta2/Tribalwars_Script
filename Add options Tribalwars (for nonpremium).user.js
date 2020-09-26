@@ -3,6 +3,8 @@
 // @version      1.6.0
 // @description  NavigationArrors; VillagesList; NotesOnVillage (in progress)
 // @author       kilwilll
+// @updateURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
+// @downloadURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
 // @include https://pt*.tribalwars.com.pt/*
 // ==/UserScript==
 (function() {
