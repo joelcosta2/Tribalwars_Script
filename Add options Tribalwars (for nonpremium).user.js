@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Add options Tribalwars (for nonpremium)
-// @version      1.6.0
+// @version      1.6.1
 // @description  NavigationArrors; VillagesList; NotesOnVillage (in progress)
 // @author       kilwilll
 // @updateURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
