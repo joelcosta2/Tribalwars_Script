@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Add options Tribalwars (for nonpremium)
-// @version      1.6.3
-// @description  Assets available: Village Navigation Arrors; Villages List on the right collumn; NotesOnVillage (in progress)
+// @version      1.6.1
+// @description  Assets working: Village Navigation Arrors; Villages List on the right collumn; NotesOnVillage (in progress)
 // @author       kilwilll
 // @updateURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
 // @downloadURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
