@@ -13,14 +13,17 @@
     //GLOBAL VARIABLES
     //false/true: toggle the assets visibility
     var villageNavigationArrows = true;
-    var mostrarListaAldeias = false;
+    var mostrarListaAldeias = true;
     var usarAtalhosTrocarAldeias = true;
     var mostrarNotes = true;
     var date = new Date();
 
-    var villageList = {
-        '001 - Valhalla': '....'
-    };
+    var TEST_MODE = false;
+
+    var villageList = [
+        { name: '001 - The', url: 'https://pt97.tribalwars.com.pt/game.php?screen=main&village=21147' },
+    ];
+
     var jsonFromCookies,
         currentURL = document.location.href,
         currentVilageIndex,
@@ -33,15 +36,15 @@
         listenTextAreas();
         var urlPage = document.location.href;
 
-        if (jsonFromCookies) {
-            villageList = JSON.parse(jsonFromCookies);
+        if (jsonFromCookies || TEST_MODE) {
+            villageList = jsonFromCookies ? JSON.parse(jsonFromCookies) : villageList;
             setCookieCurrentVillage();
             if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
-                //so na pagina overview
+                //only overview page
                 insertVillagesListColumn();
                 setNotesOverview();
             }
-            //em todas as paginas
+            //all pages
             insertNavigationArrows();
             defineKeyboardShortcuts();
 
@@ -85,6 +88,7 @@
         var currentCookieValue = getCookie('vilagges_notes');
         var notesArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
         notesArray[currentVilageIndex] = textToSave;
+        debugger;
         var jsonToSave = JSON.stringify(notesArray);
         setCookie('vilagges_notes', jsonToSave, 100000000000000);
         toggleElement('note_body_edit');
@@ -207,7 +211,7 @@
             rightlColoumn.innerHTML = htmlInject + rightlColoumn.innerHTML;
 
             var minVillagesList = document.getElementById('mini_list_villages');
-            minNotes.onclick = function () { VillageOverview.toggleWidget('mini_list_villages', this); };
+            minVillagesList.onclick = function () { VillageOverview.toggleWidget('show_villages', this); };
         }
     }
 
