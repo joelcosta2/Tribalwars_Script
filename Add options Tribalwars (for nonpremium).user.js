@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Add options Tribalwars (for nonpremium)
-// @version      1.6.3
+// @version      1.6.4
 // @description  Assets available: Village Navigation Arrors; Villages List on the right collumn; NotesOnVillage (in progress)
 // @author       kilwilll
 // @updateURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Add%20options%20Tribalwars%20(for%20nonpremium).user.js
@@ -18,7 +18,7 @@
     var mostrarNotes = true;
     var date = new Date();
 
-    var TEST_MODE = false;
+    var TEST_RUN = true;
 
     var villageList = [
         { name: '001 - The', url: 'https://pt97.tribalwars.com.pt/game.php?screen=main&village=21147' },
@@ -36,15 +36,15 @@
         listenTextAreas();
         var urlPage = document.location.href;
 
-        if (jsonFromCookies || TEST_MODE) {
+        if (jsonFromCookies || TEST_RUN) {
             villageList = jsonFromCookies ? JSON.parse(jsonFromCookies) : villageList;
             setCookieCurrentVillage();
             if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
-                //only overview page
+                //so na pagina overview
                 insertVillagesListColumn();
                 setNotesOverview();
             }
-            //all pages
+            //em todas as paginas
             insertNavigationArrows();
             defineKeyboardShortcuts();
 
@@ -59,6 +59,26 @@
 
     }
 
+    //Utils
+    function setCookieCurrentVillage() {
+        var str = currentURL;
+        var temp = str.indexOf("="),
+            temp2 = str.indexOf("&", temp),
+            villageID = str.slice(temp + 1, temp2);
+
+        var i = 0,
+            villgersNum = sizeOfObject(villageList);
+
+        for (i = 0; i < villgersNum; i++) {
+            var urlTemp = villageList[i].url;
+            if (urlTemp.includes(villageID)) {
+                currentVilageIndex = i;
+                setCookie('current_vilage', currentVilageIndex, 1000000000000);
+                return;
+            }
+        }
+    }
+
     function toggleElement(element) {
         var elementToToggle = document.getElementById(element);
         if (elementToToggle.style.display === 'none') {
@@ -68,61 +88,6 @@
         }
         console.log("abre-te sesamo", elementToToggle);
     }
-
-    function loadNote() {
-        var cookieNotesJson = getCookie('vilagges_notes');
-        var notesArray = cookieNotesJson ? JSON.parse(cookieNotesJson) : [];
-        var textToShow = notesArray[currentVilageIndex];
-        if (textToShow !== '') {
-            // village_note_script show this
-            toggleElement('village_note_script');
-            //set text to village-note-body_script
-            var textPlacer = document.getElementById('village-note-body_script');
-            textPlacer.textContent = textToShow;
-
-        }
-    }
-
-    function saveNote() {
-        var textToSave = document.getElementById('message_note_script').value;
-        var currentCookieValue = getCookie('vilagges_notes');
-        var notesArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
-        notesArray[currentVilageIndex] = textToSave;
-        debugger;
-        var jsonToSave = JSON.stringify(notesArray);
-        setCookie('vilagges_notes', jsonToSave, 100000000000000);
-        toggleElement('note_body_edit');
-        loadNote();
-        toggleElement('edit_notes_link_script');
-    }
-
-    function openEditModeNote() {
-        listenTextAreas();
-        var currentCookieValue = getCookie('vilagges_notes');
-        var notesArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
-        document.getElementById('message_note_script').value = notesArray[currentVilageIndex];
-        toggleElement('note_body_edit');
-        document.getElementById('village_note_script').style.display = 'none';
-        document.getElementById('edit_notes_link_script').style.display = 'none';
-    }
-
-    function setNotesOverview() {
-        if (mostrarNotes) {
-            var leftColoumn = document.getElementById('leftcolumn');
-            var htmlInject = '<div id="show_notes_script" class="vis moveable widget "><h4 class="head with-button ui-sortable-handle"><img id="mini_notes_script" class="widget-button" src="graphic/minus.png">Bloco de notas</h4><div class="widget_content" style="display: block;"><table width="100%"><tbody><tr id="village_note_script" style="display:none;"><td><div class="village-note"><div id="village-note-body_script" style="white-space: pre-wrap;" class="village-note-body"></div></div></td></tr><tr id="note_body_edit" style="display:none"><td><div class="village-note"><div style="width:100%; overflow:hidden;"><div><textarea id="message_note_script" name="note" style="width:97%;" rows="10" cols="40"></textarea></div><div><a id="note_submit_button_script" class="btn btn-default">Guardar</a></div></div><div class="village-note-body"></div></div></td></tr><tr><td><a id="edit_notes_link_script">» Editar</a></td></tr></tbody></table></div></div>'
-            leftColoumn.innerHTML = htmlInject + leftColoumn.innerHTML;
-
-            var editButton = document.getElementById('edit_notes_link_script');
-            var btnSaveNote = document.getElementById('note_submit_button_script');
-            var minNotes = document.getElementById('mini_notes_script');
-
-            minNotes.onclick = function () { VillageOverview.toggleWidget('show_notes_script', this); };
-            editButton.onclick = function () { openEditModeNote() };
-            btnSaveNote.onclick = function () { saveNote() };
-            loadNote();
-        }
-    }
-
 
     function listenTextAreas() {
         // get all inputs || textareas
@@ -186,7 +151,9 @@
         return size;
     }
 
-    function getVillagesHTML() {
+
+    //Village List
+    function getVillagesDataURL() {
         var i = 0,
             villgersNum = sizeOfObject(villageList);
 
@@ -204,7 +171,7 @@
     function insertVillagesListColumn() {
         if (mostrarListaAldeias) {
             var rightlColoumn = document.getElementById('rightcolumn');
-            var villagesDataUrl = getVillagesHTML();
+            var villagesDataUrl = getVillagesDataURL();
             var villagersHtmlInject = "<div style='display: block'><table id='vilage_overview_table' class='vis bordered-table' width='100%' style='vertical-align: middle;'><tbody>" + villagesDataUrl + "</tbody></table></div>"
             var htmlInject = '<div id="show_villages" class="vis moveable hidden_widget"><h4 class="head with-button"><img id="mini_list_villages" class="widget-button" src="graphic/minus.png">Aldeias</h4>' + villagersHtmlInject + '</div></div>';
 
@@ -215,6 +182,8 @@
         }
     }
 
+    
+    // Villages Arrows
     function prepareLinkToArrows(goToUrl) {
         var str = currentURL,
             temp = str.indexOf("="),
@@ -231,25 +200,6 @@
         var FINALURL = urlFirst + villagenumber + urlLast;
 
         return FINALURL;
-    }
-
-    function setCookieCurrentVillage() {
-        var str = currentURL;
-        var temp = str.indexOf("="),
-            temp2 = str.indexOf("&", temp),
-            villageID = str.slice(temp + 1, temp2);
-
-        var i = 0,
-            villgersNum = sizeOfObject(villageList);
-
-        for (i = 0; i < villgersNum; i++) {
-            var urlTemp = villageList[i].url;
-            if (urlTemp.includes(villageID)) {
-                currentVilageIndex = i;
-                setCookie('current_vilage', currentVilageIndex, 1000000000000);
-                return;
-            }
-        }
     }
 
     function nextVillage() {
@@ -286,6 +236,61 @@
 
             leftArrowContainer.onclick = function () { previousVillage() };
             rightArrowContainer.onclick = function () { nextVillage() };
+        }
+    }
+
+    
+    // Notes Module
+    function loadNote() {
+        var cookieNotesJson = getCookie('vilagges_notes');
+        var notesArray = cookieNotesJson ? JSON.parse(cookieNotesJson) : [];
+        var textToShow = notesArray[currentVilageIndex];
+        if (textToShow !== '') {
+            // village_note_script show this
+            toggleElement('village_note_script');
+            //set text to village-note-body_script
+            var textPlacer = document.getElementById('village-note-body_script');
+            textPlacer.textContent = textToShow;
+
+        }
+    }
+
+    function saveNote() {
+        var textToSave = document.getElementById('message_note_script').value;
+        var currentCookieValue = getCookie('vilagges_notes');
+        var notesArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
+        notesArray[currentVilageIndex] = textToSave;
+        var jsonToSave = JSON.stringify(notesArray);
+        setCookie('vilagges_notes', jsonToSave, 100000000000000);
+        toggleElement('note_body_edit');
+        loadNote();
+        toggleElement('edit_notes_link_script');
+    }
+
+    function openEditModeNote() {
+        listenTextAreas();
+        var currentCookieValue = getCookie('vilagges_notes');
+        var notesArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
+        document.getElementById('message_note_script').value = notesArray[currentVilageIndex];
+        toggleElement('note_body_edit');
+        document.getElementById('village_note_script').style.display = 'none';
+        document.getElementById('edit_notes_link_script').style.display = 'none';
+    }
+
+    function setNotesOverview() {
+        if (mostrarNotes) {
+            var leftColoumn = document.getElementById('leftcolumn');
+            var htmlInject = '<div id="show_notes_script" class="vis moveable widget "><h4 class="head with-button ui-sortable-handle"><img id="mini_notes_script" class="widget-button" src="graphic/minus.png">Bloco de notas</h4><div class="widget_content" style="display: block;"><table width="100%"><tbody><tr id="village_note_script" style="display:none;"><td><div class="village-note"><div id="village-note-body_script" style="white-space: pre-wrap;" class="village-note-body"></div></div></td></tr><tr id="note_body_edit" style="display:none"><td><div class="village-note"><div style="width:100%; overflow:hidden;"><div><textarea id="message_note_script" name="note" style="width:97%;" rows="10" cols="40"></textarea></div><div><a id="note_submit_button_script" class="btn btn-default">Guardar</a></div></div><div class="village-note-body"></div></div></td></tr><tr><td><a id="edit_notes_link_script">» Editar</a></td></tr></tbody></table></div></div>'
+            leftColoumn.innerHTML = htmlInject + leftColoumn.innerHTML;
+
+            var editButton = document.getElementById('edit_notes_link_script');
+            var btnSaveNote = document.getElementById('note_submit_button_script');
+            var minNotes = document.getElementById('mini_notes_script');
+
+            minNotes.onclick = function () { VillageOverview.toggleWidget('show_notes_script', this); };
+            editButton.onclick = function () { openEditModeNote() };
+            btnSaveNote.onclick = function () { saveNote() };
+            loadNote();
         }
     }
 

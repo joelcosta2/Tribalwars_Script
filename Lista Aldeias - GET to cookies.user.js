@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Lista Aldeias - GET to cookies
-// @version      1.1
-// @description  kilwilll LDA.
+// @version      1.2
+// @description  This script is used to read the villages info (for now is the only way to for me to get the info to use in the other script)
 // @author       kilwilll
 // @include https://pt*.tribalwars.com.pt/*screen=overview_villages
 // ==/UserScript==
@@ -28,8 +28,8 @@
         var i = 0;
 
         for (i = 1; i < numVillages; i++) {
-            var url = eachRow[i].getElementsByTagName('td')[0].getElementsByTagName('span')[0].getElementsByTagName('span')[0].getElementsByTagName('a')[0].href; //url;
-            var name = eachRow[i].getElementsByTagName('td')[0].getElementsByTagName('span')[0].getElementsByTagName('span')[0].getElementsByTagName('a')[0].getElementsByTagName('span')[0].innerText;;
+            var url = eachRow[i].getElementsByTagName('td')[0].getElementsByTagName('span')[0].getElementsByTagName('span')[0].getElementsByTagName('a')[0].href;
+            var name = eachRow[i].getElementsByTagName('td')[0].getElementsByTagName('span')[0].getElementsByTagName('span')[0].getElementsByTagName('a')[0].getElementsByTagName('span')[0].innerText;
             var temp = {
                 name: name.split("(")[0],
                 url: url
