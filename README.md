@@ -2,20 +2,24 @@
 
 ## Description
 
-Scripts para o jogo Tribalwars.
-Adiciona extras que seriam apenas para premiun users. E talvez outras opçoes.
+Tribalwars_Script is a collection of scripts designed to enhance the gaming experience in Tribalwars. These scripts provide additional features that are typically available only to premium users, along with other useful options.
 
 ## Key Features
 
-- setas de mudança de aldeias
-- Lista de aldeias para facil seleção
-- Notas por aldeia
+- **Arrows for Changing Villages:** Navigate between villages more efficiently with arrow controls.
+- **Village List for Easy Selection:** Access a convenient list of villages for quick selection.
+- **Notes for Each Village:** Keep track of important details by adding notes to individual villages.
 
 ## How to Use
-Estes scripts foram feitos para ser usados com o Tampermonker "hiperlink-para-tampermonkey".
 
-1. No tampermonkey navegue at the "Utilities" tab 
-2. No input field named "URL" insert: "https://github.com/joelcosta2/Tribalwars_Script/archive/refs/heads/master.zip"
-3. Click "Install"
-4. Click "Import"
+These scripts are intended for use with Tampermonkey, a popular userscript manager for web browsers.
+
+1. **Install Tampermonkey:** If you haven't already, install the [Tampermonkey extension](https://www.tampermonkey.net/) for your web browser.
+2. **Install the Script:**
+   - Open Tampermonkey and navigate to the "Utilities" tab.
+   - In the "Import from URL" field, paste the following link: `https://github.com/joelcosta2/Tribalwars_Script/archive/refs/heads/master.zip`.
+   - Click "Install" to add the script to Tampermonkey.
+3. **Import the Script:** After installation, click "Import" to import the script into Tampermonkey.
+
+Enjoy the enhanced features while playing Tribalwars!
 
