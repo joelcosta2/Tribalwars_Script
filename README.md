@@ -21,5 +21,10 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
    - Click "Install" to add the script to Tampermonkey.
 3. **Import the Script:** After installation, click "Import" to import the script into Tampermonkey.
 
+## Notes
+This functionalities only work on the browser, and only tested with only one account/world. Maybe in the future I will add support for multiple accounts or worlds. All the information is saved on the browser cookies. 
+Currently there are a few bugs, the columns, where the new assets are added, lose the hover function on some cases.
+
+
 Enjoy the enhanced features while playing Tribalwars!
 
