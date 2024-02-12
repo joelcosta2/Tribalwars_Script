@@ -62,7 +62,7 @@ var assetsInjectFunctions = {
     'extra_building_queue': injectBuildQueueExtraList,
 };
 
-var currentURL = document.location.href,
+var currentURL,
     currentVillageIndex,
     textSelected;
 function setCookieCurrentVillage() {

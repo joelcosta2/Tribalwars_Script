@@ -16,6 +16,8 @@
 (function () {
     'use strict';
 
+    currentURL = document.location.href;
+
     $.ajax({
         'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
         'type': 'GET',
