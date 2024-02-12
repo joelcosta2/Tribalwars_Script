@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Lista Aldeias - GET to cookies
+// @name         List Villages - GET to cookies
 // @version      1.1
 // @description  kilwilll LDA.
 // @author       kilwilll
-// @updateURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Lista%20Aldeias%20-%20GET%20to%20cookies.user.js
-// @downloadURL https://github.com/joelcosta2/Tribalwars_Script/raw/master/Lista%20Aldeias%20-%20GET%20to%20cookies.user.js
+// @updateURL    https://github.com/joelcosta2/Tribalwars_Script/raw/master/fetchVillagesInfoList.user.js
+// @downloadURL  https://github.com/joelcosta2/Tribalwars_Script/raw/master/fetchVillagesInfoList.user.js
 // @include https://pt*.tribalwars.com.pt/*screen=overview_villages
 // ==/UserScript==
 (function () {
