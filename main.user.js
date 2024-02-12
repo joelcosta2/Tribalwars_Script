@@ -3,12 +3,12 @@
 // @version      2.8.4
 // @description  Assets available: Village Navigation Arrors; Adds a new column on the left of the main screen with: Village List, Notepad and Extra Build Queue(experimental)
 // @author       kilwilll
-// @require      navigationArrows_script.js
-// @require      villageList_script.js
-// @require      notepad_script.js
-// @require      extraBuildQueue_script.js
-// @require      utils.js
-// @require      map_script.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/navigationArrows_script.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/villageList_script.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/notepad_script.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/extraBuildQueue_script.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/map_script.js
 // @updateURL    https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
 // @downloadURL  https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
 // @include https://pt*.tribalwars.com.pt/*
