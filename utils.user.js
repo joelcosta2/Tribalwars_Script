@@ -66,6 +66,7 @@ var currentURL = document.location.href,
     currentVillageIndex,
     textSelected;
 function setCookieCurrentVillage() {
+    if (TEST_RUN) { debugger; }
     var str = currentURL;
     var temp = str.indexOf("="),
         temp2 = str.indexOf("&", temp),
