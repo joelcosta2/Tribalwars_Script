@@ -62,16 +62,14 @@ var assetsInjectFunctions = {
     'extra_building_queue': injectBuildQueueExtraList,
 };
 
-var currentURL,
-    currentVillageIndex,
+var currentVillageIndex,
     textSelected;
 function setCookieCurrentVillage() {
     if (TEST_RUN) { debugger; }
-    var str = currentURL;
+    var str = document.location.href;
     var temp = str.indexOf("="),
         temp2 = str.indexOf("&", temp),
-        villageID = str.slice(temp + 1, temp2),
-        currentURL = document.location.href;
+        villageID = str.slice(temp + 1, temp2);
 
     var i = 0,
         villgersNum = sizeOfObject(villageList);

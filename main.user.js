@@ -38,7 +38,6 @@
     });
 
     function init() {
-        currentURL = document.location.href;
         villageList = getCookie('villages_show') ? JSON.parse(getCookie('villages_show')) : villageList;
         settings_cookies = getCookie('settings_cookies') ? JSON.parse(getCookie('settings_cookies')) : settings_cookies;
         build_queue = getCookie('build_queue') ? JSON.parse(getCookie('build_queue')) : build_queue;

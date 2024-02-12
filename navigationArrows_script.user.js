@@ -1,6 +1,6 @@
 // Villages Arrows
 function prepareLinkToArrows(goToUrl) {
-    var str = currentURL,
+    var str = document.location.href,
         temp = str.indexOf("="),
         temp2 = str.indexOf("&", temp),
         urlFirst = str.slice(0, temp + 1),
