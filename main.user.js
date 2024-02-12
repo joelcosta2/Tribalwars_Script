@@ -3,11 +3,11 @@
 // @version      2.8.4
 // @description  Assets available: Village Navigation Arrors; Adds a new column on the left of the main screen with: Village List, Notepad and Extra Build Queue(experimental)
 // @author       kilwilll
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/navigationArrows_script.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/villageList_script.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/notepad_script.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/extraBuildQueue_script.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/map_script.user.js
 // @updateURL    https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
 // @downloadURL  https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
@@ -15,71 +15,6 @@
 // ==/UserScript==
 (function () {
     'use strict';
-
-    //GLOBAL VARIABLES
-    //false/true: toggle the assets visibility
-    var villageNavigationArrows = true;
-    var showVillagesList = true;
-    var usarAtalhosTrocarAldeias = true;
-    var showNotepad = true;
-    var showExtraBuildingQueue = true;
-
-    var TEST_RUN = true;  //set true to run the script in test mode
-    var USE_SCRIPT_COLUMN = true;  // create a column on the left side of the main screen
-    var COLUMN_ASSETS = "script_column";  //column where add the assets: rightcolumn || leftcolumn || script_column
-    var RIGHT_COLUMN = "rightcolumn";
-    var CENTER_COLUMN = "leftcolumn";
-    var LEFT_COLUMN = "script_column";
-
-    var upgradesAvailableUrls = [];
-    var upgradesAvailablesLevels = [];
-    // Criar as linhas e colunas da tabela
-    var availableSettings = [
-        { name: 'feature_share_status', label: 'Partilhar o estado Premium', description: 'Permitir que os membros da tribo vejam se tem funcionalidades premium activas.' },
-        { name: 'ally_share_units', label: 'Partilhar tropas próprias', description: 'Permita que a aristocracia da tribo veja suas tropas nas suas aldeias.' },
-        // Adicionar mais configurações conforme necessário
-    ];
-    var villageList = [
-        { name: '001 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
-        { name: '001 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
-    ];
-
-    var settings_cookies = {
-        assets: [
-            {
-                name: 'village_list',
-                column: LEFT_COLUMN,
-                pos: 0,
-                open: true
-            },
-            {
-                name: 'notepad',
-                column: LEFT_COLUMN,
-                pos: 1,
-                open: true
-            },
-            {
-                name: 'extra_building_queue',
-                column: LEFT_COLUMN,
-                pos: 2,
-                open: true
-            }
-        ]
-    };
-
-    var build_queue = [
-        'wood1', 'main2', 'smith3', 'main3'
-    ]
-
-    var assetsInjectFunctions = {
-        'village_list': injectVillagesListColumn,
-        'notepad': injectNotepadOveriew,
-        'extra_building_queue': injectBuildQueueExtraList,
-    };
-
-    var currentURL = document.location.href,
-        currentVillageIndex,
-        textSelected;
 
     $.ajax({
         'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
@@ -251,9 +186,6 @@
     function loadSetting() {
 
     }
-
-
-
 
     //Override the sortable update function from Tribalwars
     var originalSortableUpdate = $("#overviewtable").sortable("option", "update");
