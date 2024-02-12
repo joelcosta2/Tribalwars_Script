@@ -16,8 +16,6 @@
 (function () {
     'use strict';
 
-    currentURL = document.location.href;
-
     $.ajax({
         'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
         'type': 'GET',
@@ -40,6 +38,7 @@
     });
 
     function init() {
+        currentURL = document.location.href;
         villageList = getCookie('villages_show') ? JSON.parse(getCookie('villages_show')) : villageList;
         settings_cookies = getCookie('settings_cookies') ? JSON.parse(getCookie('settings_cookies')) : settings_cookies;
         build_queue = getCookie('build_queue') ? JSON.parse(getCookie('build_queue')) : build_queue;
