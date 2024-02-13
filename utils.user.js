@@ -21,7 +21,11 @@ var upgradesAvailablesLevels = [];
 // Criar as linhas e colunas da tabela
 var availableSettings = [
     { name: 'feature_share_status', label: 'Partilhar o estado Premium', description: 'Permitir que os membros da tribo vejam se tem funcionalidades premium activas.' },
-    { name: 'ally_share_units', label: 'Partilhar tropas próprias', description: 'Permita que a aristocracia da tribo veja suas tropas nas suas aldeias.' },
+    { name: 'show__village_list', label: 'Mostrar lista de aldeias', description: 'Mostrar lista de aldeias no main screen' },
+    { name: 'show__navigation_arrows', label: 'Usar setas de navegação', description: 'Usar setas de navegação' },
+    { name: 'show__notepad', label: 'Mostrar notepad', description: 'Mostrar notepad' },
+    { name: 'show__extra_building_queue', label: 'Mostrar extra building queue', description: 'Mostrar extra building queue' },
+    { name: 'show__extra_options_map_hover', label: 'Mostrar extra options map hover', description: 'Mostrar extra options map hover' },
     // Adicionar mais configurações conforme necessário
 ];
 var villageList = [
@@ -65,7 +69,6 @@ var assetsInjectFunctions = {
 var currentVillageIndex,
     textSelected;
 function setCookieCurrentVillage() {
-    if (TEST_RUN) { debugger; }
     var str = document.location.href;
     var temp = str.indexOf("="),
         temp2 = str.indexOf("&", temp),

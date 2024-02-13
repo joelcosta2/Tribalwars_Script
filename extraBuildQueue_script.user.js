@@ -1,13 +1,8 @@
 
 // Build Extra List
 function initializeBuilderInfo() {
-    var villageBuilderid = getVillageBuilderid();
+    var villageBuilderid = game_data.csrf;
     setCookie('village_builder_id', villageBuilderid, 30);
-}
-
-function getVillageBuilderid() {
-    var builderid = document.getElementsByClassName('btn-cancel')[0].href.split('h=')[1].split('&')[0];
-    return builderid;
 }
 
 function addToBuildQueue(build_id) {

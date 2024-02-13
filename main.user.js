@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Script Extra Assets Premiun
-// @version      2.8.4
+// @version      2.9.5
 // @description  Assets available: Village Navigation Arrors; Adds a new column on the left of the main screen with: Village List, Notepad and Extra Build Queue(experimental)
 // @author       kilwilll
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.user.js
@@ -50,6 +50,7 @@
                 if (USE_SCRIPT_COLUMN) {
                     injectScriptColumn();
                 }
+
                 var sortedKeys = settings_cookies.assets.sort(function (a, b) {
                     return a.pos - b.pos;
                 });

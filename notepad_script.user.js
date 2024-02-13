@@ -3,14 +3,12 @@
 function loadNote() {
     var cookieNotepadJson = getCookie('vilagges_notepad');
     var notepadArray = cookieNotepadJson ? JSON.parse(cookieNotepadJson) : [];
-    var textToShow = notepadArray[currentVillageIndex];
+    var notepadText = notepadArray[currentVillageIndex];
 
-    if (textToShow !== '') {
-        // village_note_script show this
+    if (notepadText !== '') {
         toggleElement('village_note_script');
-        //set text to village-note-body_script
         var textPlacer = document.getElementById('village-note-body_script');
-        textPlacer.textContent = textToShow;
+        textPlacer.textContent = notepadText;
 
     }
 }
@@ -39,15 +37,11 @@ function openEditModeNote() {
 
 function injectNotepadOveriew(columnToUse) {
     if (showNotepad) {
-        // Criação do botão "Editar"
         var editLink = document.createElement('a');
         editLink.id = 'edit_notepad_link_script';
         editLink.textContent = '» Editar';
-        editLink.onclick = function () {
-            openEditModeNote();
-        };
+        editLink.addEventListener('click', openEditModeNote);
 
-        // Criação da área de texto para a nota e do botão "Guardar"
         var noteTextarea = document.createElement('textarea');
         noteTextarea.id = 'message_note_script';
         noteTextarea.name = 'note';
@@ -59,9 +53,7 @@ function injectNotepadOveriew(columnToUse) {
         saveButton.id = 'note_submit_button_script';
         saveButton.className = 'btn btn-default';
         saveButton.textContent = 'Guardar';
-        saveButton.onclick = function () {
-            saveNote();
-        };
+        saveButton.addEventListener('click', saveNote);
 
         // Criação da estrutura da tabela
         var table = document.createElement('table');

@@ -25,11 +25,8 @@ function injectVillagesListColumn(columnToUse) {
         table.width = '100%';
         table.style.verticalAlign = 'middle';
 
-        // Criação do corpo da tabela
         var tbody = document.createElement('tbody');
-        tbody.innerHTML = villagesDataUrl; // Adiciona os dados diretamente ao corpo da tabela
-
-        // Anexa o corpo da tabela à tabela
+        tbody.innerHTML = villagesDataUrl;
         table.appendChild(tbody);
 
         createAssetElement('Village List', table, columnToUse);
