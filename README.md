@@ -2,25 +2,27 @@
 
 ## Description
 
-Tribalwars_Script is a collection of scripts designed to enhance the gaming experience in Tribalwars. These scripts provide additional features that are typically available only to premium users, along with other useful options. A new column has been added to the left of the main screen, and new assets added by this script will remember their position on the main screen.
+Tribalwars_Script is a collection of scripts designed to enhance the gaming experience in Tribalwars. These scripts provide additional features that are typically available only to premium users, along with other useful options. A new column on the left of the main screen has been added. New assets added by this script will remember the position on the main screen.
 
 ## Key Features
 
-- **Arrows for Changing Villages:** Navigate between villages more efficiently with arrow controls.
+- **Arrows for Changing Villages:** Seamlessly navigate between villages using intuitive arrow controls.
 
   ![Arrows for Changing Villages](images/arrows_example.png)
 
-- **Village List for Easy Selection:** Access a convenient list of villages for quick selection.
+- **Village List for Easy Selection:** Quickly access a comprehensive list of villages for efficient selection.
 
   ![Village List for Easy Selection](images/village_list_example.png)
 
-- **Notes for Each Village:** Keep track of important details by adding notes to individual villages.
+- **Notes for Each Village:** Stay organized by adding important notes to individual villages for easy reference.
 
   ![Notes for Each Village](images/notes_example.png)
 
-- **Extra Village Information on Map Hover:** Get additional village information on hover on the map, including details such as the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
+- **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
 
   ![Extra Village Information on Map Hover](images/extra_info_example.png)
+
+- **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (WIP: just placeholders at the moment)
 
 ## How to Use
 
@@ -35,10 +37,10 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 
 ## Notes
 
-- These functionalities only work in the browser and have only been tested with one account/world. Support for multiple accounts or worlds may be added in the future.
+- These functionalities only work on the browser and have only been tested with one account/world. Support for multiple accounts or worlds may be added in the future.
 - All information is saved in browser cookies.
-- The default TW assets on the main screen currently do not retain their position after a refresh (bug to fix).
-- Some information is fetched from an AJAX call to the corresponding page. For example, to retrieve information on village hover (regarding last attacks info), the script will fetch the page for that specific report and extract the information to display on the map. I'm currently working on reducing the number of calls to prevent detection by the TW bot-catching tool and decrease the likelihood of a ban.
-- By the way, I'm not responsible for any bans resulting from using this script. It is intended to be used in moderation to enhance the gameplay of a casual player without any intention of gaining an advantage over other players.
+- The default TW assets on the main screen currently are not able to keep the position after refresh. (Bug to fix)
+- Some information is fetched from an AJAX call to the corresponding page, for example, to get the information on village hover (regarding last attacks info) this will get the page to that specific report and scrap the info out of it to show on the map. I'm currently trying to decrease the number of calls to prevent the bot catch tool from TW and diminish the probability of ban.
+- By the way, I'm not responsible for any ban resulting from the use of this script. It is intended to be used moderately to increase the gameplay of a casual player without any intention of gaining an advantage over other players.
 
 Enjoy the enhanced features while playing Tribalwars!
