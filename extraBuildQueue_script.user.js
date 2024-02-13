@@ -49,6 +49,21 @@ function getBuildQueueElement(update) {
     return td;
 }
 
+
+function callUpgradeBuilding(url) {
+    $.ajax({
+        'url': url,
+        'type': 'GET',
+        'success': function (data) {
+            var tempElement = document.createElement('div');
+            tempElement.innerHTML = data;
+            var success = tempElement.querySelector('.autoHideBox');
+            debugger;
+
+        }
+    });
+}
+
 function injectBuildQueueExtraList(columnToUse) {
     if (showExtraBuildingQueue) {
         var visualBuildingElements = document.getElementById("show_summary").getElementsByClassName("visual-building");
@@ -128,7 +143,7 @@ function injectBuildQueueExtraList(columnToUse) {
 
             var textLink = document.createElement('a');
             textLink.href = '/game.php?village=' + game_data.village.id + '&screen=' + id;
-            textLink.textContent = id + upgradesAvailablesLevels[index];
+            textLink.textContent = document.querySelector('.visual-label-' + id).getAttribute('data-title');
             cell.appendChild(textLink);
 
             var br = document.createElement('br');
@@ -136,7 +151,10 @@ function injectBuildQueueExtraList(columnToUse) {
 
             // Create the link for upgrading the building
             var upgradeLink = document.createElement('a');
-            upgradeLink.href = '/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + otherClasses[index] + '&type=main&h=' + 'toChange_token_buildilg';
+            upgradeLink.addEventListener('click', function () {
+                callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf);
+            })
+            //upgradeLink.href = '/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf;
             upgradeLink.className = 'btn current-quest';
             upgradeLink.setAttribute('data-building', id + upgradesAvailablesLevels[index]);
             upgradeLink.setAttribute('data-level-next', upgradesAvailablesLevels[index]);
