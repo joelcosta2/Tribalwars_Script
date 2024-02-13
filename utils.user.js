@@ -69,15 +69,10 @@ var assetsInjectFunctions = {
 var currentVillageIndex,
     textSelected;
 function setCookieCurrentVillage() {
-    var str = document.location.href;
-    var temp = str.indexOf("="),
-        temp2 = str.indexOf("&", temp),
-        villageID = str.slice(temp + 1, temp2);
-
-    var i = 0,
+    var villageID = game_data.village.id,
         villgersNum = sizeOfObject(villageList);
 
-    for (i = 0; i < villgersNum; i++) {
+    for (var i = 0; i < villgersNum; i++) {
         var urlTemp = villageList[i].url;
         if (urlTemp.includes(villageID)) {
             currentVillageIndex = i;

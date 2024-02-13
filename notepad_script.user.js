@@ -55,13 +55,10 @@ function injectNotepadOveriew(columnToUse) {
         saveButton.textContent = 'Guardar';
         saveButton.addEventListener('click', saveNote);
 
-        // Criação da estrutura da tabela
         var table = document.createElement('table');
         table.width = '100%';
-
         var tbody = document.createElement('tbody');
 
-        // Criação da linha para mostrar a nota
         var noteRow = document.createElement('tr');
         noteRow.id = 'village_note_script';
         noteRow.style.display = 'none';
@@ -78,7 +75,6 @@ function injectNotepadOveriew(columnToUse) {
         noteCell.appendChild(noteDiv);
         noteRow.appendChild(noteCell);
 
-        // Criação da linha para editar a nota
         var editRow = document.createElement('tr');
         editRow.id = 'note_body_edit';
         editRow.style.display = 'none';
@@ -105,7 +101,6 @@ function injectNotepadOveriew(columnToUse) {
         editCell.appendChild(editDiv);
         editRow.appendChild(editCell);
 
-        // Criação da linha para o botão "Editar"
         var editButtonRow = document.createElement('tr');
         var editButtonCell = document.createElement('td');
         editButtonCell.appendChild(editLink);

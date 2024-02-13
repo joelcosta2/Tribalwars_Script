@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Script Extra Assets Premiun
-// @version      2.9.5
+// @version      2.10.2
 // @description  Assets available: Village Navigation Arrors; Adds a new column on the left of the main screen with: Village List, Notepad and Extra Build Queue(experimental)
 // @author       kilwilll
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.user.js
@@ -15,27 +15,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-
-    $.ajax({
-        'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
-        'type': 'GET',
-        'success': function (data) {
-            var tempElement = document.createElement('div');
-            tempElement.innerHTML = data;
-            var btnCancelElements = tempElement.querySelectorAll('.btn-cancel:not([style*="display: none"])');
-            var btnBuildElements = tempElement.querySelectorAll('.btn-build:not([style*="display: none"])');
-            var visibleBtnBuildElements = Array.from(btnBuildElements).filter(function (element) {
-                return element.style.display !== 'none';
-            });
-            upgradesAvailableUrls = visibleBtnBuildElements.map(function (element) {
-                return element.href;
-            });
-            upgradesAvailablesLevels = visibleBtnBuildElements.map(function (element) {
-                return element.getAttribute('data-level-next');
-            });
-            init();
-        }
-    });
+    init();
 
     function init() {
         villageList = getCookie('villages_show') ? JSON.parse(getCookie('villages_show')) : villageList;
@@ -47,6 +27,7 @@
         if (getCookie('villages_show') || TEST_RUN) {
             setCookieCurrentVillage();
             if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
+
                 if (USE_SCRIPT_COLUMN) {
                     injectScriptColumn();
                 }
@@ -184,10 +165,6 @@
         document.body.appendChild(popupHelperDiv);
     }
 
-    function loadSetting() {
-
-    }
-
     //Override the sortable update function from Tribalwars
     var originalSortableUpdate = $("#overviewtable").sortable("option", "update");
     $("#overviewtable").sortable("option", "update", function () {
@@ -197,7 +174,4 @@
             originalSortableUpdate.apply(this, arguments);
         }
     });
-
-
-
 })();

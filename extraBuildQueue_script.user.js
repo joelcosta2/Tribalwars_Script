@@ -1,74 +1,12 @@
 
 // Build Extra List
-function initializeBuilderInfo() {
+function initializeBuilderQueueInfo(upgradesAvailableUrls, columnToUse) {
     var villageBuilderid = game_data.csrf;
     setCookie('village_builder_id', villageBuilderid, 30);
-}
 
-function addToBuildQueue(build_id) {
-    build_queue.push(build_id);
-    setCookie('build_queue', JSON.stringify(build_queue), 30);
-    getBuildQueueElement(true);
-}
-
-function removeFromBuildQueue(build_id) {
-    build_queue.splice(build_id, 1);
-    setCookie('build_queue', JSON.stringify(build_queue), 30);
-    getBuildQueueElement(true);
-}
-
-function getBuildQueueElement(update) {
-    var td = document.createElement('td');
-    td.style = '';
-    td.className = '';
-
-    build_queue.forEach(function (id, index) {
-        var anchor = document.createElement('a');
-        anchor.className = '';
-        anchor.onclick = function () {
-            removeFromBuildQueue(index);
-        }
-
-        var span = document.createElement('span');
-        span.className = 'icon header village';
-        span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/b56f49d7/graphic/buildings/mid/' + id + '.png)';
-        span.style.backgroundPosition = '0px 0px';
-        span.style.backgroundSize = 'contain';
-        span.style.backgroundRepeat = 'no-repeat';
-        span.style.width = '24px';
-        span.style.cursor = 'pointer';
-        span.classList.add('tooltip');
-
-        anchor.appendChild(span);
-        td.appendChild(anchor);
-    });
-    if (update) {
-        var extra_build_queue_table_tr = document.getElementById('extra_build_queue_table').getElementsByTagName('tr')[0];
-        extra_build_queue_table_tr.innerHTML = td.outerHTML;
-    }
-    return td;
-}
-
-
-function callUpgradeBuilding(url) {
-    $.ajax({
-        'url': url,
-        'type': 'GET',
-        'success': function (data) {
-            var tempElement = document.createElement('div');
-            tempElement.innerHTML = data;
-            var success = tempElement.querySelector('.autoHideBox');
-            debugger;
-
-        }
-    });
-}
-
-function injectBuildQueueExtraList(columnToUse) {
     if (showExtraBuildingQueue) {
         var visualBuildingElements = document.getElementById("show_summary").getElementsByClassName("visual-building");
         var otherClasses = [];
-        var imageUrls = [];
 
         for (var i = 0; i < visualBuildingElements.length; i++) {
             var allClasses = visualBuildingElements[i].classList;
@@ -77,13 +15,9 @@ function injectBuildQueueExtraList(columnToUse) {
             for (var j = 0; j < allClasses.length; j++) {
                 var currentClass = allClasses[j];
 
-                // Verifica se a classe não é "visual-building"
                 if (currentClass !== "visual-building") {
                     currentClass = currentClass.replace("visual-building-", "");
                     otherClasses.push(currentClass);
-                    var imageUrl = "https://dspt.innogamescdn.com/asset/b56f49d7/graphic/buildings/mid/" + currentClass.replace("visual-building-", "") + ".png";
-                    imageUrls.push(imageUrl);
-                    console.log("%c" + imageUrl, "color: blue; text-decoration: underline; cursor: pointer;");
                 }
             }
         }
@@ -151,9 +85,6 @@ function injectBuildQueueExtraList(columnToUse) {
 
             // Create the link for upgrading the building
             var upgradeLink = document.createElement('a');
-            upgradeLink.addEventListener('click', function () {
-                callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf);
-            })
             //upgradeLink.href = '/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf;
             upgradeLink.className = 'btn current-quest';
             upgradeLink.setAttribute('data-building', id + upgradesAvailablesLevels[index]);
@@ -163,7 +94,8 @@ function injectBuildQueueExtraList(columnToUse) {
             upgradeLink.style.width = '-webkit-fill-available';
             upgradeLink.textContent = 'Nível ' + upgradesAvailablesLevels[index];
             upgradeLink.onclick = function () {
-                addToBuildQueue(buildGraphicId)
+                addToBuildQueue(buildGraphicId);
+                callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf);
             }
 
             var upgradeCell = document.createElement('td');
@@ -180,4 +112,88 @@ function injectBuildQueueExtraList(columnToUse) {
 
         createAssetElement('Extra Building Queue', extraBuildDiv, columnToUse);
     }
+}
+
+function addToBuildQueue(build_id) {
+    build_queue.push(build_id);
+    setCookie('build_queue', JSON.stringify(build_queue), 30);
+    getBuildQueueElement(true);
+}
+
+function removeFromBuildQueue(build_id) {
+    build_queue.splice(build_id, 1);
+    setCookie('build_queue', JSON.stringify(build_queue), 30);
+    getBuildQueueElement(true);
+}
+
+function getBuildQueueElement(update) {
+    var td = document.createElement('td');
+    td.style = '';
+    td.className = '';
+
+    build_queue.forEach(function (id, index) {
+        var anchor = document.createElement('a');
+        anchor.className = '';
+        anchor.onclick = function () {
+            removeFromBuildQueue(index);
+        }
+
+        var span = document.createElement('span');
+        span.className = 'icon header village';
+        span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/b56f49d7/graphic/buildings/mid/' + id + '.png)';
+        span.style.backgroundPosition = '0px 0px';
+        span.style.backgroundSize = 'contain';
+        span.style.backgroundRepeat = 'no-repeat';
+        span.style.width = '24px';
+        span.style.cursor = 'pointer';
+        span.classList.add('tooltip');
+
+        anchor.appendChild(span);
+        td.appendChild(anchor);
+    });
+    if (update) {
+        var extra_build_queue_table_tr = document.getElementById('extra_build_queue_table').getElementsByTagName('tr')[0];
+        extra_build_queue_table_tr.innerHTML = td.outerHTML;
+    }
+    return td;
+}
+
+
+function callUpgradeBuilding(url) {
+    $.ajax({
+        'url': url,
+        'type': 'GET',
+        'success': function (data) {
+            var tempElement = document.createElement('div');
+            tempElement.innerHTML = data;
+            var success = tempElement.querySelector('.autoHideBox');
+
+        }
+    });
+}
+
+function injectBuildQueueExtraList(columnToUse) {
+
+    $.ajax({
+        'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
+        'type': 'GET',
+        'success': function (data) {
+            var tempElement = document.createElement('div');
+            var upgradesAvailableUrls = [];
+            tempElement.innerHTML = data;
+            var btnCancelElements = tempElement.querySelectorAll('.btn-cancel:not([style*="display: none"])');
+            var btnBuildElements = tempElement.querySelectorAll('.btn-build:not([style*="display: none"])');
+            var visibleBtnBuildElements = Array.from(btnBuildElements).filter(function (element) {
+                return element.style.display !== 'none';
+            });
+            upgradesAvailableUrls = visibleBtnBuildElements.map(function (element) {
+                return element.href;
+            });
+            upgradesAvailablesLevels = visibleBtnBuildElements.map(function (element) {
+                return element.getAttribute('data-level-next');
+            });
+
+            initializeBuilderQueueInfo(upgradesAvailableUrls, columnToUse);
+        }
+    });
 }
