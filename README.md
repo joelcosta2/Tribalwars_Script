@@ -8,19 +8,19 @@ Tribalwars_Script is a collection of scripts designed to enhance the gaming expe
 
 - **Arrows for Changing Villages:** Seamlessly navigate between villages using intuitive arrow controls.
 
-  ![Arrows for Changing Villages](images/arrows_example.png)
+  ![Arrows for Changing Villages](img/navigationArrows.png)
 
 - **Village List for Easy Selection:** Quickly access a comprehensive list of villages for efficient selection.
 
-  ![Village List for Easy Selection](images/village_list_example.png)
+  ![Village List for Easy Selection](img/village_list_example.png)
 
 - **Notes for Each Village:** Stay organized by adding important notes to individual villages for easy reference.
 
-  ![Notes for Each Village](images/notes_example.png)
+  ![Notes for Each Village](img/notes_example.png)
 
 - **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
 
-  ![Extra Village Information on Map Hover](images/extra_info_example.png)
+  ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
 
 - **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (WIP: just placeholders at the moment)
 
