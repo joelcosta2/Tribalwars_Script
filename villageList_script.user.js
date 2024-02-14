@@ -16,7 +16,7 @@ function getVillagesDataURL() {
 }
 
 function injectVillagesListColumn(columnToUse) {
-    if (showVillagesList) {
+    if (settings_cookies.general['show__village_list']) {
         var villagesDataUrl = getVillagesDataURL();
         // Criação da tabela
         var table = document.createElement('table');

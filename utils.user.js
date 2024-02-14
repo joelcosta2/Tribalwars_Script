@@ -16,11 +16,9 @@ var RIGHT_COLUMN = "rightcolumn";
 var CENTER_COLUMN = "leftcolumn";
 var LEFT_COLUMN = "script_column";
 
-var upgradesAvailableUrls = [];
 var upgradesAvailablesLevels = [];
 // Criar as linhas e colunas da tabela
 var availableSettings = [
-    { name: 'feature_share_status', label: 'Partilhar o estado Premium', description: 'Permitir que os membros da tribo vejam se tem funcionalidades premium activas.' },
     { name: 'show__village_list', label: 'Mostrar lista de aldeias', description: 'Mostrar lista de aldeias no main screen' },
     { name: 'show__navigation_arrows', label: 'Usar setas de navegação', description: 'Usar setas de navegação' },
     { name: 'show__notepad', label: 'Mostrar notepad', description: 'Mostrar notepad' },
@@ -53,7 +51,14 @@ var settings_cookies = {
             pos: 2,
             open: true
         }
-    ]
+    ],
+    general: {
+        show__village_list: true,
+        show__navigation_arrows: true,
+        show__notepad: true,
+        show__extra_building_queue: true,
+        show__extra_options_map_hover: true
+    }
 };
 
 var build_queue = [
@@ -194,8 +199,6 @@ function createAssetElement(title, contents, columnToUse, extra_name) {
             // Encontra o objeto correspondente no array de assets e atualiza o valor de 'open' para true
             settings_cookies.assets.find(asset => asset.name === elemId).open = true;
         }
-
-        setCookie('settings_cookies', JSON.stringify(settings_cookies), 100000000);
     };
 
 

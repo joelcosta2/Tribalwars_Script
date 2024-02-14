@@ -36,7 +36,7 @@ function openEditModeNote() {
 }
 
 function injectNotepadOveriew(columnToUse) {
-    if (showNotepad) {
+    if (settings_cookies.general['show__notepad']) {
         var editLink = document.createElement('a');
         editLink.id = 'edit_notepad_link_script';
         editLink.textContent = '» Editar';

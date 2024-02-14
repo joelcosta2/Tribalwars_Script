@@ -130,26 +130,27 @@ function getReportInfoToMap() {
 
 }
 
-
 if (typeof TWMap !== 'undefined') {
-    var originalHandleMouseMove = TWMap.popup.handleMouseMove;
-    getOutgoingUnitsToMap();
-    getReportsList();
-    TWMap.popup.handleMouseMove = function (e) {
-        originalHandleMouseMove.call(this, e);
-        var villageHoverCoords = TWMap.map.coordByEvent(e);
-        coords = villageHoverCoords.join('|');
-        var mapPopupElement = document.getElementById('map_popup');
-        mapPopUpBody = mapPopupElement.getElementsByTagName('tbody')[0];
+    if (settings_cookies.general['show__extra_options_map_hover']) {
+        var originalHandleMouseMove = TWMap.popup.handleMouseMove;
+        getOutgoingUnitsToMap();
+        getReportsList();
+        TWMap.popup.handleMouseMove = function (e) {
+            originalHandleMouseMove.call(this, e);
+            var villageHoverCoords = TWMap.map.coordByEvent(e);
+            coords = villageHoverCoords.join('|');
+            var mapPopupElement = document.getElementById('map_popup');
+            mapPopUpBody = mapPopupElement.getElementsByTagName('tbody')[0];
 
-        // Criando o elemento tr
-        var tr = document.createElement('tr');
-        tr.className = 'nowrap';
-        tr.id = 'map_popup_extra';
+            // Criando o elemento tr
+            var tr = document.createElement('tr');
+            tr.className = 'nowrap';
+            tr.id = 'map_popup_extra';
 
-        if (mapPopUpBody && !mapPopUpBody.querySelector('#map_popup_extra')) {
-            mapPopUpBody.appendChild(tr);
-            getReportInfoToMap();
-        }
-    };
+            if (mapPopUpBody && !mapPopUpBody.querySelector('#map_popup_extra')) {
+                mapPopUpBody.appendChild(tr);
+                getReportInfoToMap();
+            }
+        };
+    }
 }

@@ -92,7 +92,7 @@ function initializeBuilderQueueInfo(upgradesAvailableUrls, columnToUse) {
             upgradeLink.setAttribute('data-title', 'O mercador');
             upgradeLink.id = 'main_buildlink_' + id + '_' + upgradesAvailablesLevels[index];
             upgradeLink.style.width = '-webkit-fill-available';
-            upgradeLink.textContent = 'Nível ' + upgradesAvailablesLevels[index];
+            upgradeLink.textContent = 'Level ' + upgradesAvailablesLevels[index];
             upgradeLink.onclick = function () {
                 addToBuildQueue(buildGraphicId);
                 callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf);
@@ -158,7 +158,6 @@ function getBuildQueueElement(update) {
     return td;
 }
 
-
 function callUpgradeBuilding(url) {
     $.ajax({
         'url': url,
@@ -173,27 +172,28 @@ function callUpgradeBuilding(url) {
 }
 
 function injectBuildQueueExtraList(columnToUse) {
+    if (settings_cookies.general['show__extra_building_queue']) {
+        $.ajax({
+            'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
+            'type': 'GET',
+            'success': function (data) {
+                var tempElement = document.createElement('div');
+                var upgradesAvailableUrls = [];
+                tempElement.innerHTML = data;
+                var btnCancelElements = tempElement.querySelectorAll('.btn-cancel:not([style*="display: none"])');
+                var btnBuildElements = tempElement.querySelectorAll('.btn-build:not([style*="display: none"])');
+                var visibleBtnBuildElements = Array.from(btnBuildElements).filter(function (element) {
+                    return element.style.display !== 'none';
+                });
+                upgradesAvailableUrls = visibleBtnBuildElements.map(function (element) {
+                    return element.href;
+                });
+                upgradesAvailablesLevels = visibleBtnBuildElements.map(function (element) {
+                    return element.getAttribute('data-level-next');
+                });
 
-    $.ajax({
-        'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=main',
-        'type': 'GET',
-        'success': function (data) {
-            var tempElement = document.createElement('div');
-            var upgradesAvailableUrls = [];
-            tempElement.innerHTML = data;
-            var btnCancelElements = tempElement.querySelectorAll('.btn-cancel:not([style*="display: none"])');
-            var btnBuildElements = tempElement.querySelectorAll('.btn-build:not([style*="display: none"])');
-            var visibleBtnBuildElements = Array.from(btnBuildElements).filter(function (element) {
-                return element.style.display !== 'none';
-            });
-            upgradesAvailableUrls = visibleBtnBuildElements.map(function (element) {
-                return element.href;
-            });
-            upgradesAvailablesLevels = visibleBtnBuildElements.map(function (element) {
-                return element.getAttribute('data-level-next');
-            });
-
-            initializeBuilderQueueInfo(upgradesAvailableUrls, columnToUse);
-        }
-    });
+                initializeBuilderQueueInfo(upgradesAvailableUrls, columnToUse);
+            }
+        });
+    }
 }
