@@ -24,7 +24,7 @@ Tribalwars_Script is a collection of scripts designed to enhance the gaming expe
 
 - **Extra Building Queue:** A ideia é conseguir criar uma especie de queue alargada, para programar a queue com mais que 2 edificios apenas (semelhante ao prossivel com premiun)
 
-  ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
+  ![Extra Village Information on Map Hover](img/extraBuildQueue.png)
 
 - **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (More option will be added;)
 
