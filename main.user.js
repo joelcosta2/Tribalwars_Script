@@ -25,15 +25,12 @@
         listenTextAreas();
         var urlPage = document.location.href;
 
-        if (getCookie('villages_show') || TEST_RUN) {
+        if (villageList) {
             setCookieCurrentVillage();
             if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
                 injectScriptColumn();
 
-                var sortedKeys = settings_cookies.assets.sort(function (a, b) {
-                    return a.pos - b.pos;
-                });
-                sortedKeys.forEach(function (asset) {
+                settings_cookies.assets.forEach(function (asset) {
                     var functionName = assetsInjectFunctions[asset.name];
                     if (functionName) {
                         functionName(asset.column);

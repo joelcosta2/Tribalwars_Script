@@ -159,7 +159,7 @@ function sizeOfObject(obj) {
     return size;
 }
 
-function createAssetElement(title, contents, columnToUse, extra_name) {
+function createAssetElement(title, contents, columnToUse, update, extra_name) {
     var columnElement = document.getElementById(columnToUse);
     var elemId = title.toLowerCase().replace(/ /g, '_'); // Obtém o título do elemento
     var elemName = extra_name ? elemId + '_' + extra_name : elemId;
@@ -208,6 +208,14 @@ function createAssetElement(title, contents, columnToUse, extra_name) {
 
     var assetIndex = settings_cookies.assets.find(asset => asset.name === elemId).pos;
     var children = columnElement.childNodes;
+    //if update, remove the current element
+    if (update) {
+        var currentElement = document.getElementById('show_' + elemName);
+        if (currentElement) {
+            columnElement.removeChild(currentElement);
+        }
+    }
+
     // Verifica se o índice fornecido é válido
     if (assetIndex >= 0 && assetIndex <= children.length) {
         var refChild = (assetIndex + 1 === children.length) ? null : children[assetIndex + 1];

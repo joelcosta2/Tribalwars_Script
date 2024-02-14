@@ -35,7 +35,6 @@ function getOutgoingUnitsToMap() {
 
 
 function getReportsList() {
-
     if (settings_cookies.general['show__extra_options_map_hover']) {
         var reportsList = [];
         $.ajax({
@@ -64,7 +63,6 @@ function getReportsList() {
 
 
 function getReportInfoToMap() {
-
     if (settings_cookies.general['show__extra_options_map_hover']) {
         var reports_list = getCookie('reports_list') ? JSON.parse(getCookie('reports_list')) : null;
         var outgoing_units_saved = getCookie('outgoing_units_saved') ? JSON.parse(getCookie('outgoing_units_saved')) : null;
@@ -108,7 +106,6 @@ function getReportInfoToMap() {
                 }
                 if (reportDone) { break; }
             }
-
         }
 
         if (outgoing_units_saved) {
@@ -132,7 +129,6 @@ function getReportInfoToMap() {
                     popUpTitle.insertBefore(span1Element, popUpTitle.firstChild);
                 }
             })
-
         }
     }
 
@@ -150,7 +146,6 @@ if (typeof TWMap !== 'undefined') {
             var mapPopupElement = document.getElementById('map_popup');
             mapPopUpBody = mapPopupElement.getElementsByTagName('tbody')[0];
 
-            // Criando o elemento tr
             var tr = document.createElement('tr');
             tr.className = 'nowrap';
             tr.id = 'map_popup_extra';
