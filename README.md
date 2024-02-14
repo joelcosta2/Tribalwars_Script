@@ -22,7 +22,7 @@ Tribalwars_Script is a collection of scripts designed to enhance the gaming expe
 
   ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
 
-- **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (WIP: just placeholders at the moment)
+- **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (More option will be added;)
 
   ![Extra Village Information on Map Hover](img/scriptSettings.png)
 

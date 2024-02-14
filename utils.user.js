@@ -2,30 +2,20 @@
 //Utils
 
 //GLOBAL VARIABLES
-//false/true: toggle the assets visibility
-var villageNavigationArrows = true;
-var showVillagesList = true;
-var usarAtalhosTrocarAldeias = true;
-var showNotepad = true;
-var showExtraBuildingQueue = true;
-
-var TEST_RUN = true;  //set true to run the script in test mode
-var USE_SCRIPT_COLUMN = true;  // create a column on the left side of the main screen
-var COLUMN_ASSETS = "script_column";  //column where add the assets: rightcolumn || leftcolumn || script_column
 var RIGHT_COLUMN = "rightcolumn";
 var CENTER_COLUMN = "leftcolumn";
 var LEFT_COLUMN = "script_column";
-
 var upgradesAvailablesLevels = [];
-// Criar as linhas e colunas da tabela
+
 var availableSettings = [
-    { name: 'show__village_list', label: 'Mostrar lista de aldeias', description: 'Mostrar lista de aldeias no main screen' },
-    { name: 'show__navigation_arrows', label: 'Usar setas de navegação', description: 'Usar setas de navegação' },
-    { name: 'show__notepad', label: 'Mostrar notepad', description: 'Mostrar notepad' },
-    { name: 'show__extra_building_queue', label: 'Mostrar extra building queue', description: 'Mostrar extra building queue' },
-    { name: 'show__extra_options_map_hover', label: 'Mostrar extra options map hover', description: 'Mostrar extra options map hover' },
-    // Adicionar mais configurações conforme necessário
+    { name: 'show__village_list', label: 'Show village list', description: 'Show village list on the main screen' },
+    { name: 'show__navigation_arrows', label: 'Use navigation arrows', description: 'Use navigation arrows' },
+    { name: 'show__notepad', label: 'Show notepad', description: 'Show notepad' },
+    { name: 'show__extra_building_queue', label: 'Show extra building queue', description: 'Show extra building queue' },
+    { name: 'show__extra_options_map_hover', label: 'Show extra options map hover', description: 'Show extra options map hover' },
+    // Add more settings as needed
 ];
+
 var villageList = [
     { name: '001 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
     { name: '002 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
@@ -123,7 +113,7 @@ function listenTextAreas() {
 }
 
 function defineKeyboardShortcuts() {
-    if (usarAtalhosTrocarAldeias) {
+    if (settings_cookies.general['show__navigation_arrows']) {
         $(document).keydown(function (evt) {
             if (evt.keyCode == 65 && !textSelected) {
                 evt.preventDefault();

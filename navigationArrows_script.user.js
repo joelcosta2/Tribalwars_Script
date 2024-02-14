@@ -40,7 +40,7 @@ function previousVillage() {
 }
 
 function insertNavigationArrows() {
-    if (villageNavigationArrows) {
+    if (settings_cookies.general['show__navigation_arrows']) {
         var menu_row1_container = document.getElementById('menu_row2');
         var htmlToInject = '<td class="box-item icon-box separate arrowCell"><a id="village_switch_previous" class="village_switch_link" accesskey="a"><span class="arrowLeft" style="cursor:pointer;"> </span></a></td><td class="box-item icon-box arrowCell"><a id="village_switch_next" class="village_switch_link" accesskey="d"><span class="arrowRight" style="cursor:pointer;"> </span></a></td>';
 

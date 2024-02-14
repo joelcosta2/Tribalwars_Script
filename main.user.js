@@ -28,10 +28,7 @@
         if (getCookie('villages_show') || TEST_RUN) {
             setCookieCurrentVillage();
             if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
-
-                if (USE_SCRIPT_COLUMN) {
-                    injectScriptColumn();
-                }
+                injectScriptColumn();
 
                 var sortedKeys = settings_cookies.assets.sort(function (a, b) {
                     return a.pos - b.pos;
