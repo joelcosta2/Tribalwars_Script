@@ -2,7 +2,7 @@
 // Build Extra List
 function initializeBuilderQueueInfoAvailable(upgradesAvailableUrls, columnToUse, buildQueueElment, update = false) {
     var villageBuilderid = game_data.csrf;
-    setCookie('village_builder_id', villageBuilderid, 30);
+    localStorage.setItem('village_builder_id', villageBuilderid);
     var visualBuildingElements = document.getElementById("show_summary").getElementsByClassName("visual-building");
     var otherClasses = [];
 
@@ -112,7 +112,7 @@ function initializeBuilderQueueInfoAvailable(upgradesAvailableUrls, columnToUse,
 
 function initializeBuilderQueueInfoAll(allAvailableBuildingsImgs, allAvailableBuildingLevels, columnToUse, buildQueueElment, update = false) {
     var villageBuilderid = game_data.csrf;
-    setCookie('village_builder_id', villageBuilderid, 30);
+    localStorage.setItem('village_builder_id', villageBuilderid);
 
     //Create the extra build queue table
     var extraBuildQueueTable = document.createElement('table');
@@ -194,26 +194,26 @@ function addToBuildQueue(build_id, fromQueueList = true) {
         if (!isBuildQueueFull) {
             callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + build_id + '&type=main&h=' + game_data.csrf);
         } else {
-            var extra_building_queue = JSON.parse(getCookie('extra_building_queue')) || [];
+            var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue')) || [];
             extra_building_queue.push(build_id);
-            setCookie('extra_building_queue', JSON.stringify(extra_building_queue), 5);
+            localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
             injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
         }
     } else {
-        var extra_building_queue = JSON.parse(getCookie('extra_building_queue'));
+        var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue'));
         callUpgradeBuilding('/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + extra_building_queue[0] + '&type=main&h=' + game_data.csrf);
 
         extra_building_queue.shift();
-        setCookie('extra_building_queue', JSON.stringify(extra_building_queue), 5);
+        localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
         injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
     }
 }
 
 
 function removeFromBuildQueue(build_index) {
-    var extra_building_queue = JSON.parse(getCookie('extra_building_queue'));
+    var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue'));
     extra_building_queue.splice(build_index, 1);
-    setCookie('extra_building_queue', JSON.stringify(extra_building_queue), 30);
+    localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
     injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
 }
 
@@ -305,7 +305,7 @@ function injectBuildQueueExtraList(columnToUse, update = false) {
                         dateLastSlot.setDate(new Date().getDate() + 1);
                         dateLastSlot.setHours(timeLastSlot[0], timeLastSlot[1], timeLastSlot[2]);
                     }
-                    setCookie('extra_building_queue_last_slot', dateLastSlot, 1);
+                    localStorage.setItem('extra_building_queue_last_slot', dateLastSlot);
                 } else if (cancelButtons.length == 1) {
                     var nextSlotTime = cancelButtons[0].parentElement.parentElement.children[3].textContent.split(' ');
                     isBuildQueueFull = false;
@@ -317,11 +317,11 @@ function injectBuildQueueExtraList(columnToUse, update = false) {
                         dateNextSlot.setDate(new Date().getDate() + 1);
                         dateNextSlot.setHours(timeNextSlot[0], timeNextSlot[1], timeNextSlot[2]);
                     }
-                    setCookie('extra_building_queue_next_slot', dateNextSlot, 1);
+                    localStorage.setItem('extra_building_queue_next_slot', dateNextSlot);
                 } else {
                     isBuildQueueFull = false;
-                    setCookie('extra_building_queue_last_slot', 0, 1);
-                    setCookie('extra_building_queue_next_slot', 0, 1);
+                    localStorage.setItem('extra_building_queue_last_slot', 0);
+                    localStorage.setItem('extra_building_queue_next_slot', 0);
                 }
 
                 cancelButtons.forEach(function (element) {
@@ -329,7 +329,7 @@ function injectBuildQueueExtraList(columnToUse, update = false) {
                     queueBuildIdsOld.push(element.parentElement.parentElement.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ""));
                 })
 
-                queueBuildIds = queueBuildIdsOld.concat(JSON.parse(getCookie('extra_building_queue')) || []);
+                queueBuildIds = queueBuildIdsOld.concat(JSON.parse(localStorage.getItem('extra_building_queue')) || []);
 
                 queueBuildIds.forEach(function (id) {
                     var anchor = document.createElement('a');
@@ -342,7 +342,7 @@ function injectBuildQueueExtraList(columnToUse, update = false) {
 
                     anchor.addEventListener('mouseenter', function (event) {
                         var interval = setInterval(function () {
-                            var storedDate = new Date(JSON.parse(getCookie('extra_building_queue_last_slot')));
+                            var storedDate = new Date(JSON.parse(localStorage.getItem('extra_building_queue_last_slot')));
                             var currentDate = new Date();
                             var differenceInMilliseconds = storedDate - currentDate;
                             var differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));

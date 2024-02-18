@@ -1,7 +1,7 @@
 
 // Notepad Module
 function loadNote() {
-    var cookieNotepadJson = getCookie('vilagges_notepad');
+    var cookieNotepadJson = localStorage.getItem('vilagges_notepad');
     var notepadArray = cookieNotepadJson ? JSON.parse(cookieNotepadJson) : [];
     var notepadText = notepadArray[currentVillageIndex];
 
@@ -15,11 +15,11 @@ function loadNote() {
 
 function saveNote() {
     var textToSave = document.getElementById('message_note_script').value;
-    var currentCookieValue = getCookie('vilagges_notepad');
+    var currentCookieValue = localStorage.getItem('vilagges_notepad');
     var notepadArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
     notepadArray[currentVillageIndex] = textToSave;
     var jsonToSave = JSON.stringify(notepadArray);
-    setCookie('vilagges_notepad', jsonToSave, 100000000000000);
+    localStorage.setItem('vilagges_notepad', jsonToSave);
     toggleElement('note_body_edit');
     loadNote();
     toggleElement('edit_notepad_link_script');
@@ -27,7 +27,7 @@ function saveNote() {
 
 function openEditModeNote() {
     listenTextAreas();
-    var currentCookieValue = getCookie('vilagges_notepad');
+    var currentCookieValue = localStorage.getItem('vilagges_notepad');
     var notepadArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
     document.getElementById('message_note_script').value = notepadArray[currentVillageIndex];
     toggleElement('note_body_edit');

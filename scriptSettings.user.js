@@ -9,7 +9,7 @@ function saveScriptSettings() {
         settings_cookies.general[allSettings[i].name] = allSettings[i].checked;
     }
 
-    setCookie('settings_cookies', JSON.stringify(settings_cookies), 1000);
+    localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
     location.reload();
 }
 

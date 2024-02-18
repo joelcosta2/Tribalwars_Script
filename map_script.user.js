@@ -26,7 +26,7 @@ function getOutgoingUnitsToMap() {
 
                         outgoing_units.push(outgoing_units_temp);
                     })
-                    setCookie('outgoing_units_saved', JSON.stringify(outgoing_units), 1);
+                    localStorage.setItem('outgoing_units_saved', JSON.stringify(outgoing_units));
                 }
             }
         });
@@ -55,7 +55,7 @@ function getReportsList() {
                     reportsList.push(tempReport);
 
                 });
-                setCookie('reports_list', JSON.stringify(reportsList), 1);
+                localStorage.setItem('reports_list', JSON.stringify(reportsList));
             }
         });
     }
@@ -64,8 +64,8 @@ function getReportsList() {
 
 function getReportInfoToMap() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
-        var reports_list = getCookie('reports_list') ? JSON.parse(getCookie('reports_list')) : null;
-        var outgoing_units_saved = getCookie('outgoing_units_saved') ? JSON.parse(getCookie('outgoing_units_saved')) : null;
+        var reports_list = localStorage.getItem('reports_list') ? JSON.parse(localStorage.getItem('reports_list')) : null;
+        var outgoing_units_saved = localStorage.getItem('outgoing_units_saved') ? JSON.parse(localStorage.getItem('outgoing_units_saved')) : null;
         if (reports_list) {
             for (var i = 0; i < reports_list.length; i++) {
                 var report = reports_list[i];

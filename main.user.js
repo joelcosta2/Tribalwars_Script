@@ -22,9 +22,9 @@
     function init() {
         restoreTimeouts();
         if (!document.getElementById('mobileContent')) {
-            villageList = getCookie('villages_show') ? JSON.parse(getCookie('villages_show')) : villageList;
-            settings_cookies = getCookie('settings_cookies') ? JSON.parse(getCookie('settings_cookies')) : settings_cookies;
-            build_queue = getCookie('build_queue') ? JSON.parse(getCookie('build_queue')) : build_queue;
+            villageList = localStorage.getItem('villages_show') ? JSON.parse(localStorage.getItem('villages_show')) : villageList;
+            settings_cookies = localStorage.getItem('settings_cookies') ? JSON.parse(localStorage.getItem('settings_cookies')) : settings_cookies;
+            build_queue = localStorage.getItem('build_queue') ? JSON.parse(localStorage.getItem('build_queue')) : build_queue;
             listenTextAreas();
             var urlPage = document.location.href;
 
@@ -43,9 +43,9 @@
                     //TO FUNTIOON
                     /* ver se tem na fila;
                     se sim, pegar no nextTimeSlot e obtera diferenca para o tempo atual, com essa diferenca, criar um temporizador a chamar o  */
-                    var extra_building_queue = JSON.parse(getCookie('extra_building_queue')) || [];
+                    var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue')) || [];
                     if (extra_building_queue.length) {
-                        var nextTimeDate = new Date(parseInt(getCookie('extra_building_queue_next_slot')));
+                        var nextTimeDate = new Date(parseInt(localStorage.getItem('extra_building_queue_next_slot')));
                         var waitTime = nextTimeDate.getTime() - Date.now();
                         if (waitTime > 0) {
                             setFunctionOnTimeOut('extra_building_queue', addToBuildQueue, waitTime);
@@ -58,7 +58,7 @@
                 injectNavigationBar();
 
             } else {
-                var missingVillageError = getCookie('missing_village_error') === 'true';
+                var missingVillageError = localStorage.getItem('missing_village_error') === 'true';
                 var d = new Date();
                 d.setDate(d.getDate() + 7);
                 if (missingVillageError) {
