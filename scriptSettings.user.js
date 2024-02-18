@@ -43,7 +43,7 @@ function injectScriptSettingsPopUp() {
         var content = document.getElementsByClassName('settings-popup')[0]
         content.style.display = content.style.display === 'none' ? 'block' : 'none';
     }
-    closeLink.id = 'closelink_unit_popup_spear';
+    //closeLink.id = 'closelink_unit_popup_spear';
     closeLink.textContent = 'X';
     closeLink.style.cursor = 'pointer';
 
@@ -53,7 +53,7 @@ function injectScriptSettingsPopUp() {
     // Criar o elemento <div> do popup_content
     var popupContentDiv = document.createElement('div');
     popupContentDiv.classList.add('popup_content');
-    popupContentDiv.id = 'unit_popup_spear_content';
+    //popupContentDiv.id = 'unit_popup_spear_content';
     popupContentDiv.style.height = 'auto';
     popupContentDiv.style.overflowY = 'auto';
     popupContentDiv.style.display = 'flex';

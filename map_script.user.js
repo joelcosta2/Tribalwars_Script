@@ -67,7 +67,7 @@ function getReportInfoToMap() {
         var reports_list = getCookie('reports_list') ? JSON.parse(getCookie('reports_list')) : null;
         var outgoing_units_saved = getCookie('outgoing_units_saved') ? JSON.parse(getCookie('outgoing_units_saved')) : null;
         if (reports_list) {
-            for (var i = reports_list.length - 1; i >= 0; i--) {
+            for (var i = 0; i < reports_list.length; i++) {
                 var report = reports_list[i];
                 var reportDone = false;
 

@@ -12,7 +12,11 @@ var availableSettings = [
     { name: 'show__navigation_arrows', label: 'Use navigation arrows', description: 'Use navigation arrows' },
     { name: 'show__notepad', label: 'Show notepad', description: 'Show notepad' },
     { name: 'show__extra_building_queue', label: 'Show extra building queue', description: 'Show extra building queue' },
+    { name: 'show__extra_building_queue_all', label: 'Show all buildings in extra queue ', description: 'Show all buildings in extra building queue (Testing EXTRA QUEUE)' },
     { name: 'show__extra_options_map_hover', label: 'Show extra options map hover', description: 'Show extra options map hover' },
+
+    { name: 'show__navigation_bar', label: 'Show Navigation Bar', description: 'Show Navigation Bar on the top' },
+    { name: 'remove__premiun_promo', label: 'Remove Premiun Promos', description: 'Remove Premiun Promos, for now its just one promo that apears next to the nav bar.' },
     // Add more settings as needed
 ];
 
@@ -266,4 +270,128 @@ function saveColumnOrder() {
     });
 
     setCookie('settings_cookies', JSON.stringify(settings_cookies), 100000000);
+}
+
+function injectScriptColumn() {
+    var overviewtableElement = document.getElementById('overviewtable');
+    var trElement = overviewtableElement.getElementsByTagName('tr')[0];
+    var scriptColumn = document.createElement('td');
+    scriptColumn.setAttribute('valign', 'top');
+    scriptColumn.setAttribute('id', 'script_column');
+    scriptColumn.style.width = document.getElementById('rightcolumn').offsetWidth + 'px';
+    trElement.insertBefore(scriptColumn, trElement.firstChild);
+}
+
+function showTooltip(element, isVisible) {
+    var rect = element.getBoundingClientRect();
+    var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    var scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+    var elementPosition = {
+        top: rect.top + scrollTop,
+        left: rect.left + scrollLeft
+    };
+
+    var tooltip = document.getElementById('tooltip');
+    if (isVisible) {
+        tooltip.style.display = 'block';
+        tooltip.style.top = (Math.ceil(elementPosition.top) + 22) + 'px';
+        tooltip.style.left = (Math.ceil(elementPosition.left) + 25) + 'px';
+        tooltip.classList.add('tooltip-style');
+        var h3 = tooltip.getElementsByTagName('h3')[0];
+        h3.innerText = element.parentNode.getAttribute('data-title');
+    } else {
+        tooltip.style.display = 'none';
+        tooltip.classList.remove('tooltip-style');
+    }
+}
+function showTooltipNoText(element, isVisible) {
+    var rect = element.getBoundingClientRect();
+    var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    var scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+    var elementPosition = {
+        top: rect.top + scrollTop,
+        left: rect.left + scrollLeft
+    };
+
+    var tooltip = document.getElementById('tooltip');
+    if (isVisible) {
+        tooltip.style.display = 'block';
+        tooltip.style.top = (Math.ceil(elementPosition.top) + 22) + 'px';
+        tooltip.style.left = (Math.ceil(elementPosition.left) + 25) + 'px';
+        tooltip.classList.add('tooltip-style');
+    } else {
+        tooltip.style.display = 'none';
+        tooltip.classList.remove('tooltip-style');
+    }
+}
+
+/**
+ * Sets a function to run after a specified time, using local storage to store the function's elapsed time and restart the time on that.
+ *
+ * @param {function} func - The function to be executed after the specified time
+ * @param {number} timeToRun - The time in milliseconds after which the function should be executed
+ * @param {string} id - The identifier for the function's start time in local storage
+ */
+/*function setFunctionOnTimeOut(func, timeToRun, id) {
+let startTime = localStorage.getItem('startTime_' + id);
+
+if (startTime) {
+    let elapsedTime = Date.now() - parseInt(startTime);
+    let remainingTime = timeToRun - elapsedTime;
+    setTimeout(func, remainingTime);
+} else {
+    localStorage.setItem('startTime_' + id, Date.now());
+}
+}*/
+
+function functionToCallTest() {
+    debugger;
+    alert("opaaaaa")
+}
+
+function timeToMilliseconds(timeString) {
+    // Split the time string into hours, minutes, and seconds
+    var parts = timeString.split(':');
+
+    // Convert each part to milliseconds and sum them up
+    var hours = parseInt(parts[0], 10) * 60 * 60 * 1000;
+    var minutes = parseInt(parts[1], 10) * 60 * 1000;
+    var seconds = parseInt(parts[2], 10) * 1000;
+
+    // Return the total milliseconds
+    return hours + minutes + seconds;
+}
+
+function setFunctionOnTimeOut(id, func, timeToRun) {
+    let endTime = Date.now() + timeToRun;
+    localStorage.setItem('endTime_' + id, endTime); // Armazena o tempo de término do temporizador
+    localStorage.setItem('function_' + id, func.toString()); // Armazena a função como uma string
+    setTimeout(func, timeToRun);
+}
+
+function restoreTimeouts() {
+    // Itera sobre todas as chaves do localStorage
+    for (var key in localStorage) {
+        // Verifica se a chave começa com 'endTime_'
+        if (key.startsWith('endTime_')) {
+            var id = key.replace('endTime_', ''); // Obtém o ID do temporizador
+
+            // Obtém o tempo de término do temporizador
+            var endTime = localStorage.getItem(key);
+            var remainingTime = parseInt(endTime) - Date.now();
+
+            if (remainingTime > 0) {
+                // Define um novo temporizador com o tempo restante
+                setTimeout(() => {
+                    eval('(' + localStorage.getItem('function_' + id) + ')();');
+                }, remainingTime);
+            } else {
+                // Se o tempo restante for menor ou igual a zero, limpe as informações do temporizador
+                localStorage.removeItem('endTime_' + id);
+                localStorage.removeItem('function_' + id);
+            }
+        }
+    }
 }
