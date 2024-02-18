@@ -7,28 +7,35 @@ Tribalwars_Script is a collection of scripts designed to enhance the gaming expe
 ## Key Features
 
 - **Arrows for Changing Villages:** Seamlessly navigate between villages using intuitive arrow controls.
+  
   ![Arrows for Changing Villages](img/navigationArrows.png)
 
 - **Village List for Easy Selection:** Quickly access a comprehensive list of villages for efficient selection.
+  
   ![Village List for Easy Selection](img/villageList.png)
 
 - **Notes for Each Village:** Stay organized by adding important notes to individual villages for easy reference.
+  
   ![Notes for Each Village](img/notepad.png)
 
 - **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
+  
   ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
 
 - **Extra Building Queue:** The idea is to create a kind of expanded queue to program the queue with more than 2 buildings only (similar to what is possible with premium).
-  ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
+  
+  ![Extra Village Information on Map Hover](img/extraBuildQueue.png)
 
 - **Navigation Bar:** Possibility of having a navigation bar, where you can add shortcuts to various pages. Currently, the shortcuts are hardcoded (you can edit them directly in the code).
   ![Navigation Bar](img/navigationBar.png)
 
 - **Remove Premium Promos:** Remove advertising for premium promotions, like the examples:
+  
   ![Remove Premium Promos](img/premium_promo.png)
   ![Remove Premium Promos](img/premium_promo2.png)
 
 - **Script Settings:** Customize your gameplay experience with in-game settings to control various aspects of the script. Adjust settings to suit your preferences and gameplay style. (More options will be added;)
+  
   ![Script Settings](img/scriptSettings.png)
 
 ## How to Use
