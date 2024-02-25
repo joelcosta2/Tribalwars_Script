@@ -103,21 +103,21 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
     //Get times from the cancel buttons row and check if the queue is full
     if (cancelButtons.length == 2) {
         isBuildQueueFull = true;
-
+        debugger
         var lastBuildTime = extractTimeFromHTML(cancelButtons[1].parentElement.parentElement.children[3].textContent);
         dateLastSlot = new Date().setDate(new Date().getDate() + lastBuildTime[0]);
-        dateLastSlot = new Date(dateLastSlot).setHours(lastBuildTime[0], lastBuildTime[1]);
+        dateLastSlot = new Date(dateLastSlot).setHours(lastBuildTime[1], lastBuildTime[2]);
         localStorage.setItem('extra_building_queue_last_slot', dateLastSlot);
 
         var nextSlotTime = extractTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
         dateNextSlot = new Date().setDate(new Date().getDate() + nextSlotTime[0]);
-        dateNextSlot = new Date(dateNextSlot).setHours(nextSlotTime[0], nextSlotTime[1]);
+        dateNextSlot = new Date(dateNextSlot).setHours(nextSlotTime[1], nextSlotTime[2]);
         localStorage.setItem('extra_building_queue_next_slot', dateNextSlot);
     } else if (cancelButtons.length == 1) {
         isBuildQueueFull = false;
         var nextSlotTime = extractTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
         dateNextSlot = new Date().setDate(new Date().getDate() + dateNextSlot[0]);
-        dateNextSlot = new Date(dateLastSlot).setHours(dateNextSlot[0], dateNextSlot[1]);
+        dateNextSlot = new Date(dateLastSlot).setHours(dateNextSlot[1], dateNextSlot[2]);
         localStorage.setItem('extra_building_queue_next_slot', dateNextSlot);
     } else {
         isBuildQueueFull = false;
