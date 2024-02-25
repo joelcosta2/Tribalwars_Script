@@ -88,8 +88,8 @@
                 var originalSortableUpdate = $("#overviewtable").sortable("option", "update");
                 $("#overviewtable").sortable("option", "update", function () {
                     saveColumnOrder(this);
-                    $(this).find('.script_widget').detach();
                     if (typeof originalSortableUpdate === "function" && !arguments[1].item[0].classList.contains('script_widget')) {
+                        $(this).find('.script_widget').detach();
                         originalSortableUpdate.apply(this, arguments);
                     }
                 });
