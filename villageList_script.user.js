@@ -2,13 +2,14 @@
 //Village List
 function getVillagesDataURL() {
     var i = 0,
-        villgersNum = sizeOfObject(villageList);
+        villages = JSON.parse(localStorage.getItem('villages_show') || '[]'),
+        villgersNum = sizeOfObject(villages);
 
     var villagesDataUrl = '';
 
     for (i = 0; i < villgersNum; i++) {
-        var url = villageList[i].url,
-            name = villageList[i].name;
+        var url = villages[i].url,
+            name = villages[i].name;
 
         villagesDataUrl = villagesDataUrl + "<tr><td style='' class=''><a class='' href='" + url + "'><span class='icon header village'></span>" + name + "</a></td></tr>"
     }
@@ -29,6 +30,33 @@ function injectVillagesListColumn(columnToUse) {
         tbody.innerHTML = villagesDataUrl;
         table.appendChild(tbody);
 
-        createAssetElement('Village List', table, columnToUse);
+        createWidgetElement('Village List', table, columnToUse);
     }
+}
+
+function prepareVillageList() {
+    var jsonToSave;
+    $.ajax({
+        url: '/game.php?village=' + game_data.village.id + '&screen=overview_villages',
+        type: 'GET',
+        async: false,
+        success: function (data) {
+            var tempElement = document.createElement('div');
+            tempElement.innerHTML = data;
+            let rows = tempElement.querySelectorAll('#production_table tbody tr');
+            let villageList = {};
+
+            rows.forEach(function (row, index) {
+                let link = row.querySelector('td:first-child span:first-child a');
+                let name = link.querySelector('span').innerText.split('(')[0];
+                let url = link.href;
+
+                villageList[index] = { name: name, url: url };
+            });
+
+            jsonToSave = JSON.stringify(villageList);
+        }
+    });
+    localStorage.setItem('villages_show', jsonToSave);
+    return jsonToSave;
 }

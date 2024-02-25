@@ -9,34 +9,51 @@ function prepareLinkToArrows(goToUrl) {
     // substituir por cookie 'global_village_id
     temp = goToUrl.indexOf("=");
     temp2 = goToUrl.indexOf("&", temp);
-
     var villagenumber = goToUrl.slice(temp + 1, temp2);
-
     var FINALURL = urlFirst + villagenumber + urlLast;
 
     return FINALURL;
 }
 
 function nextVillage() {
-    var goToUrl;
-    if (villageList[currentVillageIndex + 1]) {
-        goToUrl = villageList[currentVillageIndex + 1].url;
-    } else {
-        goToUrl = villageList[0].url;
+    var goToUrl,
+        villages = JSON.parse(localStorage.getItem('villages_show') || '[]');
+    if (villages) {
+        if (villages[currentVillageIndex + 1]) {
+            goToUrl = villages[currentVillageIndex + 1].url;
+        } else {
+            goToUrl = villages[0].url;
+        }
     }
-
     document.location.href = prepareLinkToArrows(goToUrl);
 }
 
 function previousVillage() {
-    var goToUrl;
-    if (villageList[currentVillageIndex - 1]) {
-        goToUrl = villageList[currentVillageIndex - 1].url;
-    } else {
-        goToUrl = villageList[sizeOfObject(villageList) - 1].url;
+    var goToUrl,
+        villages = JSON.parse(localStorage.getItem('villages_show') || '[]');
+    if (villages) {
+        if (villages[currentVillageIndex - 1]) {
+            goToUrl = villages[currentVillageIndex - 1].url;
+        } else {
+            goToUrl = villages[sizeOfObject(villages) - 1].url;
+        }
     }
-
     document.location.href = prepareLinkToArrows(goToUrl);
+}
+
+function insertNavigationArrows() {
+    if (settings_cookies.general['show__navigation_arrows']) {
+        var menu_row1_container = document.getElementById('menu_row2');
+        var htmlToInject = '<td class="box-item icon-box separate arrowCell"><a id="village_switch_previous" class="village_switch_link" accesskey="a"><span class="arrowLeft" style="cursor:pointer;"> </span></a></td><td class="box-item icon-box arrowCell"><a id="village_switch_next" class="village_switch_link" accesskey="d"><span class="arrowRight" style="cursor:pointer;"> </span></a></td>';
+
+        menu_row1_container.innerHTML = htmlToInject + menu_row1_container.innerHTML;
+
+        var leftArrowContainer = document.getElementById('village_switch_previous');
+        var rightArrowContainer = document.getElementById('village_switch_next');
+
+        leftArrowContainer.onclick = function () { previousVillage() };
+        rightArrowContainer.onclick = function () { nextVillage() };
+    }
 }
 
 function injectNavigationBar() {
@@ -95,7 +112,7 @@ function injectNavigationBar() {
 
         var innerTable = document.createElement('table');
         innerTable.classList.add('header-border', 'menu_block_right');
-        innerTable.setAttribute('style', 'border-collapse: collapse; background-size: auto 77%;'); // Added background-size
+        innerTable.setAttribute('style', 'border-collapse: collapse; background-size: auto 77%;');
 
         var innerTr = document.createElement('tr');
         var innerTd = document.createElement('td');
@@ -132,7 +149,8 @@ function injectNavigationBar() {
                         alert('ja esta a correr');
                     } else {
                         link.onclick = function (event) {
-                            setFunctionOnTimeOut('test-call-' + index, urlsObject[key].run, timeToMilliseconds('0:02:00'));
+                            //setFunctionOnTimeOut('test-call-' + index, urlsObject[key].run, timeToMilliseconds('0:02:00'));
+                            urlsObject[key].run();
                         }
 
                     }
@@ -173,12 +191,10 @@ function injectNavigationBar() {
 
 
     //delete premiun promotion:
-
     if (settings_cookies.general['remove__premiun_promo']) {
         var premiunPromo = document.querySelectorAll('.icon.header.premium')[0];
         var parent = premiunPromo;
 
-        // Itera pelos pais até encontrar um com a classe 'topAlign'
         while (parent && !parent.classList.contains('topAlign')) {
             parent = parent.parentElement;
         }
@@ -191,19 +207,4 @@ function injectNavigationBar() {
         }
     }
 
-}
-
-function insertNavigationArrows() {
-    if (settings_cookies.general['show__navigation_arrows']) {
-        var menu_row1_container = document.getElementById('menu_row2');
-        var htmlToInject = '<td class="box-item icon-box separate arrowCell"><a id="village_switch_previous" class="village_switch_link" accesskey="a"><span class="arrowLeft" style="cursor:pointer;"> </span></a></td><td class="box-item icon-box arrowCell"><a id="village_switch_next" class="village_switch_link" accesskey="d"><span class="arrowRight" style="cursor:pointer;"> </span></a></td>';
-
-        menu_row1_container.innerHTML = htmlToInject + menu_row1_container.innerHTML;
-
-        var leftArrowContainer = document.getElementById('village_switch_previous');
-        var rightArrowContainer = document.getElementById('village_switch_next');
-
-        leftArrowContainer.onclick = function () { previousVillage() };
-        rightArrowContainer.onclick = function () { nextVillage() };
-    }
 }

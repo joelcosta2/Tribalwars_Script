@@ -5,27 +5,8 @@
 var RIGHT_COLUMN = "rightcolumn";
 var CENTER_COLUMN = "leftcolumn";
 var LEFT_COLUMN = "script_column";
-var upgradesAvailablesLevels = [];
 
-var availableSettings = [
-    { name: 'show__village_list', label: 'Show village list', description: 'Show village list on the main screen' },
-    { name: 'show__navigation_arrows', label: 'Use navigation arrows', description: 'Use navigation arrows' },
-    { name: 'show__notepad', label: 'Show notepad', description: 'Show notepad' },
-    { name: 'show__extra_building_queue', label: 'Show extra building queue', description: 'Show extra building queue' },
-    { name: 'show__extra_building_queue_all', label: 'Show all buildings in extra queue ', description: 'Show all buildings in extra building queue (Testing EXTRA QUEUE)' },
-    { name: 'show__extra_options_map_hover', label: 'Show extra options map hover', description: 'Show extra options map hover' },
-
-    { name: 'show__navigation_bar', label: 'Show Navigation Bar', description: 'Show Navigation Bar on the top' },
-    { name: 'remove__premiun_promo', label: 'Remove Premiun Promos', description: 'Remove Premiun Promos, for now its just one promo that apears next to the nav bar.' },
-    // Add more settings as needed
-];
-
-var villageList = [
-    { name: '001 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
-    { name: '002 - The', url: 'https://' + game_data.world + '.tribalwars.com.pt/game.php?screen=main&village=' + game_data.village.id + '' },
-];
-
-var settings_cookies = {
+var default_settings_cookies = {
     assets: [
         {
             name: 'village_list',
@@ -55,9 +36,22 @@ var settings_cookies = {
     }
 };
 
-var build_queue = [
-    'wood1', 'main2', 'smith3', 'main3'
-]
+var settings_cookies = JSON.parse(localStorage.getItem('settings_cookies')) || default_settings_cookies;
+
+var availableSettings = [
+    { name: 'show__village_list', label: 'Show village list', description: 'Show village list on the main screen' },
+    { name: 'show__navigation_arrows', label: 'Use navigation arrows', description: 'Use navigation arrows' },
+    { name: 'show__notepad', label: 'Show notepad', description: 'Show notepad' },
+    { name: 'show__extra_building_queue', label: 'Show extra building queue', description: 'Show extra building queue' },
+    { name: 'show__extra_building_queue_all', label: 'Show all buildings in extra queue ', description: 'Show all buildings in extra building queue (Testing EXTRA QUEUE)' },
+
+    { name: 'allow_pre_queue', label: 'Allow pre queue', description: 'Allow to queue extra "real" queue, If a building in queue does have enough resources, it will prepare the queue to auto add it when time arrives' },
+    { name: 'show__extra_options_map_hover', label: 'Show extra options map hover', description: 'Show extra options map hover' },
+
+    { name: 'show__navigation_bar', label: 'Show Navigation Bar', description: 'Show Navigation Bar on the top' },
+    { name: 'remove__premiun_promo', label: 'Remove Premiun Promos', description: 'Remove Premiun Promos, for now its just one promo that apears next to the nav bar.' },
+    // Add more settings as needed
+];
 
 var assetsInjectFunctions = {
     'village_list': injectVillagesListColumn,
@@ -66,13 +60,16 @@ var assetsInjectFunctions = {
 };
 
 var currentVillageIndex,
-    textSelected;
+    textSelected,
+    isBuildQueueFull = false;
+
 function setCookieCurrentVillage() {
     var villageID = game_data.village.id,
-        villgersNum = sizeOfObject(villageList);
+        villages = JSON.parse(localStorage.getItem('villages_show') || '[]'),
+        villgersNum = sizeOfObject(villages);
 
     for (var i = 0; i < villgersNum; i++) {
-        var urlTemp = villageList[i].url;
+        var urlTemp = villages[i].url;
         if (urlTemp.includes(villageID)) {
             currentVillageIndex = i;
             localStorage.setItem('current_village', currentVillageIndex);
@@ -141,7 +138,7 @@ function sizeOfObject(obj) {
     return size;
 }
 
-function createAssetElement(title, contents, columnToUse, update, extra_name) {
+function createWidgetElement(title, contents, columnToUse, update, extra_name) {
     var columnElement = document.getElementById(columnToUse);
     var elemId = title.toLowerCase().replace(/ /g, '_'); // Obtém o título do elemento
     var elemName = extra_name ? elemId + '_' + extra_name : elemId;
@@ -149,7 +146,7 @@ function createAssetElement(title, contents, columnToUse, update, extra_name) {
     // Create a container div
     var containerDiv = document.createElement('div');
     containerDiv.id = 'show_' + elemName;
-    containerDiv.className = 'vis moveable widget';
+    containerDiv.className = 'vis moveable widget script_widget';
 
     // Create the header with button
     var header = document.createElement('h4');
@@ -172,8 +169,17 @@ function createAssetElement(title, contents, columnToUse, update, extra_name) {
             settings_cookies.assets.find(asset => asset.name === elemId).open = true;
         }
     };
+    // Create the help link
+    var helpLink = document.createElement('a');
+    helpLink.href = '#';
+    helpLink.className = 'help-link help_link';
+    helpLink.style.backgroundSize = 'contain';
+    helpLink.style.marginLeft = '3px';
+    header.appendChild(helpLink);
 
-
+    helpLink.addEventListener('click', function (event) {
+        alert('Help link clicked');
+    });
     // Create the image for the button
     var buttonImg = document.createElement('img');
     buttonImg.className = 'widget-button';
@@ -187,9 +193,6 @@ function createAssetElement(title, contents, columnToUse, update, extra_name) {
     contentDiv.appendChild(contents);
     containerDiv.appendChild(header);
     containerDiv.appendChild(contentDiv);
-
-    var assetIndex = settings_cookies.assets.find(asset => asset.name === elemId).pos;
-    var children = columnElement.childNodes;
     //if update, remove the current element
     if (update) {
         var currentElement = document.getElementById('show_' + elemName);
@@ -199,14 +202,14 @@ function createAssetElement(title, contents, columnToUse, update, extra_name) {
     }
 
     // Verifica se o índice fornecido é válido
+    var assetIndex = settings_cookies.assets.find(asset => asset.name === elemId).pos;
+    var children = columnElement.childNodes;
     if (assetIndex >= 0 && assetIndex <= children.length) {
-        var refChild = (assetIndex + 1 === children.length) ? null : children[assetIndex + 1];
+        var refChild = (assetIndex + 1 === children.length) ? children[assetIndex] : children[assetIndex + 1];
         columnElement.insertBefore(containerDiv, refChild);
     } else {
         columnElement.appendChild(containerDiv);
     }
-
-    //columnElement.appendChild(containerDiv);
 }
 
 function saveColumnOrder() {
@@ -226,20 +229,15 @@ function saveColumnOrder() {
 
     var parentIds = [RIGHT_COLUMN, LEFT_COLUMN, CENTER_COLUMN];
     parentIds.forEach(function (parentId) {
-        // Obtém o elemento pai pelo ID
         var parentElement = document.getElementById(parentId);
         if (parentElement) {
-            // Obtém os elementos filhos do pai
             var children = parentElement.children;
-            // Itera sobre os elementos filhos
             for (var i = 0; i < children.length; i++) {
                 var childId = children[i].id.replace("show_", "");
-                // Verifica se o ID do filho está presente em settings_cookies.assets
                 var assetIndex = settings_cookies.assets.findIndex(function (asset) {
                     return asset.name === childId;
                 });
                 if (assetIndex !== -1) {
-                    // Atualiza a coluna com o ID do pai e a posição com a posição do filho no HTML
                     settings_cookies.assets[assetIndex].column = parentId;
                     settings_cookies.assets[assetIndex].pos = i;
                 }
@@ -305,71 +303,144 @@ function showTooltipNoText(element, isVisible) {
     }
 }
 
-/**
- * Sets a function to run after a specified time, using local storage to store the function's elapsed time and restart the time on that.
- *
- * @param {function} func - The function to be executed after the specified time
- * @param {number} timeToRun - The time in milliseconds after which the function should be executed
- * @param {string} id - The identifier for the function's start time in local storage
- */
-/*function setFunctionOnTimeOut(func, timeToRun, id) {
-let startTime = localStorage.getItem('startTime_' + id);
-
-if (startTime) {
-    let elapsedTime = Date.now() - parseInt(startTime);
-    let remainingTime = timeToRun - elapsedTime;
-    setTimeout(func, remainingTime);
-} else {
-    localStorage.setItem('startTime_' + id, Date.now());
-}
-}*/
-
 function functionToCallTest() {
-    debugger;
-    alert("opaaaaa")
+    /* GM_xmlhttpRequest({
+         method: 'GET',
+         //url: 'https://pt.twstats.com/pt97/index.php?page=player&id=848974103&utm_source=pt&utm_medium=player&utm_campaign=dsref',
+         url: '/game.php?village=' + game_data.village.id + '&screen=statue',
+         onload: function (responseDetails) {
+             var tempElement = document.createElement('div');
+             tempElement.innerHTML = responseDetails.responseText;
+             debugger;
+             console.log(
+                 "GM_xmlhttpRequest() response is:\n",
+                 responseDetails.responseText.substring(0, 80) + '...'
+             );
+         }
+     });*/
+
+    $.ajax({
+        url: '/game.php?village=' + game_data.village.id + '&screen=overview_villages',
+        type: 'GET'
+    }).then(function (data) {
+        var tempElement = document.createElement('div');
+        tempElement.innerHTML = data;
+        let rows = tempElement.querySelectorAll('#production_table tbody tr');
+        let villageList = {};
+
+        rows.forEach(function (row, index) {
+            let link = row.querySelector('td:first-child span:first-child a');
+            let name = link.querySelector('span').innerText;
+            let url = link.href;
+
+            villageList[index] = { name: name, url: url };
+        });
+
+        let jsonToSave = JSON.stringify(villageList);
+        debugger;
+    }).catch(function (error) {
+        debugger;
+    });
+}
+
+function extractTimeFromHTML(stringHTML) {
+    const stringToday = localStorage.getItem('today_build_time_string');
+    const stringTomorow = localStorage.getItem('tomorrow_build_time_string');
+    if (stringToday && stringTomorow) {
+        const modelosStrings = [stringToday, stringTomorow];
+        var day, hora, minuto;
+        for (const [index, modeloString] of modelosStrings.entries()) {
+            const regexString = modeloString
+                .replace(/\\/g, "\\\\")
+                .replace(/%s/, "(\\d{1,2}):(\\d{2})");
+
+            const regex = new RegExp(regexString);
+            const match = stringHTML.match(regex);
+            if (match) {
+                day = index;
+                hora = match[1];
+                minuto = match[2];
+            }
+        }
+        var time = [day, hora, minuto];
+        return time;
+    } else {
+        alert('erro no extractTimeFromHTML');
+        return null;
+    }
 }
 
 function timeToMilliseconds(timeString) {
-    // Split the time string into hours, minutes, and seconds
     var parts = timeString.split(':');
 
-    // Convert each part to milliseconds and sum them up
     var hours = parseInt(parts[0], 10) * 60 * 60 * 1000;
     var minutes = parseInt(parts[1], 10) * 60 * 1000;
     var seconds = parseInt(parts[2], 10) * 1000;
 
-    // Return the total milliseconds
     return hours + minutes + seconds;
+}
+
+function wait(seconds) {
+    return new Promise(resolve => {
+        setTimeout(resolve, seconds * 1000);
+    });
 }
 
 function setFunctionOnTimeOut(id, func, timeToRun) {
     let endTime = Date.now() + timeToRun;
-    localStorage.setItem('endTime_' + id, endTime); // Armazena o tempo de término do temporizador
-    localStorage.setItem('function_' + id, func.toString()); // Armazena a função como uma string
+    localStorage.setItem('endTime_' + id, endTime);
+    localStorage.setItem('function_' + id, func.toString());
     setTimeout(func, timeToRun);
 }
 
 function restoreTimeouts() {
-    // Itera sobre todas as chaves do localStorage
+    //general timeouts
     for (var key in localStorage) {
-        // Verifica se a chave começa com 'endTime_'
         if (key.startsWith('endTime_')) {
-            var id = key.replace('endTime_', ''); // Obtém o ID do temporizador
+            var id = key.replace('endTime_', '');
 
-            // Obtém o tempo de término do temporizador
             var endTime = localStorage.getItem(key);
             var remainingTime = parseInt(endTime) - Date.now();
 
             if (remainingTime > 0) {
-                // Define um novo temporizador com o tempo restante
                 setTimeout(() => {
                     eval('(' + localStorage.getItem('function_' + id) + ')();');
                 }, remainingTime);
             } else {
-                // Se o tempo restante for menor ou igual a zero, limpe as informações do temporizador
                 localStorage.removeItem('endTime_' + id);
                 localStorage.removeItem('function_' + id);
             }
         }
     }
+
+    //train timeouts
+    /*if (localStorage.getItem('auto_trainer_knight_level') !== '-1') {
+        var auto_trainer_next_train = new Date(parseInt(localStorage.getItem('auto_trainer_next_train')));
+        var waitTime = (auto_trainer_next_train.getTime() - Date.now() + timeToMilliseconds('00:00:01'));
+        if (waitTime > 0) {
+            setFunctionOnTimeOut('auto_trainer_knight', function () {
+                //localStorage.setItem('auto_trainer_next_train', '-1');
+                //window.location.href = '/game.php?village=' + game_data.village.id + '&screen=statue';
+            }, waitTime);
+        }
+    }*/
+}
+
+function prepareStorage() {
+    if (unsafeWindow.lang) {
+        const stringToday = unsafeWindow.lang['aea2b0aa9ae1534226518faaefffdaad'];
+        const stringTomorow = unsafeWindow.lang['57d28d1b211fddbb7a499ead5bf23079'];
+
+        if (stringToday) {
+            localStorage.setItem('today_build_time_string', stringToday);
+        }
+        if (stringTomorow) {
+            localStorage.setItem('tomorrow_build_time_string', stringTomorow);
+        }
+    }
+
+    localStorage.setItem('waiting_for_queue', localStorage.getItem('waiting_for_queue') ?? '{}');
+    localStorage.setItem('extra_building_queue', localStorage.getItem('extra_building_queue') ?? '[]');
+    localStorage.setItem('villages_show', localStorage.getItem('villages_show') ?? '[]');
+    localStorage.setItem('build_queue', localStorage.getItem('build_queue') ?? '[]');
 }

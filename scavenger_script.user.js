@@ -95,10 +95,3 @@ function stopAutoScavenger() {
         unitsInputByName[input.name] = input.value;
     });
 }
-
-var urlPage = document.location.href;
-if (urlPage.includes("&screen=place&mode=scavenge")) {
-    $(document).ready(function () {
-        injectAutoScavenger();
-    });
-}

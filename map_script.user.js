@@ -1,10 +1,10 @@
-//Override the sortable update function from Tribalwars
+
 //TODO: Refactor this code to split it up into smaller pieces
 var coords, mapPopUpBody;
 function getOutgoingUnitsToMap() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
         $.ajax({
-            'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=overview',
+            'url': '/game.php?village=' + game_data.village.id + '&screen=overview',
             'type': 'GET',
             'success': function (data) {
                 var outgoing_units = [];
@@ -38,7 +38,7 @@ function getReportsList() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
         var reportsList = [];
         $.ajax({
-            'url': 'https://' + game_data.world + '.tribalwars.com.pt/game.php?village=' + game_data.village.id + '&screen=report&mode=attack',
+            'url': '/game.php?village=' + game_data.village.id + '&screen=report&mode=attack',
             'type': 'GET',
             'success': function (data) {
                 var tempElement = document.createElement('div');

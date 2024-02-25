@@ -111,7 +111,7 @@ function injectNotepadOveriew(columnToUse) {
         tbody.appendChild(editButtonRow);
         table.appendChild(tbody);
 
-        createAssetElement('Notepad', table, columnToUse);
+        createWidgetElement('Notepad', table, columnToUse);
         loadNote();
     }
 }
