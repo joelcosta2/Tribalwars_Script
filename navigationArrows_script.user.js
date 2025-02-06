@@ -6,7 +6,6 @@ function prepareLinkToArrows(goToUrl) {
         urlFirst = str.slice(0, temp + 1),
         urlLast = str.slice(temp2);
 
-    // substituir por cookie 'global_village_id
     temp = goToUrl.indexOf("=");
     temp2 = goToUrl.indexOf("&", temp);
     var villagenumber = goToUrl.slice(temp + 1, temp2);
@@ -63,17 +62,9 @@ function injectNavigationBar() {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/main3.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=main"
             },
-            "Barracks": {
-                img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/barracks2.png",
-                href: "/game.php?village=" + game_data.village.id + "&screen=barracks"
-            },
-            "Stable": {
-                img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/stable2.png",
-                href: "/game.php?village=" + game_data.village.id + "&screen=stable"
-            },
-            "Watchtower": {
-                img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/watchtower1.png",
-                href: "/game.php?village=" + game_data.village.id + "&screen=watchtower"
+            "Mass Train?": {
+                img: "https://dspt.innogamescdn.com/asset/243a567d/graphic/unit/att.png",
+                href: "/game.php?village=" + game_data.village.id + "&screen=train"
             },
             "Smith": {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/smith2.png",
@@ -83,19 +74,11 @@ function injectNavigationBar() {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/place1.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=place"
             },
-            "Market": {
-                img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/market2.png",
-                href: "/game.php?village=" + game_data.village.id + "&screen=market"
-            },
-            "Wall": {
-                img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/wall2.png",
-                href: "/game.php?village=" + game_data.village.id + "&screen=wall"
-            },
             "Busca Minuciosa": {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/scavenging/options/3.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=place&mode=scavenge"
             },
-            "Start Test": {
+            "FOR TEST": {
                 img: "https://cdn-icons-png.flaticon.com/512/2285/2285551.png",
                 run: functionToCallTest
             }
@@ -190,21 +173,11 @@ function injectNavigationBar() {
     }
 
 
-    //delete premiun promotion:
-    if (settings_cookies.general['remove__premiun_promo']) {
-        var premiunPromo = document.querySelectorAll('.icon.header.premium')[0];
-        var parent = premiunPromo;
-
-        while (parent && !parent.classList.contains('topAlign')) {
-            parent = parent.parentElement;
-        }
-        if (parent) {
-            parent.remove();
-        }
-        var premiunPromoHint = document.querySelectorAll('.premium_account_hint.main')[0];
-        if (premiunPromoHint) {
-            premiunPromoHint.remove();
-        }
+    //delete premium promotion
+    if (settings_cookies.general['remove__premium_promo']) {
+        const style = document.createElement("style"); 
+        style.innerHTML = ".premium_account_hint { display: none !important; }"; 
+        document.head.appendChild(style);
     }
 
 }

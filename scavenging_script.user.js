@@ -1,10 +1,11 @@
 
 
-function injectAutoScavenger() {
+function injectAutoScavengingOption() {
+    /*
     const unitNames = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy', 'knight'];
 
     const tr = document.createElement('tr');
-    tr.id = 'auto_scavenger_form';
+    tr.id = 'auto_scavenging_form';
     unitNames.forEach(unit => {
         const input = document.createElement('input');
         input.setAttribute('name', unit);
@@ -35,7 +36,7 @@ function injectAutoScavenger() {
     buttonAnchor.setAttribute('href', '#');
     buttonAnchor.textContent = 'Start Auto Scavenge';
     buttonAnchor.onclick = function () {
-        startAutoScavenger();
+        startAutoScavenging();
     }
     buttonTd.appendChild(buttonAnchor);
     tr.appendChild(buttonTd);
@@ -49,26 +50,62 @@ function injectAutoScavenger() {
     // Append the created table row to the table
     const table = document.querySelector('.candidate-squad-widget tbody');
     table.appendChild(tr);
+    */
+
+    if(settings_cookies.general['show__auto_scavenging'].enabled) {
+        startAutoScavenging();
+    }
 }
 
-function startAutoScavenger(all = true) {
-    if (all) {
-        document.querySelector('.fill-all').click();
-        var startButton = document.querySelectorAll('.free_send_button');
-        startButton = startButton[startButton.length - 1];
-
-        var timeToAnother = document.querySelector('.return-countdown');
-        if (!timeToAnother) {
-            var temp = document.querySelectorAll('.duration');
-            timeToAnother = document.querySelectorAll('.duration')[temp.length - 1];
-        }
-        console.log(timeToAnother.textContent);
-        setFunctionOnTimeOut('scavenger-auto', functionToCallTest, timeToMilliseconds(timeToAnother.textContent) + timeToMilliseconds('0:00:20'));
-        startButton.style.color = 'red';
-        startButton.click();
-
+async function runAutoScavengingAll() {
+    const userChoice = await showWarningPopup('Confirm Auto Scavenging', 'Do you wish to continue with the scavenging automation?');
+    if (userChoice === 'cancel') {
+        return;
     } else {
-        const form = document.querySelector('#auto_scavenger_form');
+        var startButton = document.querySelectorAll('.free_send_button');
+        var timeToAnother = document.querySelector('.return-countdown');
+        //always goes to the last level available
+        if (startButton && !timeToAnother) {
+            document.querySelector('.fill-all').click();
+            startButton = startButton[startButton.length - 1];
+            
+            startButton.style.color = 'red';
+            startButton.click();
+            console.log("AutoScavengingAll started at: " + new Date());
+            wait(2).then(() => {
+                timeToAnother = document.querySelector('.return-countdown');
+                if (timeToAnother) {
+                    var temp = document.querySelectorAll('.duration');
+                    timeToAnother = document.querySelectorAll('.duration')[temp.length - 1];
+                    var waitTime = timeToMilliseconds(timeToAnother.textContent) + 15000; //15 more sec
+                    
+                    if (waitTime > 0) {
+                        setFunctionOnTimeOut('scavenging-auto', function () {
+                            window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
+                        }, waitTime);
+                    }
+                    console.log("AutoScavengingAll next at " + new Date(Date.now() + waitTime))
+                    history.back();
+                }
+            })
+        } else if (startButton && timeToAnother) {
+            var waitTime = timeToMilliseconds(timeToAnother.textContent) + 15000; //15 more sec
+            
+            if (waitTime > 0) {
+                setFunctionOnTimeOut('scavenging-auto', function () {
+                    window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
+                }, waitTime);
+            }
+        }
+    }
+}
+
+function startAutoScavenging(all = true) {
+    //only all for now
+    if (all) {
+        runAutoScavengingAll();
+    } else {
+        const form = document.querySelector('#auto_scavenging_form');
         const unitsInput = Array.from(form.querySelectorAll('input'));
 
         const unitsInputByName = {};
@@ -86,8 +123,10 @@ function startAutoScavenger(all = true) {
     }
 }
 
-function stopAutoScavenger() {
-    const form = document.querySelector('#auto_scavenger_form');
+
+//not in use
+function stopAutoScavenging() {
+    const form = document.querySelector('#auto_scavenging_form');
     const unitsInput = Array.from(form.querySelectorAll('input'));
 
     const unitsInputByName = {};

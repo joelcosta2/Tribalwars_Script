@@ -1,12 +1,12 @@
 
 // Build Extra List
-function injectExtraBuildQueue(availableBuildingsImgs, availableBuildingLevels, columnToUse, buildQueueElment, update = false) {
+function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildingLevels, columnToUse, buildQueueElment, update = false) {
     var villageBuilderid = game_data.csrf;
     localStorage.setItem('village_builder_id', villageBuilderid);
 
     //Create the extra build queue table
     var extraBuildQueueTable = document.createElement('table');
-    extraBuildQueueTable.id = 'extra_build_queue_table';
+    extraBuildQueueTable.id = 'build_queue_table';
     extraBuildQueueTable.className = 'vis bordered-table';
     extraBuildQueueTable.setAttribute('width', '100%');
     extraBuildQueueTable.style.verticalAlign = 'middle';
@@ -30,22 +30,26 @@ function injectExtraBuildQueue(availableBuildingsImgs, availableBuildingLevels, 
         var buildLvel = url.match(/([^\/]+?)(?=\.\w+$)/)[1];
         var row = document.createElement('tr');
         row.id = 'main_buildrow_' + index;
+        const canAddToQueue = buildingImgs.includes(url);
 
         var cell = document.createElement('td');
         cell.style.display = 'flex';
+        cell.style.alignItems = 'center';
+        cell.style.padding = '0';
 
         var imgLink = document.createElement('a');
-        imgLink.href = '/game.php?village=' + game_data.village.id + '&screen=' + buildId;
+        imgLink.href = game_data.link_base_pure + '' + buildId;
         var img = document.createElement('img');
         img.className = 'bmain_list_img';
+        img.style.marginRight = '3px';
         img.src = url;
         img.setAttribute('data-title', buildLvel);
         imgLink.appendChild(img);
         cell.appendChild(imgLink);
 
         var textLink = document.createElement('a');
-        textLink.href = '/game.php?village=' + game_data.village.id + '&screen=' + buildId;
-        textLink.textContent = document.querySelector('.visual-label-' + buildId).getAttribute('data-title');
+        textLink.href = game_data.link_base_pure + '' + buildId;
+        textLink.textContent = document.querySelector('.visual-label-' + buildId)?.getAttribute('data-title');
         cell.appendChild(textLink);
 
         var br = document.createElement('br');
@@ -53,18 +57,29 @@ function injectExtraBuildQueue(availableBuildingsImgs, availableBuildingLevels, 
 
         // Create the link for upgrading the building
         var upgradeLink = document.createElement('a');
-        upgradeLink.className = 'btn btn-build current-quest';
+        upgradeLink.className = canAddToQueue ? 'btn btn-build' : 'btn evt-cancel-btn btn-confirm-no';
         upgradeLink.setAttribute('data-building', (buildId + availableBuildingLevels[index] + 1));
         upgradeLink.setAttribute('data-level-next', (parseInt(availableBuildingLevels[index]) + 1));
-        upgradeLink.setAttribute('data-title', 'O mercador');
+        
         upgradeLink.id = 'main_buildlink_' + buildId + '_' + (parseInt(availableBuildingLevels[index]) + 1);
         upgradeLink.style.width = '-webkit-fill-available';
+        upgradeLink.style.margin = '0';
+        upgradeLink.style.fontSize = '11px !important';
+        upgradeLink.style.padding = '1px 3px';
         upgradeLink.textContent = 'Level ' + (parseInt(availableBuildingLevels[index]) + 1);
         upgradeLink.onclick = function () {
             addToBuildQueue(buildId);
         }
+        
+        upgradeLink.addEventListener('mouseenter', function (event) {
+            showTooltip(event.target, true);
+        });
+        upgradeLink.addEventListener('mouseleave', function (event) {
+            showTooltip(event.target, false);
+        });
 
         var upgradeCell = document.createElement('td');
+        upgradeCell.setAttribute('data-title', canAddToQueue ? 'Add to queue' : 'Add to waiting queue');
         upgradeCell.appendChild(upgradeLink);
 
         row.appendChild(cell);
@@ -90,10 +105,10 @@ function injectExtraBuildQueue(availableBuildingsImgs, availableBuildingLevels, 
     extraBuildDiv.appendChild(extraBuildQueueTable);
     extraBuildDiv.appendChild(buildsListTable);
 
-    createWidgetElement('Extra Building Queue', extraBuildDiv, columnToUse, update);
+    createWidgetElement({ title: 'Building Queue', contents: extraBuildDiv, columnToUse, update, extra_name: '', description: '' });
 }
 
-function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
+function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
     var buildQueueElment = document.createElement('td');
     var cancelConfirmIds = [];
     var queueBuildIdsActive = [];
@@ -103,49 +118,59 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
     //Get times from the cancel buttons row and check if the queue is full
     if (cancelButtons.length == 2) {
         isBuildQueueFull = true;
-        debugger
-        var lastBuildTime = extractTimeFromHTML(cancelButtons[1].parentElement.parentElement.children[3].textContent);
+        var lastBuildTime = extractBuildTimeFromHTML(cancelButtons[1].parentElement.parentElement.children[3].textContent);
         dateLastSlot = new Date().setDate(new Date().getDate() + lastBuildTime[0]);
         dateLastSlot = new Date(dateLastSlot).setHours(lastBuildTime[1], lastBuildTime[2]);
-        localStorage.setItem('extra_building_queue_last_slot', dateLastSlot);
+        localStorage.setItem('building_queue_last_slot', dateLastSlot);
 
-        var nextSlotTime = extractTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
+        var nextSlotTime = extractBuildTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
         dateNextSlot = new Date().setDate(new Date().getDate() + nextSlotTime[0]);
         dateNextSlot = new Date(dateNextSlot).setHours(nextSlotTime[1], nextSlotTime[2]);
-        localStorage.setItem('extra_building_queue_next_slot', dateNextSlot);
+        localStorage.setItem('building_queue_next_slot', dateNextSlot);
+        setCancelBuildIds(cancelButtons);
     } else if (cancelButtons.length == 1) {
         isBuildQueueFull = false;
-        var nextSlotTime = extractTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
-        dateNextSlot = new Date().setDate(new Date().getDate() + dateNextSlot[0]);
-        dateNextSlot = new Date(dateLastSlot).setHours(dateNextSlot[1], dateNextSlot[2]);
-        localStorage.setItem('extra_building_queue_next_slot', dateNextSlot);
+        var nextSlotTime = extractBuildTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
+        dateNextSlot = new Date().setDate(new Date().getDate() + nextSlotTime[0]);
+        dateNextSlot = new Date(dateLastSlot).setHours(nextSlotTime[1], nextSlotTime[2]);
+        localStorage.setItem('building_queue_next_slot', dateNextSlot);
+        setCancelBuildIds(cancelButtons);
     } else {
         isBuildQueueFull = false;
-        localStorage.setItem('extra_building_queue_last_slot', 0);
-        localStorage.setItem('extra_building_queue_next_slot', 0);
+        localStorage.setItem('building_queue_last_slot', 0);
+        localStorage.setItem('building_queue_next_slot', 0);
     }
 
     cancelButtons.forEach(function (element) {
-        cancelConfirmIds.push(element.href.match(/id=(\d+)/)?.[1]);
-        queueBuildIdsActive.push(element.parentElement.parentElement.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ""));
+        queueBuildIdsActive.push(element.parentElement.parentElement.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ''));
     })
+    
+    localStorage.setItem('building_queue_active', JSON.stringify(queueBuildIdsActive))
 
-    var queueBuildIds = JSON.parse(localStorage.getItem('extra_building_queue') || '[]');
+    // inject active real queue
     if (queueBuildIdsActive.length) {
-        queueBuildIdsActive.forEach(function (id) {
+        queueBuildIdsActive.forEach(function (id, index) {
             var anchor = document.createElement('a');
             anchor.className = '';
             anchor.style.display = 'inline-flex';
+            anchor.style.border = '1px solid #7d510f';
 
-            /*anchor.onclick = function () {
-                var index = Array.from(this.parentElement.children).indexOf(this);
-                removeFromBuildQueue(index); //todo: NOT WORKING
-                //callRemoveBuildingQueue('/game.php?village=' + game_data.village.id + '&screen=main');
-            }*/
+            anchor.onclick = async function () {
+                const cancelIds = JSON.parse(localStorage.getItem('queue_cancelIds'));
+
+                try {
+                    await callRemoveFromActiveBuildingQueue(cancelIds[index]);  // Wait for the promise to resolve
+                    console.log('Building successfully removed');
+                
+                    removeFromActiveBuildQueue(index); //todo: NOT WORKING
+                } catch (error) {
+                    console.error('Error removing building:', error);
+                }
+            }
 
             /*anchor.addEventListener('mouseenter', function (event) {
                 var interval = setInterval(function () {
-                    var storedDate = new Date(JSON.parse(localStorage.getItem('extra_building_queue_last_slot')));
+                    var storedDate = new Date(JSON.parse(localStorage.getItem('building_queue_last_slot')));
                     var currentDate = new Date();
                     var differenceInMilliseconds = storedDate - currentDate;
                     var differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
@@ -163,38 +188,46 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
 
             var span = document.createElement('span');
             span.className = 'icon header village active_queue';
-            span.style.backgroundImage = 'url(' + allAvailableBuildingsImgs.find(element => element.includes(id)) + ')';
+            span.style.backgroundImage = 'url(' + allBuildingsImgs.find(element => element.includes(id)) + ')';
             span.style.backgroundPosition = '0px 0px';
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
             span.style.width = '24px';
             span.style.position = 'relative';
             span.style.display = 'inline-block';
-            //span.style.cursor = 'pointer';
-            span.classList.add('tooltip');
+            span.style.cursor = 'pointer';
+
 
             var progressBar = document.createElement('div');
-            progressBar.style.cssText = 'position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background-color: #4caf50;';
+            progressBar.style.position = 'absolute';
+            progressBar.style.bottom = '0';
+            progressBar.style.left = '0';
+            progressBar.style.width = '100%';
+            progressBar.style.height = '4px';
+            progressBar.style.backgroundColor = index != 0 ? '#ffb400' : '#4caf50';
+
             span.appendChild(progressBar);
             anchor.appendChild(span);
             buildQueueElment.appendChild(anchor);
         });
     }
+    // inject waiting fake queue
+    var queueBuildIds = JSON.parse(localStorage.getItem('building_queue') || '[]');
     if (queueBuildIds.length) {
         queueBuildIds.forEach(function (id) {
             var anchor = document.createElement('a');
             anchor.className = '';
             anchor.style.display = 'inline-flex';
-            anchor.style.backgroundColor = 'red';
+            anchor.setAttribute('data-title', 'Remove from queue');
+            anchor.style.border = '1px solid #7d510f';
             anchor.onclick = function () {
                 var index = Array.from(this.parentElement.children).indexOf(this);
-                removeFromBuildQueue(index - queueBuildIdsActive.length); //todo: NOT WORKING
-                //callRemoveBuildingQueue('/game.php?village=' + game_data.village.id + '&screen=main');
+                removeFromBuildQueue(index - queueBuildIdsActive.length);
             }
 
             /*anchor.addEventListener('mouseenter', function (event) {
                 var interval = setInterval(function () {
-                    var storedDate = new Date(JSON.parse(localStorage.getItem('extra_building_queue_last_slot')));
+                    var storedDate = new Date(JSON.parse(localStorage.getItem('building_queue_last_slot')));
                     var currentDate = new Date();
                     var differenceInMilliseconds = storedDate - currentDate;
                     var differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
@@ -212,7 +245,7 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
 
             var span = document.createElement('span');
             span.className = 'icon header village';
-            span.style.backgroundImage = 'url(' + allAvailableBuildingsImgs.find(element => element.includes(id)) + ')';
+            span.style.backgroundImage = 'url(' + allBuildingsImgs.find(element => element.includes(id)) + ')';
             span.style.backgroundPosition = '0px 0px';
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
@@ -220,7 +253,24 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
             span.style.position = 'relative';
             span.style.display = 'inline-block';
             span.style.cursor = 'pointer';
-            span.classList.add('tooltip');
+
+            var progressBar = document.createElement('div');
+            progressBar.style.position = 'absolute';
+            progressBar.style.bottom = '0';
+            progressBar.style.left = '0';
+            progressBar.style.width = '100%';
+            progressBar.style.height = '4px';
+            progressBar.style.backgroundColor = 'red';
+
+            span.appendChild(progressBar);
+            
+            span.addEventListener('mouseenter', function (event) {
+                showTooltip(event.target, true);
+            });
+            span.addEventListener('mouseleave', function (event) {
+                showTooltip(event.target, false);
+            });
+            
 
             anchor.appendChild(span);
             buildQueueElment.appendChild(anchor);
@@ -232,7 +282,7 @@ function getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs) {
 
 function getAllBuildingsImages(tempElement) {
     var buildingsElement = tempElement.querySelector('#buildings');
-    var allAvailableBuildingsImgs = [], availableBuildingsImgs = [], allAvailableBuildingLevels = [], availableBuildingLevels = [];
+    var allBuildingsImgs = [], availableBuildingsImgs = [], allAvailableBuildingLevels = [], availableBuildingLevels = [];
     if (buildingsElement) {
         var trs = buildingsElement.querySelectorAll('tr');
         trs.forEach(function (tr) {
@@ -265,7 +315,7 @@ function getAllBuildingsImages(tempElement) {
                         }
                         var a = tds[0].querySelector('a');
                         if (a && lvl) {
-                            allAvailableBuildingsImgs.push(a.querySelector('img').src);
+                            allBuildingsImgs.push(a.querySelector('img').src);
                         }
                     }
                 }
@@ -273,7 +323,16 @@ function getAllBuildingsImages(tempElement) {
         });
     }
 
-    return { availableBuildingsImgs, availableBuildingLevels, allAvailableBuildingsImgs, allAvailableBuildingLevels };
+    return { availableBuildingsImgs, availableBuildingLevels, allBuildingsImgs, allAvailableBuildingLevels };
+}
+
+function setCancelBuildIds(cancelButtons) {
+    var ids = [];
+    cancelButtons.forEach(btn => {
+        var id = new URLSearchParams(new URL(btn.href).search).get('id');
+        if (id) ids.push(id);
+    });
+    localStorage.setItem('queue_cancelIds', JSON.stringify(ids));
 }
 
 function addToBuildQueue(build_id) {
@@ -281,98 +340,120 @@ function addToBuildQueue(build_id) {
         if (!isBuildQueueFull && !JSON.parse(localStorage.getItem('waiting_for_queue')).buildId) {
             callUpgradeBuilding(build_id);
         } else {
-            var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue') || '[]');
-            extra_building_queue.push(build_id)
-            localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
-            injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
+            var building_queue = JSON.parse(localStorage.getItem('building_queue') || '[]');
+            building_queue.push(build_id)
+            localStorage.setItem('building_queue', JSON.stringify(building_queue));
+            injectBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
         }
     } else {
-        var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue'));
-        callUpgradeBuilding(extra_building_queue[0]);
+        var building_queue = JSON.parse(localStorage.getItem('building_queue'));
+        callUpgradeBuilding(building_queue[0]);
     }
 }
 
 function removeFromBuildQueue(build_index) {
-    var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue'));
-    extra_building_queue.splice(build_index, 1);
-    localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
+    var building_queue = JSON.parse(localStorage.getItem('building_queue'));
+    building_queue.splice(build_index, 1);
+    localStorage.setItem('building_queue', JSON.stringify(building_queue));
 
     if (build_index === 0) {
-        localStorage.setItem('function_extra_building_queue', JSON.stringify(''));
+        localStorage.removeItem('function_building_queue');
+        localStorage.removeItem('endTime_building_queue');
         localStorage.setItem('waiting_for_queue', JSON.stringify({}));
     }
-    injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
+    injectBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
+}
+
+function removeFromActiveBuildQueue(build_index) {
+    var building_active_queue = JSON.parse(localStorage.getItem('building_queue_active'));
+    building_active_queue.splice(build_index, 1);
+    localStorage.setItem('building_queue_active', JSON.stringify(building_active_queue));
+
+    if (build_index === 0) {
+        localStorage.setItem('building_queue_active', JSON.stringify({}));
+    }
+    injectBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
 }
 
 function callUpgradeBuilding(id) {
     $.ajax({
-        'url': '/game.php?village=' + game_data.village.id + '&screen=main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf,
+        'url': game_data.link_base_pure + 'main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf,
         'type': 'GET',
         'success': function (data) {
             var tempElement = document.createElement('div');
             tempElement.innerHTML = data;
             var isError = tempElement.querySelector('.error_box');
-            var extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue') || '[]');
-            extra_building_queue.shift();
-            localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue || []));
+            var building_queue = JSON.parse(localStorage.getItem('building_queue') || '[]');
+            building_queue.shift();
+            localStorage.setItem('building_queue', JSON.stringify(building_queue || []));
             localStorage.setItem('waiting_for_queue', JSON.stringify({}));
             if (isError !== null) {
                 var errorBuildContent = document.querySelector('#error_build_queue_content');
                 var buildRow = tempElement.querySelector('#main_buildrow_' + id + ' .inactive');
                 if (buildRow) {
-                    var timeAvailable = extractTimeFromHTML(buildRow.textContent);
+                    var timeAvailable = extractBuildTimeFromHTML(buildRow.textContent);
                 }
 
                 //ABLE TO GET TIME WHEN ITS AVAILABLE TO ADD TO QUEUE
                 errorBuildContent.textContent = isError.textContent;
                 if (timeAvailable) {
-                    errorBuildContent.textContent += (settings_cookies.general['allow_pre_queue'] ? ' Added to queue at ' : ' Available at ') + (timeAvailable[0] ? 'Tomorrow' : 'Today') + ' @ ' + timeAvailable[1] + ':' + timeAvailable[2];
+                    errorBuildContent.textContent += 'Added to queue at ' + (timeAvailable[0] ? 'Tomorrow' : 'Today') + ' @ ' + timeAvailable[1] + ':' + timeAvailable[2];
                     var waiting_for_queue_temp = { buildId: id, time: timeAvailable };
-                    if (settings_cookies.general['allow_pre_queue']) {
-                        localStorage.setItem('waiting_for_queue', JSON.stringify(waiting_for_queue_temp));
-                        extra_building_queue = JSON.parse(localStorage.getItem('extra_building_queue'));
-                        extra_building_queue.unshift(id);
-                        localStorage.setItem('extra_building_queue', JSON.stringify(extra_building_queue));
-                    }
+                    
+                    localStorage.setItem('waiting_for_queue', JSON.stringify(waiting_for_queue_temp));
+                    building_queue = JSON.parse(localStorage.getItem('building_queue'));
+                    building_queue.unshift(id);
+                    localStorage.setItem('building_queue', JSON.stringify(building_queue));
                 }
 
                 errorBuildContent.parentElement.style.display = 'block';
                 setTimeout(function () {
                     errorBuildContent.parentElement.style.display = 'none';
                 }, 2000);
-                //injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
+                injectBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
             } else {
-                injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
+                injectBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
             }
         }
     });
 }
 
-function callRemoveBuildingQueue(url) {
-    $.ajax({
-        'url': url,
-        'type': 'GET',
-        'success': function (data) {
-            injectBuildQueueExtraList(settings_cookies.assets.find(asset => asset.name === 'extra_building_queue').column, true);
+function callRemoveFromActiveBuildingQueue(idToRemove) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://pt105.tribalwars.com.pt/game.php?village=14520&screen=main&ajaxaction=cancel_order&type=main', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+    xhr.setRequestHeader('Tribalwars-Ajax', '1');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                console.log('edificio removido');
+            } else {
+                console.error('Error:', xhr.status, xhr.statusText);
+            }
         }
-    });
+    };
+
+    var body = 'id=' + idToRemove + '&destroy=0&h=' + game_data.csrf;
+    xhr.send(body);
 }
 
-function injectBuildQueueExtraList(columnToUse, update = false) {
-    if (settings_cookies.general['show__extra_building_queue']) {
+function injectBuildQueueWidget(columnToUse, update = false) {
+    if (settings_cookies.general['show__building_queue']) {
         $.ajax({
-            'url': '/game.php?village=' + game_data.village.id + '&screen=main',
+            'url': game_data.link_base_pure + 'main',
             'type': 'GET',
             'success': function (data) {
                 var tempElement = document.createElement('div');
                 tempElement.innerHTML = data;
-                var { availableBuildingsImgs, availableBuildingLevels, allAvailableBuildingsImgs, allAvailableBuildingLevels } = getAllBuildingsImages(tempElement);
-                var buildQueueElment = getCurrentQueueListElement(tempElement, allAvailableBuildingsImgs);
+                var { availableBuildingsImgs, availableBuildingLevels, allBuildingsImgs, allAvailableBuildingLevels } = getAllBuildingsImages(tempElement);
+                var buildQueueElment = getCurrentQueueListElement(tempElement, allBuildingsImgs);
 
-                if (settings_cookies.general['show__extra_building_queue_all']) {
-                    injectExtraBuildQueue(allAvailableBuildingsImgs, allAvailableBuildingLevels, columnToUse, buildQueueElment, update);
+                if (settings_cookies.general['show__building_queue_all']) {
+                    injectBuildQueue(allBuildingsImgs, availableBuildingsImgs, allAvailableBuildingLevels, columnToUse, buildQueueElment, update);
                 } else {
-                    injectExtraBuildQueue(availableBuildingsImgs, availableBuildingLevels, columnToUse, buildQueueElment, update);
+                    injectBuildQueue(availableBuildingsImgs, availableBuildingsImgs, availableBuildingLevels, columnToUse, buildQueueElment, update);
                 }
             }
         });

@@ -3,11 +3,11 @@
 function loadNote() {
     var cookieNotepadJson = localStorage.getItem('vilagges_notepad');
     var notepadArray = cookieNotepadJson ? JSON.parse(cookieNotepadJson) : [];
+    var textPlacer = document.getElementById('village-note-body_script');
     var notepadText = notepadArray[currentVillageIndex];
 
-    if (notepadText !== '') {
+    if (notepadText !== '' && textPlacer) {
         toggleElement('village_note_script');
-        var textPlacer = document.getElementById('village-note-body_script');
         textPlacer.textContent = notepadText;
 
     }
@@ -27,27 +27,35 @@ function saveNote() {
 
 function openEditModeNote() {
     listenTextAreas();
+
     var currentCookieValue = localStorage.getItem('vilagges_notepad');
     var notepadArray = currentCookieValue ? JSON.parse(currentCookieValue) : [];
     document.getElementById('message_note_script').value = notepadArray[currentVillageIndex];
     toggleElement('note_body_edit');
+    
     document.getElementById('village_note_script').style.display = 'none';
     document.getElementById('edit_notepad_link_script').style.display = 'none';
+    
+    var noteElem = document.getElementById('message_note_script');
+    noteElem.focus();
+    noteElem.setSelectionRange(noteElem.value.length, noteElem.value.length);
 }
 
-function injectNotepadOveriew(columnToUse) {
+function injectNotepadWidget(columnToUse) {
     if (settings_cookies.general['show__notepad']) {
         var editLink = document.createElement('a');
         editLink.id = 'edit_notepad_link_script';
+        editLink.classList.add('btn');
         editLink.textContent = '» Editar';
         editLink.addEventListener('click', openEditModeNote);
 
         var noteTextarea = document.createElement('textarea');
         noteTextarea.id = 'message_note_script';
         noteTextarea.name = 'note';
-        noteTextarea.style.width = '97%';
+        noteTextarea.style.width = '-webkit-fill-available';
         noteTextarea.rows = '10';
         noteTextarea.cols = '40';
+        noteTextarea.addEventListener('change', saveNote);
 
         var saveButton = document.createElement('a');
         saveButton.id = 'note_submit_button_script';
@@ -69,9 +77,11 @@ function injectNotepadOveriew(columnToUse) {
         var noteBodyDiv = document.createElement('div');
         noteBodyDiv.id = 'village-note-body_script';
         noteBodyDiv.className = 'village-note-body';
+        noteBodyDiv.style.cursor = 'pointer';
         noteBodyDiv.style.whiteSpace = 'pre-wrap';
-
+        noteBodyDiv.addEventListener('click', openEditModeNote);
         noteDiv.appendChild(noteBodyDiv);
+
         noteCell.appendChild(noteDiv);
         noteRow.appendChild(noteCell);
 
@@ -85,13 +95,10 @@ function injectNotepadOveriew(columnToUse) {
         editDiv.style.width = '100%';
         editDiv.style.overflow = 'hidden';
 
-        var textareaDiv = document.createElement('div');
-        textareaDiv.appendChild(noteTextarea);
-
         var buttonDiv = document.createElement('div');
         buttonDiv.appendChild(saveButton);
 
-        editDiv.appendChild(textareaDiv);
+        editDiv.appendChild(noteTextarea);
         editDiv.appendChild(buttonDiv);
 
         var editNoteBodyDiv = document.createElement('div');
@@ -111,7 +118,19 @@ function injectNotepadOveriew(columnToUse) {
         tbody.appendChild(editButtonRow);
         table.appendChild(tbody);
 
-        createWidgetElement('Notepad', table, columnToUse);
+        createWidgetElement({ title: 'Notepad', contents: table, columnToUse, update: '', extra_name: '', description: 'Save notes for your villages' });
+
         loadNote();
+    }
+}
+
+function toggleElement(element) {
+    var elementToToggle = document.getElementById(element);
+    if (elementToToggle) {
+        if (elementToToggle.style.display === 'none') {
+            elementToToggle.style.display = '';
+        } else {
+            elementToToggle.style.display = 'none';
+        }
     }
 }

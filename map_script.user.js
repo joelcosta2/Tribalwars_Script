@@ -4,7 +4,7 @@ var coords, mapPopUpBody;
 function getOutgoingUnitsToMap() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
         $.ajax({
-            'url': '/game.php?village=' + game_data.village.id + '&screen=overview',
+            'url': game_data.link_base_pure + 'overview',
             'type': 'GET',
             'success': function (data) {
                 var outgoing_units = [];
@@ -33,12 +33,11 @@ function getOutgoingUnitsToMap() {
     }
 }
 
-
 function getReportsList() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
         var reportsList = [];
         $.ajax({
-            'url': '/game.php?village=' + game_data.village.id + '&screen=report&mode=attack',
+            'url': game_data.link_base_pure + 'report&mode=attack',
             'type': 'GET',
             'success': function (data) {
                 var tempElement = document.createElement('div');
@@ -61,7 +60,6 @@ function getReportsList() {
     }
 }
 
-
 function getReportInfoToMap() {
     if (settings_cookies.general['show__extra_options_map_hover']) {
         var reports_list = localStorage.getItem('reports_list') ? JSON.parse(localStorage.getItem('reports_list')) : null;
@@ -78,22 +76,22 @@ function getReportInfoToMap() {
                         'success': function (data) {
                             var tempElement = document.createElement('div');
                             tempElement.innerHTML = data;
-                            var attackLootResults = tempElement.querySelector('#attack_results tr');
-
 
                             var tr = document.createElement('tr');
                             var th = document.createElement('th');
-                            th.innerHTML = '↓Last Report Info:  ';
+                            th.innerHTML = '↓Last Attack:  ';
                             var td = document.createElement('td');
                             td.innerHTML = report.date;
                             tr.appendChild(th);
                             tr.appendChild(td);
                             mapPopUpBody.appendChild(tr);
 
-                            attackLootResults.querySelectorAll('th')[0].innerHTML = attackLootResults.querySelectorAll('th')[0].innerHTML + ' (' + attackLootResults.querySelectorAll('td')[1].textContent + ')';
-                            attackLootResults.removeChild(attackLootResults.querySelectorAll('td')[1]);
-
-                            mapPopUpBody.appendChild(attackLootResults);
+                            var attackLootResults = tempElement.querySelector('#attack_results tr');
+                            if (attackLootResults) {
+                                attackLootResults.querySelectorAll('th')[0].innerHTML = attackLootResults.querySelectorAll('th')[0].innerHTML + ' (' + attackLootResults.querySelectorAll('td')[1].textContent + ')';
+                                attackLootResults.removeChild(attackLootResults.querySelectorAll('td')[1]);
+                                mapPopUpBody.appendChild(attackLootResults);
+                            }
                             tempElement.innerHTML = data;
                             var attackLootDiscoverResults = tempElement.querySelector('#attack_spy_resources tr');
                             if (attackLootDiscoverResults) {
@@ -131,7 +129,126 @@ function getReportInfoToMap() {
             })
         }
     }
+}
 
+function setMapSize() {
+    var isBigMapOpened = settings_cookies.general['show__big_map'];
+    
+    var mapWrap = document.getElementById('map_wrap');
+    var map = document.getElementById('map');
+    var extraMapContainer = document.getElementById('map_container');
+    var goHomeBoundarie = document.getElementById('map_go_home_boundary');
+    var coordYWrap = document.getElementById('map_coord_y_wrap');
+    var coordXWrap = document.getElementById('map_coord_x_wrap');
+
+    // Recupera as configurações salvas do localStorage
+    var storedMapConfig = JSON.parse(localStorage.getItem('mapConfig')) || {};
+
+    if (!storedMapConfig.originalWidth || !storedMapConfig.originalHeight) {
+        storedMapConfig.originalWidth = map.style.width || 'auto';
+        storedMapConfig.originalHeight = map.style.height || 'auto';
+    }
+
+    var mapImages = document.querySelectorAll('#map img');
+    mapImages.forEach(function(img) {
+        if (!storedMapConfig.originalMapImgWidth || !storedMapConfig.originalMapImgHeight) {
+            storedMapConfig.originalMapImgWidth = img.style.width || 'auto';
+            storedMapConfig.originalMapImgHeight = img.style.height || 'auto';
+        }
+    });
+
+    // Salva as configurações iniciais no localStorage
+    localStorage.setItem('mapConfig', JSON.stringify(storedMapConfig));
+
+    if (isBigMapOpened && mapWrap) {
+        // Define os novos tamanhos
+        mapWrap.style.width = '900px';
+        mapWrap.style.height = '550px';
+        map.style.width = '900px';
+        map.style.height = '550px';
+        coordYWrap.style.height = '550px';
+        coordXWrap.style.width = '900px';
+
+        mapImages.forEach(function(img) {
+            img.style.width = 'auto';
+            img.style.height = 'auto';
+        });
+
+        // Remove o container antigo e recria o mapa
+        extraMapContainer.remove();
+        goHomeBoundarie.remove(); //it will generate again
+        TWMap.size = [9, 9];
+        TWMap.init();
+        wait(1).then(() => { TWMap.focusSubmit();} );
+    } else {
+        // Restaura os tamanhos originais a partir do objeto salvo
+        mapWrap.style.width = storedMapConfig.originalWidth;
+        mapWrap.style.height = storedMapConfig.originalHeight;
+        map.style.width = storedMapConfig.originalWidth;
+        map.style.height = storedMapConfig.originalHeight;
+        coordYWrap.style.height = storedMapConfig.originalHeight;
+        coordXWrap.style.width = storedMapConfig.originalWidth;
+
+        mapImages.forEach(function(img) {
+            img.style.width = storedMapConfig.originalMapImgWidth;
+            img.style.height = storedMapConfig.originalMapImgHeight;
+        });
+
+        // Remove o container antigo e recria o mapa no tamanho original
+        extraMapContainer.remove();
+        goHomeBoundarie.remove(); //it will generate again
+        TWMap.size = [9, 9];
+        TWMap.init();
+        wait(1).then(() => { TWMap.focusSubmit();} );
+    }
+}
+
+function createBigMapOption() {
+    const tr = document.createElement('tr');
+
+    tr.style.background = '#e27f26 !important'; 
+    
+    const tdCheckbox = document.createElement('td');
+    const inputCheckbox = document.createElement('input');
+    var isBigMapOpened = settings_cookies.general['show__big_map'];
+    inputCheckbox.type = 'checkbox';
+    inputCheckbox.name = 'show_biggermap';
+    inputCheckbox.id = 'show_biggermap';
+    inputCheckbox.checked = isBigMapOpened;
+    inputCheckbox.onclick = function() {
+        var isBigMapOpened = settings_cookies.general['show__big_map'];
+        settings_cookies.general['show__big_map'] = !isBigMapOpened;
+        localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
+        setMapSize();
+    };
+    tdCheckbox.appendChild(inputCheckbox);
+    
+    const tdLabel = document.createElement('td');
+    tdLabel.colSpan = 2;
+    tdLabel.style.background = 'none';
+    const label = document.createElement('label');
+    label.setAttribute('for', 'show_biggermap');
+    label.textContent = 'Show Large Map';
+    tdLabel.appendChild(label);
+    
+    tr.appendChild(tdCheckbox);
+    tr.appendChild(tdLabel);
+    
+    const visTables = document.querySelectorAll('#map_config .vis');
+    
+    if (visTables.length > 1) {
+        const tbody = visTables[1].querySelector('tbody');
+        
+        if (tbody) {
+            const secondTr = tbody.querySelectorAll('tr')[1];
+            
+            if (secondTr) {
+                tbody.insertBefore(tr, secondTr);
+            } else {
+                tbody.appendChild(tr);
+            }
+        }
+    }
 }
 
 if (typeof TWMap !== 'undefined') {
@@ -152,8 +269,10 @@ if (typeof TWMap !== 'undefined') {
 
             if (mapPopUpBody && !mapPopUpBody.querySelector('#map_popup_extra')) {
                 mapPopUpBody.appendChild(tr);
-                getReportInfoToMap();
+                getReportInfoToMap(); //mudar isto para nao fazer fetch em cada hover, mas apenas um fetch e guardar info
             }
         };
     }
+    createBigMapOption();
+    setMapSize();
 }

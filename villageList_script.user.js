@@ -16,7 +16,7 @@ function getVillagesDataURL() {
     return villagesDataUrl;
 }
 
-function injectVillagesListColumn(columnToUse) {
+function injectVillagesListWidget(columnToUse) {
     if (settings_cookies.general['show__village_list']) {
         var villagesDataUrl = getVillagesDataURL();
         // Criação da tabela
@@ -30,14 +30,14 @@ function injectVillagesListColumn(columnToUse) {
         tbody.innerHTML = villagesDataUrl;
         table.appendChild(tbody);
 
-        createWidgetElement('Village List', table, columnToUse);
+        createWidgetElement({ title: 'Village List', contents: table, columnToUse, update: '', extra_name: '', description: '' });
     }
 }
 
 function prepareVillageList() {
     var jsonToSave;
     $.ajax({
-        url: '/game.php?village=' + game_data.village.id + '&screen=overview_villages',
+        url: game_data.link_base_pure + 'overview_villages',
         type: 'GET',
         async: false,
         success: function (data) {
