@@ -162,7 +162,7 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
                     await callRemoveFromActiveBuildingQueue(cancelIds[index]);  // Wait for the promise to resolve
                     console.log('Building successfully removed');
                 
-                    removeFromActiveBuildQueue(index); //todo: NOT WORKING
+                    removeFromActiveBuildQueue(index);
                 } catch (error) {
                     console.error('Error removing building:', error);
                 }

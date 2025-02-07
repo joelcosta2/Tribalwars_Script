@@ -85,6 +85,28 @@ var currentVillageIndex,
     textSelected,
     isBuildQueueFull = false;
 
+function prepareLocalStorageItems() {
+    if (unsafeWindow.lang) {
+        const stringToday = unsafeWindow.lang['aea2b0aa9ae1534226518faaefffdaad'];
+        const stringTomorow = unsafeWindow.lang['57d28d1b211fddbb7a499ead5bf23079'];
+        localStorage.setItem('tw_lang', JSON.stringify(unsafeWindow.lang));
+
+        if (stringToday) {
+            localStorage.setItem('today_build_time_string', stringToday);
+        }
+        if (stringTomorow) {
+            localStorage.setItem('tomorrow_build_time_string', stringTomorow);
+        }
+    }
+
+    localStorage.setItem('waiting_for_queue', localStorage.getItem('waiting_for_queue') ?? '{}');
+    localStorage.setItem('building_queue', localStorage.getItem('building_queue') ?? '[]');
+    localStorage.setItem('villages_show', localStorage.getItem('villages_show') ?? '[]');
+    localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
+    localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
+    localStorage.setItem('auto_trainer_paladin_level', localStorage.getItem('auto_trainer_paladin_level') ?? 0);
+}
+
 function setCookieCurrentVillage() {
     var villageID = game_data.village.id,
         villages = JSON.parse(localStorage.getItem('villages_show') || '[]'),
@@ -400,28 +422,6 @@ function restoreTimeouts() {
             }
         }
     }
-}
-
-function prepareLocalStorageItems() {
-    if (unsafeWindow.lang) {
-        const stringToday = unsafeWindow.lang['aea2b0aa9ae1534226518faaefffdaad'];
-        const stringTomorow = unsafeWindow.lang['57d28d1b211fddbb7a499ead5bf23079'];
-        localStorage.setItem('tw_lang', JSON.stringify(unsafeWindow.lang));
-
-        if (stringToday) {
-            localStorage.setItem('today_build_time_string', stringToday);
-        }
-        if (stringTomorow) {
-            localStorage.setItem('tomorrow_build_time_string', stringTomorow);
-        }
-    }
-
-    localStorage.setItem('waiting_for_queue', localStorage.getItem('waiting_for_queue') ?? '{}');
-    localStorage.setItem('building_queue', localStorage.getItem('building_queue') ?? '[]');
-    localStorage.setItem('villages_show', localStorage.getItem('villages_show') ?? '[]');
-    localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
-    localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
-    localStorage.setItem('auto_trainer_paladin_level', localStorage.getItem('auto_trainer_paladin_level') ?? 0);
 }
 
 function checkInactivity(minutes) {

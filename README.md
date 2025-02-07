@@ -2,7 +2,7 @@
 
 ## Description
 
-Tribalwars_Script is a collection of scripts designed to enhance the gaming experience in Tribalwars. These scripts provide additional features that are typically available only to premium users, along with other useful options. A new column on the left of the main screen has been added. New widgets added by this script will remember the position on the main screen.
+Tribalwars_Script is a collection of scripts designed to enhance the Tribalwars gaming experience. It introduces several premium-like features, such as an expanded building queue, additional navigation options, a larger map, and extra village information. The script adds a new column to the left of the main screen, and the widgets it introduces will remember their position on the screen. With these features, the gameplay experience is streamlined, offering users more control and convenience while playing, even without a premium account.
 
 ## Key Features
 
@@ -82,6 +82,7 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
    - Go to Extensions on your browser and find the TM 'card'.
    - Click details and "Allow access to file URLs".
    
+  ![Allow access to file URLs](img/dkhgl.png)
 6. **Notice the file:// URI scheme:**
       - for windows:
 
