@@ -25,16 +25,25 @@ var default_settings_cookies = {
             column: LEFT_COLUMN,
             pos: 2,
             open: true
-        }
+        },
+        {
+            name: 'recruit_troops',
+            column: LEFT_COLUMN,
+            pos: 3,
+            open: false
+        },
     ],
     general: {
         keep_awake: true,
+        redirect__train_buildings: false,
         remove__premium_promo: true,
         show__village_list: true,
+        show__recruit_troops: true,
         show__navigation_arrows: true,
         show__notepad: true,
         show__building_queue: true,
         show__extra_options_map_hover: true,
+        show__overview_premmium_info: true,
         show__time_storage_full_hover: true,
         show__big_map: false,
         show__auto_scavenging: {
@@ -57,14 +66,17 @@ var settings_cookies = JSON.parse(localStorage.getItem('settings_cookies')) || d
 
 var availableSettings = [
     { "name": "keep_awake", "label": "Keep Awake", "description": "Refreshes the page after 5 minutes of inactivity." },
+    { "name": "redirect__train_buildings", "label": "Redirect Train Buildings", "description": "All buildings used for training purposes redirect directly to the train screen."},
     { "name": "show__navigation_arrows", "label": "Use Navigation Arrows", "description": "Enables navigation arrows for easier movement." },
 
-    { "name": "show__village_list", "label": "Show Village List", "description": "Displays the village list on the main screen." },
-    { "name": "show__notepad", "label": "Show Notepad", "description": "Displays a notepad for taking notes." },
-    { "name": "show__building_queue", "label": "Show Building Queue", "description": "Displays the building queue and available upgrades on the overview page. Allows adding buildings to the queue from the overview screen." },
+    { "name": "show__village_list", "label": "Show Village List Widget", "description": "Displays the village list on the main screen." },
+    { "name": "show__recruit_troops", "label": "Show Recruitment Widget", "description": "Displays a widget to recruit troops on overview page (NOT FULLY IMPLEMENTED)" },
+    { "name": "show__notepad", "label": "Show Notepad Widget", "description": "Displays a notepad for taking notes." },
+    { "name": "show__building_queue", "label": "Show Building Queue Widget", "description": "Displays the building queue and available upgrades on the overview page. Allows adding buildings to the queue from the overview screen." },
     { "name": "show__building_queue_all", "label": "Show All Buildings in Queue", "description": "Displays all buildings in the queue, including those that cannot be upgraded due to a lack of resources or a full queue and allows to use the fake building queue. (IN TESTING)" },
     
     { "name": "show__extra_options_map_hover", "label": "Show Extra Map Hover Options", "description": "Displays additional options when hovering over the map." },
+    { "name": "show__overview_premmium_info", "label": "Displays Premium overview information", "description": "Displays additional premium information for buildings (graphical overview)" },
     { "name": "show__navigation_bar", "label": "Show Navigation Bar", "description": "Displays the navigation bar at the top of the screen." },
     { "name": "show__time_storage_full_hover", "label": "Show Time Until Full Storage on Hover", "description": "Displays the remaining time until storage is full when hovering over a resource." },
     
@@ -78,7 +90,8 @@ var availableSettings = [
 var widgetsInjectFunctions = {
     'village_list': injectVillagesListWidget,
     'notepad': injectNotepadWidget,
-    'building_queue': injectBuildQueueWidget,
+    'building_queue': fetchBuildQueueWidget,
+    'recruit_troops': injectRecruitTroopsWidget
 };
 
 var currentVillageIndex,
@@ -105,6 +118,8 @@ function prepareLocalStorageItems() {
     localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
     localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
     localStorage.setItem('auto_trainer_paladin_level', localStorage.getItem('auto_trainer_paladin_level') ?? 0);
+    localStorage.setItem('map_custom_height', localStorage.getItem('map_custom_height') ?? '600');
+    localStorage.setItem('map_custom_width', localStorage.getItem('map_custom_width') ?? '900');
 }
 
 function setCookieCurrentVillage() {
@@ -172,6 +187,7 @@ function sizeOfObject(obj) {
 
 function createWidgetElement({ title, contents, columnToUse, update, extra_name = '', description = '' }) {
     var columnElement = document.getElementById(columnToUse);
+    
     if (columnElement) {
         var elemId = title.toLowerCase().replace(/ /g, '_'); // Obtém o título do elemento
         var elemName = extra_name != '' ? elemId + '_' + extra_name : elemId;
@@ -196,31 +212,31 @@ function createWidgetElement({ title, contents, columnToUse, update, extra_name 
             if (miniElem.src.includes('minus')) {
                 miniElem.src = miniElem.src.replace('minus', 'plus');
                 // Encontra o objeto correspondente no array de widgets e atualiza o valor de 'open' para false
-                settings_cookies.widgets.find(widget => widget.name === elemId).open = false;
+                settings_cookies.widgets.find(widget => widget.name === elemName).open = false;
             } else {
                 miniElem.src = miniElem.src.replace('plus', 'minus');
                 // Encontra o objeto correspondente no array de widgets e atualiza o valor de 'open' para true
-                settings_cookies.widgets.find(widget => widget.name === elemId).open = true;
+                settings_cookies.widgets.find(widget => widget.name === elemName).open = true;
             }
             localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
         };
         
         header.addEventListener('mouseenter', function (event) {
-            showTooltip(event.target, true);
+            toggleTooltip(event.target, true);
         });
         header.addEventListener('mouseleave', function (event) {
-            showTooltip(event.target, false);
+            toggleTooltip(event.target, false);
         });
         // Create the image for the button
         var buttonImg = document.createElement('img');
         buttonImg.className = 'widget-button';
-        buttonImg.src = settings_cookies.widgets.find(widget => widget.name === elemId).open ? 'graphic/minus.png' : 'graphic/plus.png';
+        buttonImg.src = settings_cookies.widgets.find(widget => widget.name === elemName).open ? 'graphic/minus.png' : 'graphic/plus.png';
         buttonImg.id = 'mini_' + elemName;
         header.appendChild(buttonImg);
 
         var contentDiv = document.createElement('div');
         contentDiv.id = 'widget_content_' + elemName;
-        contentDiv.style.display = settings_cookies.widgets.find(widget => widget.name === elemId).open ? 'block' : 'none';
+        contentDiv.style.display = settings_cookies.widgets.find(widget => widget.name === elemName).open ? 'block' : 'none';
         contentDiv.appendChild(contents);
         containerDiv.appendChild(header);
         containerDiv.appendChild(contentDiv);
@@ -233,7 +249,7 @@ function createWidgetElement({ title, contents, columnToUse, update, extra_name 
         }
 
         // Verifica se o índice fornecido é válido
-        var widgetIndex = settings_cookies.widgets.find(widget => widget.name === elemId).pos;
+        var widgetIndex = settings_cookies.widgets.find(widget => widget.name === elemName).pos;
         var children = columnElement.childNodes;
         if (widgetIndex >= 0 && widgetIndex <= children.length) {
             var refChild = (widgetIndex + 1 === children.length) ? children[widgetIndex] : children[widgetIndex + 1];
@@ -293,7 +309,7 @@ function injectScriptColumn() {
     }
 }
 
-function showTooltip(element, isVisible) {
+function toggleTooltip(element, isVisible) {
     var rect = element.getBoundingClientRect();
     var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     var scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
@@ -318,7 +334,7 @@ function showTooltip(element, isVisible) {
     }
 }
 
-function showTooltipNoText(element, isVisible) {
+function toggleTooltipNoText(element, isVisible) {
     var rect = element.getBoundingClientRect();
     var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     var scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
@@ -367,6 +383,46 @@ function extractBuildTimeFromHTML(stringHTML) {
     }
 }
 
+function extractBuildTimestampFromHTML(stringHTML) {
+    const stringToday = localStorage.getItem('today_build_time_string');
+    const stringTomorow = localStorage.getItem('tomorrow_build_time_string');
+
+    if (stringToday && stringTomorow) {
+        const modelosStrings = [stringToday, stringTomorow];
+        let day, hora, minuto;
+
+        for (const [index, modeloString] of modelosStrings.entries()) {
+            const regexString = modeloString
+                .replace(/\\/g, "\\\\")
+                .replace(/%s/, "(\\d{1,2}):(\\d{2})");
+
+            const regex = new RegExp(regexString);
+            const match = stringHTML.match(regex);
+
+            if (match) {
+                day = index; // 0 = hoje, 1 = amanhã
+                hora = parseInt(match[1]);
+                minuto = parseInt(match[2]);
+                break;
+            }
+        }
+
+        if (day !== undefined && hora !== undefined && minuto !== undefined) {
+            const now = new Date();
+            now.setHours(hora, minuto, 0, 0);
+
+            if (day === 1) { // Se for amanhã, adicionar 1 dia
+                now.setDate(now.getDate() + 1);
+            }
+
+            return now.getTime(); // Retorna o timestamp em milissegundos
+        }
+    } else {
+        alert('Erro no extractBuildTimestampFromHTML');
+        return null;
+    }
+}
+
 function endTimeToTimer(endtime) {
     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
     var remaining = endtime - now;
@@ -376,7 +432,7 @@ function endTimeToTimer(endtime) {
         var hours = Math.floor(remaining / 3600);
         var minutes = Math.floor((remaining % 3600) / 60);
         var seconds = remaining % 60;
-        return [hours, minutes, seconds];
+        return [hours.toString().padStart(2, '0'), minutes.toString().padStart(2, '0'), seconds.toString().padStart(2, '0')];
     }
 }
 
@@ -396,11 +452,22 @@ function wait(seconds) {
     });
 }
 
+var activeTimeouts = {};
 function setFunctionOnTimeOut(id, func, timeToRun) {
+    if (activeTimeouts[id]) {
+        clearTimeout(activeTimeouts[id]);
+    }
+
     let endTime = Date.now() + timeToRun;
     localStorage.setItem('endTime_' + id, endTime);
     localStorage.setItem('function_' + id, func.toString());
-    setTimeout(func, timeToRun);
+
+    activeTimeouts[id] = setTimeout(() => {
+        localStorage.removeItem('endTime_' + id);
+        localStorage.removeItem('function_' + id);
+        func();
+        delete activeTimeouts[id];
+    }, timeToRun);
 }
 
 function restoreTimeouts() {
@@ -417,8 +484,12 @@ function restoreTimeouts() {
                     eval('(' + localStorage.getItem('function_' + id) + ')();');
                 }, remainingTime);
             } else {
+                eval('(' + localStorage.getItem('function_' + id) + ')();');
                 localStorage.removeItem('endTime_' + id);
                 localStorage.removeItem('function_' + id);
+                if (activeTimeouts[id]) {
+                    clearTimeout(activeTimeouts[id]);
+                }
             }
         }
     }
@@ -468,10 +539,10 @@ if (questButton) {
 function startResourceTimerFull(endtime, element) {
     var remaining = endTimeToTimer(endtime);
     if (!remaining) {
-        element.textContent = "FULL!";
+        element.textContent = 'END';
         clearInterval(element.dataset.interval);
     } else {
-        element.textContent = `${remaining[0]}h ${remaining[1]}m ${remaining[2]}s`;
+        element.textContent = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
     }
     element.style.display = "block";
     //element.classList.toggle('not-hidden');
@@ -480,20 +551,18 @@ function startResourceTimerFull(endtime, element) {
 function startTimerOnLabel(endtime, element) {
     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
     var remaining = endtime - now;
+
     if (remaining <= 0) {
-        element.textContent = "FULL!";
+        element.textContent = '';
         clearInterval(element.dataset.interval);
     } else {
-        var hours = Math.floor(remaining / 3600);
-        var minutes = Math.floor((remaining % 3600) / 60);
-        var seconds = remaining % 60;
+        var hours = Math.floor(remaining / 3600).toString().padStart(2, '0');
+        var minutes = Math.floor((remaining % 3600) / 60).toString().padStart(2, '0');
+        var seconds = (remaining % 60).toString().padStart(2, '0');
+
+        var formattedTime = `${hours}:${minutes}:${seconds}`;
         
-        // Manter o conteúdo atual e atualizar apenas os números
-        var currentText = element.textContent;
-        var newText = currentText.replace(/\d+h/, hours + "h")
-                                  .replace(/\d+m/, minutes + "m")
-                                  .replace(/\d+s/, seconds + "s");
-        element.textContent = newText;
+        element.textContent = element.textContent.replace(/\d{2}:\d{2}:\d{2}/, formattedTime);
     }
     element.style.display = "block";
 }
@@ -504,22 +573,44 @@ function getRemainingHours (endtime) {
     return Math.floor(remaining / 3600);
 }
 
+function showAutoHideBox(text, isError = true) {
+    let divAutoHideBox = document.querySelector('.autoHideBox');
+
+    if (!divAutoHideBox) {
+        divAutoHideBox = document.createElement('div');
+        divAutoHideBox.classList.add('autoHideBox', isError ? 'error' : 'success');
+
+        const tooltip = document.getElementById('tooltip');
+        if (tooltip) tooltip.parentNode.insertBefore(divAutoHideBox, tooltip.nextSibling);
+    }
+
+    const p = document.createElement('p');
+    p.textContent = text;
+    divAutoHideBox
+    divAutoHideBox.appendChild(p);
+    divAutoHideBox.classList.toggle(divAutoHideBox.classList.contains('error') ? 'error' : 'success');
+    divAutoHideBox.classList.add(isError ? 'error' : 'success');
+    clearTimeout(divAutoHideBox.dataset.timeout);
+    divAutoHideBox.dataset.timeout = setTimeout(() => divAutoHideBox.remove(), 3000);
+}
+
 function injectAttackCalculations() {
     console.log(parseInt(document.querySelector('#command-data-form .village-distance').textContent.match(/(\d+)/), 10));
 }
 
 function start() {
     var urlPage = document.location.href;
-    //validation to session expired, automatically select active world
+    //validation to session expired, automatically select active world (not yet :D)
     if (!urlPage.includes('?session_expired') && typeof game_data != 'undefined') {
         prepareVillageList();
         villageList = localStorage.getItem('villages_show') ? JSON.parse(localStorage.getItem('villages_show')) : [];
         settings_cookies = localStorage.getItem('settings_cookies') ? JSON.parse(localStorage.getItem('settings_cookies')) : settings_cookies;
         listenTextAreas();
         setCookieCurrentVillage();
+        addRessourcesHover(localStorage.getItem('full_storage_times') ? JSON.parse(localStorage.getItem('full_storage_times')) : null);
         if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
             injectScriptColumn();
-            updateInfoOverview();
+            updatePremiumInfoOverview();
 
             settings_cookies.widgets.forEach(function (widget) {
                 var functionName = widgetsInjectFunctions[widget.name];
@@ -550,33 +641,6 @@ function start() {
             setInterval(() => checkInactivity(maxInactiveMin), 30000);
         }
 
-        //Timeouts Extra Queue
-        var building_queue = JSON.parse(localStorage.getItem('building_queue') || '[]');
-        var waiting_for_queue = JSON.parse(localStorage.getItem('waiting_for_queue') || '{}');
-        if (!waiting_for_queue.time) {
-            if (building_queue.length) {
-                var nextTimeDate = new Date(parseInt(localStorage.getItem('building_queue_next_slot')));
-                var waitTime = (nextTimeDate.getTime() - Date.now());
-                if (waitTime > 0) {
-                    setFunctionOnTimeOut('building_queue', addToBuildQueue, waitTime);
-                } else {
-                    addToBuildQueue();
-                }
-            }
-        } else {
-            var nextTimeDate = waiting_for_queue.time;
-            var addToQueueDate = new Date();
-            addToQueueDate.setDate(addToQueueDate.getDate() + nextTimeDate[0]);
-            addToQueueDate.setHours(parseInt(nextTimeDate[1]), parseInt(nextTimeDate[2]));
-            var waitTime = (addToQueueDate.getTime() - Date.now());
-            if (waitTime > 0) {
-                //avoid this for now.... or not
-                setFunctionOnTimeOut('building_queue', addToBuildQueue, waitTime);
-            } else {
-                addToBuildQueue();
-            }
-        }
-
         //Override the sortable update function from Tribalwars
         var originalSortableUpdate = $("#overviewtable").sortable("option", "update");
         $("#overviewtable").sortable("option", "update", function () {
@@ -584,11 +648,120 @@ function start() {
             if (typeof originalSortableUpdate === "function" && !arguments[1].item[0].classList.contains('script_widget')) {
                 $(this).find('.script_widget').detach();
                 originalSortableUpdate.apply(this, arguments);
+                
+                settings_cookies.widgets.forEach(function (widget) {
+                    var functionName = widgetsInjectFunctions[widget.name];
+                    if (functionName) {
+                        functionName(widget.column);
+                    }
+                });
             }
         });
     }
 }
 
+//redirect barracks and stable to train screen
+if (settings_cookies.general['redirect__train_buildings']) {
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href], area[href]");
+
+        if (link) {
+            const url = new URL(link.href);
+            const screenParam = url.searchParams.get("screen");
+
+            if (screenParam === "barracks" || screenParam === "stables") {
+                event.preventDefault();
+                url.searchParams.set("screen", "train");
+                window.location.href = url.href;
+            }
+        }
+    });
+}
+
+
+/*<----------- Not fully implementeded functions ------------>*/
+function autoDailyBonusCollect() {
+    //falta conseguir o dia facilmente... posso fazer um fetch para criar a primeira vez e depois conta dai...
+    //so tenho de saber o que acontece quando nao recolhe um dia
+    if (game_data) {
+        fetch(game_data.link_base_pure + "daily_bonus&ajaxaction=open", {
+            "headers": {
+            "tribalwars-ajax": "1",
+            "x-requested-with": "XMLHttpRequest"
+            },
+            "referrer": game_data.link_base_pure + "info_player&mode=daily_bonus",
+            "body": "day=8&from_screen=profile&h=" + game_data.csrf,
+            "method": "POST",
+            "credentials": "include"
+        });  
+    }
+}
+
+function sendScavengeAjax() {
+    //falta conseguir as tropas a enviar... se tiver os numeros das settings sao esses
+    //se nao tiver, tenho de os arranjar
+    // falta tere o nivel a enviar
+    if (game_data) {
+        const squadRequest = {
+            village_id: 14520,
+            candidate_squad: {
+                unit_counts: {
+                    spear: 303,
+                    sword: 150,
+                    axe: 0,
+                    archer: 0,
+                    light: 32,
+                    marcher: 0,
+                    heavy: 0,
+                    knight: 0
+                },
+                carry_max: 12385
+            },
+            option_id: 3, //NIVEL DISPONIVEL??? guardar na primeira vez que se entra na pagina do scavenger, e so mudar se voltar lá
+            use_premium: false
+        };
+        
+        // Adiciona o token de segurança (`h`), necessário para a requisição
+        const requestData = {
+            squad_requests: [squadRequest],
+            h: game_data.csrf
+        };
+        
+        // Converte o objeto para um formato adequado para envio
+        const body = new URLSearchParams();
+        Object.entries(requestData).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => {
+                    Object.entries(item).forEach(([subKey, subValue]) => {
+                        if (typeof subValue === "object") {
+                            Object.entries(subValue).forEach(([unitKey, unitValue]) => {
+                                body.append(`squad_requests[${index}][${subKey}][unit_counts][${unitKey}]`, unitValue);
+                            });
+                        } else {
+                            body.append(`squad_requests[${index}][${subKey}]`, subValue);
+                        }
+                    });
+                });
+            } else {
+                body.append(key, value);
+            }
+        });
+        
+        // Agora faz o `fetch`
+       fetch(game_data.link_base_pure + "scavenge_api&ajaxaction=send_squads", {
+            headers: {
+                "tribalwars-ajax": "1",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            referrer: game_data.link_base_pure + "place&mode=scavenge",
+            body: body.toString(),
+            method: "POST",
+            credentials: "include"
+        });
+    }
+}
+
+//JUST FOR TESTING :)
 function testAntiBot() {
     /*
     quando apareceu a cena do bot, ao carregar na checkbox aquilo chamou o BotProtect.check() e depois de fazer o post:
@@ -597,11 +770,9 @@ function testAntiBot() {
                 }, {
                 response: e
             }, function(e) {
-                e.success ? BotProtect.success() : (UI.ErrorMessage(_("82e50c727674f251464fc7520f5bde26")),
-                hcaptcha.reset())
+                BotProtect.success()
             })
         se chamar o BotProtect.success() depois do ajax acho nem apareceu a cena do bot
-
 
         aainda tenho de testar isto : document.querySelector('#bot_check a').click()
         talvez timer para procurar pelo elemento, se sim, overide do check() e da click?
@@ -610,17 +781,46 @@ function testAntiBot() {
         if (typeof BotProtect !== "undefined") {
             clearInterval(checkBot); // Para o timer
             var originalBotCheeck = BotProtect.check;
-            BotProtect.check = function() {
+            BotProtect.check = function(e) {
                 TribalWars.post("botcheck", {
                     ajaxaction: "verify"
                 }, {
                     response: e
                 }, function(e) {
+                    debugger;
                     BotProtect.success();
                 })
             }
+
+            BotProtect.render = function() {
+                const t = $(".captcha")[0];
+                TribalWars.post("botcheck", {
+                    ajaxaction: "begin"
+                }, {}, function(e) {
+                    debugger;
+                    BotProtect.success();
+                })
+            }
+            BotProtect.success = function() {
+                Dialog.close(),
+                $("#botprotection_quest").remove(),
+                $("#bot_check").remove()
+            }
+            BotProtect.forced = false;
+            BotProtect.isForced = function(e) {
+                debugger;
+                return false;   
+            }
     
             console.log("Bot.check foi sobrescrito com sucesso!");
+        }
+    }, 100);
+
+    var clickBot = setInterval(function() {
+        if (document.querySelector('#bot_check a')) {
+            clearInterval(clickBot); // Para o timer
+            console.log("bot click!");
+            document.querySelector('#bot_check a').click()
         }
     }, 100);
 }

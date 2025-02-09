@@ -63,5 +63,44 @@ var customCSS = `
     font-size: 87%;
     line-height: 11px;
 }
+
+ /* darker background image */
+#ds_body {
+    backdrop-filter: brightness(0.4);
+}
+
+ /* small css change to make the body full page */
+html, body {
+    height: -webkit-fill-available;
+    margin: 0;
+    padding: 0;
+}
+body {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+#bottom {
+    position: inherit;
+}
+#bottom.bottom_sticky {
+    position: sticky;
+}
 `;
 GM_addStyle(customCSS);
+
+//apply bottom sticky beacause of custom css :D
+const resizeObserver = new ResizeObserver(() => {
+    const pageHeight = document.documentElement.scrollHeight;
+    const dsBodyHeight = document.getElementById('ds_body').offsetHeight;
+    const bottom = document.querySelector('#bottom');
+
+    if (dsBodyHeight !== pageHeight) {
+        bottom.classList.add('bottom_sticky');
+    } else {
+        bottom.classList.remove('bottom_sticky');
+    }
+});
+if (document.getElementById('main_layout')) {
+    resizeObserver.observe(document.getElementById('main_layout'));
+}

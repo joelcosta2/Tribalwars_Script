@@ -24,9 +24,13 @@ Object.keys(infoOverview).forEach(key => {
 });
 
 
-//por agora ja fa fetch dos tempos dos materiais, guarda na local storaage e aplica os hovers
+//por agora ja faz fetch dos tempos dos materiais, guarda na local storaage e aplica os hovers
 function getStorageTime() {
     let minTime = 0;
+
+    const storageCapacity = document.querySelector('#storage');
+    localStorage.setItem('storage_capacity', storageCapacity.textContent)
+
     if (settings_cookies.general['show__time_storage_full_hover'] && game_data) {
         $.ajax({
             url: game_data.link_base_pure + 'storage',
@@ -41,68 +45,74 @@ function getStorageTime() {
                 localStorage.setItem('full_storage_times', JSON.stringify(fullStorageTimes));
 
                 //hovers resources
-                var storageTimes = fullStorageTimes;
-                if (storageTimes) {
-                    Object.keys(storageTimes).forEach(resourceId => {
-                        var element = document.getElementById(resourceId);
-                        if (element) {
-                            var parentInfoBox = element.parentElement;
-                            var iconBox = parentInfoBox.previousElementSibling;
-
-                            //Check if storage is getting full
-                            var remaining = getRemainingHours(parseInt(storageTimes[resourceId]));
-                            if (remaining < 2) {
-                                parentInfoBox.classList.add('waran_90');
-                            }
-                            
-                            var tooltip = document.getElementById("tooltip");
-                            if (tooltip) {
-                                var bodyElement = tooltip.querySelector(".body");
-                                if (bodyElement) {
-                                    parentInfoBox.dataset.interval = setInterval(function () {
-                                        const resourceHover = localStorage.getItem('resourceHover');
-                                        if (resourceHover) {
-                                            startResourceTimerFull(parseInt(storageTimes[resourceHover]), bodyElement);
-                                        } else {
-                                            //bodyElement.style.display = "none";
-                                        }
-                                    }, 500);
-                                    
-                                    parentInfoBox.addEventListener("mouseenter", function () {
-                                        startResourceTimerFull(parseInt(storageTimes[resourceId]), bodyElement);
-                                        localStorage.setItem('resourceHover', resourceId);
-                                    });
-                                    iconBox.addEventListener("mouseenter", function () {
-                                        startResourceTimerFull(parseInt(storageTimes[resourceId]), bodyElement);
-                                        localStorage.setItem('resourceHover', resourceId);
-                                    });
-        
-                                    parentInfoBox.addEventListener("mouseleave", function () {
-                                        localStorage.setItem('resourceHover', '');
-                                    });
-                                    iconBox.addEventListener("mouseleave", function () {
-                                        localStorage.setItem('resourceHover', '');
-                                    });
-                                }
-                            }
-                        }
-                    });
-                }
+                addRessourcesHover(fullStorageTimes);
                 
                 if (fullStorageTimes) {
                     minTime = Math.min(...Object.values(fullStorageTimes));
                     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
                     var remaining = minTime - now;
-                    var hours = Math.floor(remaining / 3600);
-                    var minutes = Math.floor((remaining % 3600) / 60);
-                    var seconds = remaining % 60;
                     
-                    addToVisualLabelExtra('storage', `${hours}h ${minutes}m ${seconds}s`, true, minTime);
+                    if(remaining) {
+                        var hours = Math.floor(remaining / 3600).toString().padStart(2, '0');
+                        var minutes = Math.floor((remaining % 3600) / 60).toString().padStart(2, '0');
+                        var seconds = (remaining % 60).toString().padStart(2, '0');
+                        
+                        addToVisualLabelExtra('storage', `${hours}:${minutes}:${seconds}`, true, minTime);
+                    }
                 }
             }
         });
     }
     return minTime; //"Tempo calculado para o recurso mais cheio"
+}
+
+function addRessourcesHover(fullStorageTimes) {
+    if (fullStorageTimes) {
+        Object.keys(fullStorageTimes).forEach(resourceId => {
+            var element = document.getElementById(resourceId);
+            if (element) {
+                var parentInfoBox = element.parentElement;
+                var iconBox = parentInfoBox.previousElementSibling;
+
+                //Check if storage is getting full
+                /*var remaining = getRemainingHours(parseInt(fullStorageTimes[resourceId]));
+                if (remaining < 2) {
+                    parentInfoBox.classList.add('warn_90');
+                }*/
+                
+                var tooltip = document.getElementById("tooltip");
+                if (tooltip) {
+                    var bodyElement = tooltip.querySelector(".body");
+                    if (bodyElement) {
+                        parentInfoBox.dataset.interval = setInterval(function () {
+                            const resourceHover = localStorage.getItem('resourceHover');
+                            if (resourceHover) {
+                                startResourceTimerFull(parseInt(fullStorageTimes[resourceHover]), bodyElement);
+                            } else {
+                                //bodyElement.style.display = "none";
+                            }
+                        }, 500);
+                        
+                        parentInfoBox.addEventListener("mouseenter", function () {
+                            startResourceTimerFull(parseInt(fullStorageTimes[resourceId]), bodyElement);
+                            localStorage.setItem('resourceHover', resourceId);
+                        });
+                        iconBox.addEventListener("mouseenter", function () {
+                            startResourceTimerFull(parseInt(fullStorageTimes[resourceId]), bodyElement);
+                            localStorage.setItem('resourceHover', resourceId);
+                        });
+
+                        parentInfoBox.addEventListener("mouseleave", function () {
+                            localStorage.setItem('resourceHover', '');
+                        });
+                        iconBox.addEventListener("mouseleave", function () {
+                            localStorage.setItem('resourceHover', '');
+                        });
+                    }
+                }
+            }
+        });
+    }
 }
 
 function getWoodInfo() {
@@ -111,16 +121,16 @@ function getWoodInfo() {
         const fullTime = storageFullTime['wood'];
         if (fullTime) {
             var remaining = endTimeToTimer(fullTime);
-
-            const wood = document.getElementById('wood');
-            let production;
-            if (wood?.hasAttribute('data-title')) {
-                production = wood.getAttribute('data-title').split('- ')[1].split(' ')[0];
-                const labelVisual = production + '/h\n' + `${remaining[0]}h ${remaining[1]}m ${remaining[2]}s`;;
-                if (production) addToVisualLabelExtra('wood', labelVisual , true, fullTime);
-            }
-
-            return {perHour: production, fullEndTime: '0'}; //get value from label?
+            if(remaining) {
+                const wood = document.getElementById('wood');
+                let production;
+                if (wood?.hasAttribute('data-title')) {
+                    production = wood.getAttribute('data-title').match(/\d+/g);
+                    const labelVisual = production + '/h\n' + `${remaining[0]}:${remaining[1]}:${remaining[2]}`;;
+                    if (production) addToVisualLabelExtra('wood', labelVisual , true, fullTime);
+                }
+                return {perHour: production, fullEndTime: '0'}; //get value from label?
+            } 
         }
     }
     return {};
@@ -132,16 +142,17 @@ function getStoneInfo() {
         const fullTime = storageFullTime['stone'];
         if (fullTime) {
             var remaining = endTimeToTimer(fullTime);
+            if(remaining) {
+                const stone = document.getElementById('stone');
+                let production;
+                if (stone?.hasAttribute('data-title')) {
+                    production = stone.getAttribute('data-title').match(/\d+/g);
+                    const labelVisual = production + '/h\n' + `${remaining[0]}:${remaining[1]}:${remaining[2]}`;;
+                    if (production) addToVisualLabelExtra('stone', labelVisual , true, fullTime);
+                }
 
-            const stone = document.getElementById('stone');
-            let production;
-            if (stone?.hasAttribute('data-title')) {
-                production = stone.getAttribute('data-title').split('- ')[1].split(' ')[0];
-                const labelVisual = production + '/h\n' + `${remaining[0]}h ${remaining[1]}m ${remaining[2]}s`;;
-                if (production) addToVisualLabelExtra('stone', labelVisual , true, fullTime);
+                return {perHour: production, fullEndTime: '0'}; //get value from label?
             }
-
-            return {perHour: production, fullEndTime: '0'}; //get value from label?
         }
     }
     return {};
@@ -154,30 +165,20 @@ function getIronInfo() {
         if (fullTime) {
             var remaining = endTimeToTimer(fullTime);
 
-            const iron = document.getElementById('iron');
-            let production;
-            if (iron?.hasAttribute('data-title')) {
-                production = iron.getAttribute('data-title').split('- ')[1].split(' ')[0];
-                const labelVisual = production + '/h\n' + `${remaining[0]}h ${remaining[1]}m ${remaining[2]}s`;;
-                if (production) addToVisualLabelExtra('iron', labelVisual , true, fullTime);
-            }
+            if(remaining) {
+                const iron = document.getElementById('iron');
+                let production;
+                if (iron?.hasAttribute('data-title')) {
+                    production = iron.getAttribute('data-title').match(/\d+/g);
+                    const labelVisual = production + '/h\n' + `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+                    if (production) addToVisualLabelExtra('iron', labelVisual , true, fullTime);
+                }
 
-            return {perHour: production, fullEndTime: '0'}; //get value from label?
+                return {perHour: production, fullEndTime: '0'}; //get value from label?
+            }
         }
     }
     return {};
-}
-
-function getStableTime() {
-    return "30 minutos para terminar";
-}
-
-function getBarracksTime() {
-    return "45 minutos para terminar";
-}
-
-function getGarageTime() {
-    return "1 hora para terminar";
 }
 
 function getSmithTime() {
@@ -192,19 +193,194 @@ function getWallTime() {
     return "Última construção em 5 horas";
 }
 
-function updateInfoOverview() {
-    infoOverview.storage = getStorageTime();
-    infoOverview.wood = getWoodInfo();
-    infoOverview.stone = getStoneInfo();
-    infoOverview.iron = getIronInfo();
-    infoOverview.stable = getStableTime();
-    infoOverview.barracks = getBarracksTime();
-    infoOverview.garage = getGarageTime();
-    infoOverview.smith = getSmithTime();
-    infoOverview.main = getMainQueueTime();
-    infoOverview.wall = getWallTime();
+function getMarketInfo() {
+    if (game_data) {
+        $.ajax({
+            url: game_data.link_base_pure + 'market',
+            method: "GET",
+            success: function (data) {
+                const market_merchant_available_count = $(data).find("#market_merchant_available_count").text();
+                const market_merchant_total_count = $(data).find("#market_merchant_total_count").text();
+                if(market_merchant_available_count && market_merchant_total_count)
+                addToVisualLabelExtra('market', `${market_merchant_available_count}\/${market_merchant_total_count}`);
+            }
+        })
+    }
+    return "Última construção em 5 horas";
+}
 
-    localStorage.setItem("infoOverview", JSON.stringify(infoOverview));
+function getPlaceInfo() {
+    const endTime_scavenging = localStorage.getItem('endTime_scavenging-auto');
+    if (endTime_scavenging) {
+        //get all timmings
+        var endTime = Math.floor(endTime_scavenging / 1000);
+        var remaining = endTimeToTimer(endTime);
+        let labelVisual;
+        
+        if(remaining) {
+            labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            addToVisualLabelExtra('place', labelVisual, true, endTime);
+        }
+    }
+    return "Última construção em 5 horas";
+}
+
+function getStatueInfo() {
+    const endTime_paladin = localStorage.getItem('endTime_auto_trainer_paladin');
+    if (endTime_paladin) {
+        //get all timmings
+            var endTime = Math.floor(endTime_paladin / 1000);
+            var remaining = endTimeToTimer(endTime);
+            const labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            
+            addToVisualLabelExtra('statue', labelVisual, true, endTime);
+
+    }
+    return "Última construção em 5 horas";
+}
+
+function getBarracksTime(barrracksTimes) {
+    if (barrracksTimes && barrracksTimes.length) {
+        var lastTrain = Math.floor(barrracksTimes[barrracksTimes.length - 1] / 1000);
+        var remaining = endTimeToTimer(lastTrain);
+        let labelVisual;
+        
+        if(remaining) {
+            labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            addToVisualLabelExtra('barracks', labelVisual, true, lastTrain);
+        }
+    }
+    return "30 minutos para terminar";
+}
+
+function getStableTime(stableTimes) {
+    if (stableTimes && stableTimes.length) {
+        var lastTrain = Math.floor(stableTimes[stableTimes.length - 1] / 1000);
+        var remaining = endTimeToTimer(lastTrain);
+        let labelVisual;
+        
+        if(remaining) {
+            labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            addToVisualLabelExtra('stable', labelVisual, true, lastTrain);
+        }
+    }
+    return "30 minutos para terminar";
+}
+
+function getGarageTime(garageTimes) {
+    if (garageTimes && garageTimes.length) {
+        var lastTrain = Math.floor(garageTimes[garageTimes.length - 1] / 1000);
+        var remaining = endTimeToTimer(lastTrain);
+        let labelVisual;
+        
+        if(remaining) {
+            labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            addToVisualLabelExtra('stable', labelVisual, true, lastTrain);
+        }
+    }
+    return "30 minutos para terminar";
+}
+
+function storeAvailableUnitsCosts(data) {
+    let unitCosts = {};
+    $(data).find(".recruit_req").each(function(index, reqEl) {
+        $(reqEl).find('span').each(function(i, span) {
+            let match = span.id.match(/^([a-z]+)_\d+_cost_([a-z_]+)$/);
+            if (match) {
+                let unitType = match[1]; // Nome da unidade (spear, sword, etc.)
+                let resource = match[2]; // Tipo de recurso (wood, stone, iron, pop)
+    
+                // Garante que a unidade tenha um objeto antes de adicionar custos
+                if (!unitCosts[unitType]) {
+                    unitCosts[unitType] = {};
+                }
+                if (resource !== 'time') {
+                    let costValue = parseFloat(span.textContent.replace('.', '')) || 0;
+                    unitCosts[unitType][resource] = costValue;
+                } else {
+                    unitCosts[unitType].build_time = timeToMilliseconds(span.textContent);
+                }
+            }
+        });
+    
+        // Adiciona informações adicionais, se existirem
+        let unitTypeFromId = reqEl.id.split('_')[0];
+        if (game_data.units[unitTypeFromId]) {
+            unitCosts[unitTypeFromId].requirements_met = game_data.units[unitTypeFromId].requirements_met || false;
+        }
+    });
+    localStorage.setItem('unit_managers_costs', JSON.stringify(unitCosts));
+}
+
+function fetchTrainInfo() {
+    if (game_data) {
+        $.ajax({
+            url: game_data.link_base_pure + 'train',
+            method: "GET",
+            success: function (data) {
+                const todayString = localStorage.getItem('today_build_time_string')?.replace('%s', '\\d{1,2}:\\d{2}');
+                const tomorrowString = localStorage.getItem('tomorrow_build_time_string')?.replace('%s', '\\d{1,2}:\\d{2}');
+                const regex = new RegExp(`${todayString}|${tomorrowString}`, 'i');
+                let barrracksTimes = [],
+                    stableTimes = [],
+                    garageTimes = [];
+                //get all timmings barracks
+                $(data).find("#trainqueue_wrap_barracks td").each(function () {
+                    const text = $(this).text().trim();
+                    if (regex.test(text)) {
+                        barrracksTimes.push(extractBuildTimestampFromHTML(text))
+                    }
+                });
+                getBarracksTime(barrracksTimes);
+
+                //get all timmings stable
+                $(data).find("#trainqueue_wrap_stable td").each(function () {
+                    const text = $(this).text().trim();
+                    if (regex.test(text)) {
+                        stableTimes.push(extractBuildTimestampFromHTML(text))
+                    }
+                });
+                getStableTime(stableTimes)
+
+                //get all timmings gaarage
+                $(data).find("#trainqueue_wrap_garage td").each(function () {
+                    const text = $(this).text().trim();
+                    if (regex.test(text)) {
+                        garageTimes.push(extractBuildTimestampFromHTML(text))
+                    }
+                });
+                getStableTime(garageTimes);
+
+                //get all available units costs:
+                storeAvailableUnitsCosts(data);
+                }
+        })
+    }
+}
+
+function updatePremiumInfoOverview() {
+    const show__overview_premmium_info = settings_cookies.general['show__overview_premmium_info'];
+
+    if (show__overview_premmium_info) {
+        infoOverview.storage = getStorageTime();
+        infoOverview.wood = getWoodInfo();
+        infoOverview.stone = getStoneInfo();
+        infoOverview.iron = getIronInfo();
+        infoOverview.garage = getGarageTime();
+        infoOverview.smith = getSmithTime();
+        infoOverview.main = getMainQueueTime();
+        infoOverview.wall = getWallTime();
+        infoOverview.market = getMarketInfo();
+        infoOverview.place = getPlaceInfo();
+        infoOverview.statue = getStatueInfo();
+
+        fetchTrainInfo();
+
+        //infoOverview.stable = getStableTime();
+        //infoOverview.barracks = getBarracksTime();
+
+        localStorage.setItem("infoOverview", JSON.stringify(infoOverview));
+    }
 }
 
 function addToVisualLabelExtra(buildingName, textContent, isTimer = false, endtime = 0) {

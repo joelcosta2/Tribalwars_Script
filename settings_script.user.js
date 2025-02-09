@@ -16,7 +16,7 @@ function saveScriptSettings() {
     location.reload();
 }
 
-function showWarningPopup(title, message, timeoutDuration = 10000) {
+function displayWarningPopup(title, message, timeoutDuration = 5000) {
     return new Promise((resolve, reject) => {
         // Create the popup dynamically
         const popupDiv = document.createElement('div');

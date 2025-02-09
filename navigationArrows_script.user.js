@@ -56,13 +56,14 @@ function insertNavigationArrows() {
 }
 
 function injectNavigationBar() {
+    const tw_lang = JSON.parse(localStorage.getItem('tw_lang'));
     if (settings_cookies.general['show__navigation_bar']) {
         var urlsObject = {
             "Main": {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/main3.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=main"
             },
-            "Mass Train?": {
+            "Recruitment": {
                 img: "https://dspt.innogamescdn.com/asset/243a567d/graphic/unit/att.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=train"
             },
@@ -74,14 +75,40 @@ function injectNavigationBar() {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/place1.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=place"
             },
-            "Busca Minuciosa": {
+            [String(tw_lang["52e136b31c4cc30c8f3d9eeb8dc56013"])]: {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/scavenging/options/3.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=place&mode=scavenge"
             },
-            "FOR TEST": {
-                img: "https://cdn-icons-png.flaticon.com/512/2285/2285551.png",
-                run: functionToCallTest
-            }
+            "Delete Misc Reports": {
+                img: "https://dspt.innogamescdn.com/asset/243a567d/graphic/delete.png",
+                run: async function() {
+                    try {
+                        const response = await fetch(game_data.link_base_pure + "report&action=del_all&mode=other&h=" + game_data.csrf, {
+                            "headers": {
+                                "priority": "u=0, i",
+                                "sec-ch-ua": "\"Not A(Brand\";v=\"8\", \"Chromium\";v=\"132\", \"Microsoft Edge\";v=\"132\"",
+                                "sec-ch-ua-platform": "\"Windows\""
+                            },
+                            "referrer": game_data.link_base_pure + "report&mode=other",
+                            "credentials": "include"
+                        });
+                
+                        if (!response.ok) {
+                            throw new Error(`Erro na requisição: ${response.status} ${response.statusText}`);
+                        }
+                
+                        showAutoHideBox('Misc reports deleted', false);
+                    } catch (error) {
+                        showAutoHideBox('Error deleting misc reports', true);
+                    }
+                }
+            },
+            "Quests": {
+                img: "https://dsen.innogamescdn.com/asset/243a567d/graphic/quests_new/quest_icon.png",
+                run: function() {
+                      Questlines.showDialog(0, 'main-tab');
+                }
+            },
         };
 
         var table = document.createElement('table');
@@ -118,39 +145,55 @@ function injectNavigationBar() {
 
         var boxTr = document.createElement('tr');
         var index = 0;
-        for (var key in urlsObject) {
+        for (let key in urlsObject) {
             index++;
             if (urlsObject.hasOwnProperty(key)) {
                 var boxTd = document.createElement('td');
                 boxTd.classList.add('box-item', 'icon-box', 'nav-bar-item');
-
+                boxTd.style.cursor = 'pointer';
+                boxTd.style.width = 'auto';
+                boxTd.style.minWidth = 'max-content';
+                boxTd.setAttribute('data-title', key);
                 var link = document.createElement('a');
                 if (urlsObject[key].href) {
                     link.href = urlsObject[key].href;
                 } else {
-                    if (localStorage.getItem(key)) {
-                        alert('ja esta a correr');
-                    } else {
-                        link.onclick = function (event) {
-                            //setFunctionOnTimeOut('test-call-' + index, urlsObject[key].run, timeToMilliseconds('0:02:00'));
-                            urlsObject[key].run();
-                        }
+                    if (!localStorage.getItem(key)) {
+                        link.onclick = (function(currentKey) {
+                            return async function(event) {
+                                if (typeof urlsObject[currentKey].run === "function") {
+                                    urlsObject[currentKey].run();
+                                }
+                            };
+                        })(key);
 
                     }
                 }
                 link.setAttribute('data-title', key);
+                link.style.display = 'flex';
+                link.style.alignItems = 'center';
+                link.style.minWidth = 'fit-content';
+
                 var img = document.createElement('img');
                 img.src = urlsObject[key].img;
                 img.classList.add('menu-event-icon')
                 img.style.maxHeight = '18px';
+                img.style.marginRight = '2px';
                 link.appendChild(img);
+
+                var titleSpan = document.createElement('span');
+                titleSpan.textContent = key;
+                titleSpan.style.whiteSpace = 'nowrap';
+                titleSpan.style.textAlign = 'center';
+                titleSpan.style.flexGrow = '1';
+
+                link.appendChild(titleSpan);
+
                 boxTd.appendChild(link);
                 boxTr.appendChild(boxTd);
-                img.addEventListener('mouseover', function (event) {
-                    showTooltip(event.target, true);
-                });
-                img.addEventListener('mouseleave', function (event) {
-                    showTooltip(event.target, false);
+                [titleSpan, img].forEach(element => {
+                    element.addEventListener('mouseover', event => toggleTooltip(event.target, true));
+                    element.addEventListener('mouseleave', event => toggleTooltip(event.target, false));
                 });
             }
         }
@@ -163,9 +206,9 @@ function injectNavigationBar() {
         tbody.appendChild(innerTable);
         table.appendChild(tbody);
 
-        if (false) {
+        if (true) {
             var existingHeaderInfo = document.getElementById('header_info');
-            existingHeaderInfo.parentNode.insertBefore(table, existingHeaderInfo.nextSibling);
+            existingHeaderInfo.parentNode.insertBefore(table, existingHeaderInfo);
         } else {
             var existingTopAlign = document.querySelectorAll('#header_info .topAlign')[0];
             existingTopAlign.parentNode.insertBefore(table, existingTopAlign.nextSibling);

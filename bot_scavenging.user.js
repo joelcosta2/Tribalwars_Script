@@ -58,44 +58,52 @@ function injectAutoScavengingOption() {
 }
 
 async function runAutoScavengingAll() {
-    const userChoice = await showWarningPopup('Confirm Auto Scavenging', 'Do you wish to continue with the scavenging automation?');
+    const isWaiting = localStorage.getItem('function_scavenging-auto');
+    const returnTime = document.querySelector('.return-countdown');
+    const showWarningPopup = !isWaiting && !returnTime;
+
+    const userChoice = showWarningPopup ? await displayWarningPopup('Confirm Auto Scavenging', 'Do you wish to continue with the scavenging automation?') : 'cancel';
     if (userChoice === 'cancel') {
-        return;
-    } else {
-        var startButton = document.querySelectorAll('.free_send_button');
-        var timeToAnother = document.querySelector('.return-countdown');
-        //always goes to the last level available
-        if (startButton && !timeToAnother) {
-            document.querySelector('.fill-all').click();
-            startButton = startButton[startButton.length - 1];
-            
-            startButton.style.color = 'red';
-            startButton.click();
-            console.log("AutoScavengingAll started at: " + new Date());
-            wait(2).then(() => {
-                timeToAnother = document.querySelector('.return-countdown');
-                if (timeToAnother) {
-                    var temp = document.querySelectorAll('.duration');
-                    timeToAnother = document.querySelectorAll('.duration')[temp.length - 1];
-                    var waitTime = timeToMilliseconds(timeToAnother.textContent) + 15000; //15 more sec
-                    
-                    if (waitTime > 0) {
-                        setFunctionOnTimeOut('scavenging-auto', function () {
-                            window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
-                        }, waitTime);
-                    }
-                    console.log("AutoScavengingAll next at " + new Date(Date.now() + waitTime))
-                    history.back();
-                }
-            })
-        } else if (startButton && timeToAnother) {
-            var waitTime = timeToMilliseconds(timeToAnother.textContent) + 15000; //15 more sec
+        if (returnTime) {
+            var waitTime = timeToMilliseconds(returnTime.textContent) + 15000; //15 more sec
             
             if (waitTime > 0) {
                 setFunctionOnTimeOut('scavenging-auto', function () {
                     window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
                 }, waitTime);
             }
+        }
+        return;
+    } else {
+        var startButton = document.querySelectorAll('.free_send_button');
+        var durationScavenger = document.querySelector('.duration');
+        //always goes to the last level available
+        if (startButton && !returnTime) {
+            //select all units except paladin
+            const unitAllButtons = document.querySelectorAll('.units-entry-all');
+            unitAllButtons.forEach((allbutton, index) => {
+                if (index !== unitAllButtons.length - 1) {
+                    allbutton.click();
+                }
+            });
+
+            durationScavenger = durationScavenger[durationScavenger.length - 1];
+            startButton = startButton[startButton.length - 1];
+            
+            startButton.style.color = 'red';
+            startButton.click(); //click on last available free start
+            console.log("AutoScavengingAll started at: " + new Date());
+            wait(1).then(() => {
+                const duration = document.querySelector('.return-countdown');
+                var waitTime = timeToMilliseconds(duration.textContent) + 15000; //15 more sec
+                
+                if (waitTime > 0) {
+                    setFunctionOnTimeOut('scavenging-auto', function () {
+                        window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
+                    }, waitTime);
+                }
+                console.log("AutoScavengingAll next at " + new Date(Date.now() + waitTime))
+            })
         }
     }
 }

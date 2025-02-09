@@ -135,79 +135,110 @@ function setMapSize() {
     var isBigMapOpened = settings_cookies.general['show__big_map'];
     
     var mapWrap = document.getElementById('map_wrap');
-    var map = document.getElementById('map');
-    var extraMapContainer = document.getElementById('map_container');
-    var goHomeBoundarie = document.getElementById('map_go_home_boundary');
-    var coordYWrap = document.getElementById('map_coord_y_wrap');
-    var coordXWrap = document.getElementById('map_coord_x_wrap');
-
-    // Recupera as configurações salvas do localStorage
-    var storedMapConfig = JSON.parse(localStorage.getItem('mapConfig')) || {};
-
-    if (!storedMapConfig.originalWidth || !storedMapConfig.originalHeight) {
-        storedMapConfig.originalWidth = map.style.width || 'auto';
-        storedMapConfig.originalHeight = map.style.height || 'auto';
-    }
-
-    var mapImages = document.querySelectorAll('#map img');
-    mapImages.forEach(function(img) {
-        if (!storedMapConfig.originalMapImgWidth || !storedMapConfig.originalMapImgHeight) {
-            storedMapConfig.originalMapImgWidth = img.style.width || 'auto';
-            storedMapConfig.originalMapImgHeight = img.style.height || 'auto';
+    if (mapWrap) {
+        var map = document.getElementById('map');
+        var extraMapContainer = document.getElementById('map_container');
+        var goHomeBoundarie = document.getElementById('map_go_home_boundary');
+        var coordYWrap = document.getElementById('map_coord_y_wrap');
+        var coordXWrap = document.getElementById('map_coord_x_wrap');
+    
+        // Recupera as configurações originais salvas do localStorage
+        var storedMapConfig = JSON.parse(localStorage.getItem('mapConfig')) || {};
+        if (!storedMapConfig.originalWidth || !storedMapConfig.originalHeight) {
+            storedMapConfig.originalWidth = map.style.width || 'auto';
+            storedMapConfig.originalHeight = map.style.height || 'auto';
         }
-    });
-
-    // Salva as configurações iniciais no localStorage
-    localStorage.setItem('mapConfig', JSON.stringify(storedMapConfig));
-
-    if (isBigMapOpened && mapWrap) {
-        // Define os novos tamanhos
-        mapWrap.style.width = '900px';
-        mapWrap.style.height = '550px';
-        map.style.width = '900px';
-        map.style.height = '550px';
-        coordYWrap.style.height = '550px';
-        coordXWrap.style.width = '900px';
-
+    
+        var mapImages = document.querySelectorAll('#map img');
         mapImages.forEach(function(img) {
-            img.style.width = 'auto';
-            img.style.height = 'auto';
+            if (!storedMapConfig.originalMapImgWidth || !storedMapConfig.originalMapImgHeight) {
+                storedMapConfig.originalMapImgWidth = img.style.width || 'auto';
+                storedMapConfig.originalMapImgHeight = img.style.height || 'auto';
+            }
         });
+    
+        // Salva as configurações iniciais no localStorage
+        localStorage.setItem('mapConfig', JSON.stringify(storedMapConfig));
 
-        // Remove o container antigo e recria o mapa
-        extraMapContainer.remove();
-        goHomeBoundarie.remove(); //it will generate again
-        TWMap.size = [9, 9];
-        TWMap.init();
-        wait(1).then(() => { TWMap.focusSubmit();} );
-    } else {
-        // Restaura os tamanhos originais a partir do objeto salvo
-        mapWrap.style.width = storedMapConfig.originalWidth;
-        mapWrap.style.height = storedMapConfig.originalHeight;
-        map.style.width = storedMapConfig.originalWidth;
-        map.style.height = storedMapConfig.originalHeight;
-        coordYWrap.style.height = storedMapConfig.originalHeight;
-        coordXWrap.style.width = storedMapConfig.originalWidth;
+        const mapHeightInput = document.querySelector('#map_custom_height');
+        const mapWidthInput = document.querySelector('#map_custom_width');
+        
+        if (mapHeightInput.value != localStorage.getItem('map_custom_height')) {
+            localStorage.setItem('map_custom_height', mapHeightInput.value);
+        }        
+        if (mapWidthInput.value != localStorage.getItem('map_custom_width')) {
+            localStorage.setItem('map_custom_width', mapWidthInput.value);
+        }
 
-        mapImages.forEach(function(img) {
-            img.style.width = storedMapConfig.originalMapImgWidth;
-            img.style.height = storedMapConfig.originalMapImgHeight;
-        });
+        const mapHeight = localStorage.getItem('map_custom_height') + 'px';
+        const mapWidth = localStorage.getItem('map_custom_width') + 'px';
+    
+        if (isBigMapOpened && mapWrap) {
+            // Define os novos tamanhos
+            mapWrap.style.width = mapWidth;
+            mapWrap.style.height = mapHeight;
+            map.style.width = mapWidth;
+            map.style.height = mapHeight;
+            coordYWrap.style.height = mapHeight;
+            coordXWrap.style.width = mapWidth;
+    
+            mapImages.forEach(function(img) {
+                img.style.width = 'auto';
+                img.style.height = 'auto';
+            });
+    
+            // Remove o container antigo e recria o mapa
+            extraMapContainer.remove();
+            goHomeBoundarie.remove(); //it will generate again
+            TWMap.size = [9, 9];
+            TWMap.init();
 
-        // Remove o container antigo e recria o mapa no tamanho original
-        extraMapContainer.remove();
-        goHomeBoundarie.remove(); //it will generate again
-        TWMap.size = [9, 9];
-        TWMap.init();
-        wait(1).then(() => { TWMap.focusSubmit();} );
+            wait(1).then(() => { 
+                // Captura a parte do hash da URL (depois do #)
+                const hash = window.location.hash.substring(1); // Remove o #
+                if (hash && hash.includes(";")) {
+                    const [x, y] = hash.split(";");
+                    TWMap.focus(x, y);
+                } else {
+                    TWMap.focusSubmit();
+                }
+            });
+        } else {
+            // Restaura os tamanhos originais a partir do objeto salvo
+            mapWrap.style.width = storedMapConfig.originalWidth;
+            mapWrap.style.height = storedMapConfig.originalHeight;
+            map.style.width = storedMapConfig.originalWidth;
+            map.style.height = storedMapConfig.originalHeight;
+            coordYWrap.style.height = storedMapConfig.originalHeight;
+            coordXWrap.style.width = storedMapConfig.originalWidth;
+    
+            mapImages.forEach(function(img) {
+                img.style.width = storedMapConfig.originalMapImgWidth;
+                img.style.height = storedMapConfig.originalMapImgHeight;
+            });
+    
+            // Remove o container antigo e recria o mapa no tamanho original
+            extraMapContainer.remove();
+            goHomeBoundarie.remove(); //it will generate again
+            TWMap.size = [9, 9];
+            TWMap.init(); 
+            // Captura a parte do hash da URL (depois do #)
+            const hash = window.location.hash.substring(1); // Remove o #
+            if (hash && hash.includes(";")) {
+                const [x, y] = hash.split(";");
+                TWMap.focus(x, y);
+            } else {
+                TWMap.focusSubmit();
+            }
+        }
     }
 }
 
 function createBigMapOption() {
     const tr = document.createElement('tr');
-
     tr.style.background = '#e27f26 !important'; 
     
+    //option to enable big map
     const tdCheckbox = document.createElement('td');
     const inputCheckbox = document.createElement('input');
     var isBigMapOpened = settings_cookies.general['show__big_map'];
@@ -233,12 +264,57 @@ function createBigMapOption() {
     
     tr.appendChild(tdCheckbox);
     tr.appendChild(tdLabel);
+
+    //option to set map size
+    let trMapSize = document.createElement("tr");
+    let td1 = document.createElement("td");
+    td1.classList.add("nowrap");
+    let td2 = document.createElement("td");
+    td2.classList.add("nowrap");
+
+    let labelHeight = document.createTextNode("Height: ");
+    let inputHeight = document.createElement("input");
+    inputHeight.type = "number";
+    inputHeight.name = "x";
+    inputHeight.id = "map_custom_height";
+    inputHeight.value = localStorage.getItem('map_custom_height');
+    inputHeight.setAttribute('step', '100');
+    inputHeight.style.width = "50px";
+    inputHeight.oninput = function () {
+        var isBigMapOpened = settings_cookies.general['show__big_map'];
+        if(isBigMapOpened){
+            setMapSize();
+        }
+        //save value
+    }
+
+    let labelWidth = document.createTextNode(" Width: ");
+    let inputWidth = document.createElement("input");
+    inputWidth.type = "number";
+    inputWidth.name = "y";
+    inputWidth.id = "map_custom_width";
+    inputWidth.value = localStorage.getItem('map_custom_width');
+    inputWidth.setAttribute('step', '100');
+    inputWidth.style.width = "50px";
+    inputWidth.oninput = function () {
+        var isBigMapOpened = settings_cookies.general['show__big_map'];
+        if(isBigMapOpened){
+            setMapSize();
+        }
+        //save value
+    }
+    td1.appendChild(labelHeight);
+    td1.appendChild(inputHeight);
+    td2.appendChild(labelWidth);
+    td2.appendChild(inputWidth);
+    trMapSize.appendChild(td1);
+    trMapSize.appendChild(td2);
     
     const visTables = document.querySelectorAll('#map_config .vis');
     
     if (visTables.length > 1) {
         const tbody = visTables[1].querySelector('tbody');
-        
+        console.log(tbody)
         if (tbody) {
             const secondTr = tbody.querySelectorAll('tr')[1];
             
@@ -247,7 +323,11 @@ function createBigMapOption() {
             } else {
                 tbody.appendChild(tr);
             }
+
+            tbody.insertBefore(trMapSize, secondTr);
+
         }
+        
     }
 }
 
