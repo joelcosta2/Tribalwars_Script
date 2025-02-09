@@ -407,8 +407,6 @@ async function removeFromActiveBuildQueue(build_index) {
         if (build_index === 0) {
             localStorage.setItem('building_queue_active', JSON.stringify({}));
         }
-        
-        showAutoHideBox('Build removed from queue', false);
         fetchBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
     } catch (error) {
         showAutoHideBox('Error removing building:', error);
@@ -464,9 +462,9 @@ function callRemoveFromActiveBuildingQueue(idToRemove) {
     xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
             if (xhr.status === 200) {
-                console.log('edificio removido');
+                showAutoHideBox('Build removed from queue', false);
             } else {
-                console.error('Error:', xhr.status, xhr.statusText);
+                showAutoHideBox('Error removing building:', xhr.status, xhr.statusText);
             }
         }
     };

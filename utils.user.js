@@ -497,7 +497,8 @@ function restoreTimeouts() {
 
 function checkInactivity(minutes) {
     if (TribalWars.getIdleTime() >= minutes * 60 * 1000) {
-        console.log("Inactivity detected! Reloading page...");
+        showAutoHideBox('Inactivity detected! Reloading page...', error);
+        wait(5);
         location.reload();
     }
 }
@@ -946,8 +947,6 @@ function functionToCallTest() {
                     }
                 });
             });
-            
-            console.log();
         }
     });*/
 
