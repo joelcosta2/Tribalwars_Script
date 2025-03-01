@@ -9,7 +9,6 @@
         prepareLocalStorageItems();
         if (!document.getElementById('mobileContent')) {
             start();
-            testAntiBot();  
         }
     }
 })();
