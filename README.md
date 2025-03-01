@@ -81,9 +81,9 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\overviewPremiumInfo.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_trainerPaladin.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_scavenging.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_villagelist.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_villageList.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_notepad.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_extrabuildqueue.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_extraBuildQueue.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_recruitTroops.user.js
       // @updateURL    file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
       // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
