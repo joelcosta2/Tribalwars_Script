@@ -71,7 +71,24 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 1. **Download project:**
    - Download or clone the project to your local machine.
 2. **Change you project file path:**
-   - Edit the **main_local.user** file, and replace {YOUR_PATH} with the correct path to your project.
+   - Edit the **main_local.user** file, and past follow settings on the file, replacing YOUR_PATH:
+        ```javascript
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\utils.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\custom_css.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\settings_script.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\navigationArrows_script.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\map_script.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\overviewPremiumInfo.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_trainerPaladin.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_scavenging.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_villagelist.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_notepad.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_extrabuildqueue.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_recruitTroops.user.js
+      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
+      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
+
+   
 3. **Import the main file on Tampermonkey:**
    - Open Tampermonkey and navigate to the "Utilities" tab.
    - In the "Import from file" field, select the **main_local.user**.
