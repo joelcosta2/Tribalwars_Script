@@ -10,18 +10,9 @@ infoOverview.barracks = infoOverview.barracks || "";
 infoOverview.garage = infoOverview.garage || "";
 infoOverview.smith = infoOverview.smith || "";
 infoOverview.main = infoOverview.main || "";
+infoOverview.statue = infoOverview.statue || "";
 infoOverview.wall = infoOverview.wall || "";
-
-//pmudar de sitio maybe, defini +1 para construçoes em progresso
-var infoOverview = JSON.parse(localStorage.getItem("infoOverview")) || {};
-var buildingQueueActive = JSON.parse(localStorage.getItem("building_queue_active"));
-var buildIds = buildingQueueActive ? buildingQueueActive.map(item => item.replace(/[0-9]/g, '')) : {};
-
-Object.keys(infoOverview).forEach(key => {
-    if (buildIds.includes(key)) {
-        addToVisualLabel(key, '+1')
-    } 
-});
+infoOverview.farm = infoOverview.farm || "";
 
 
 //por agora ja faz fetch dos tempos dos materiais, guarda na local storaage e aplica os hovers
@@ -281,6 +272,25 @@ function getGarageTime(garageTimes) {
     return "30 minutos para terminar";
 }
 
+function getFarmInfo() {
+    return ''
+}
+
+function setBuildingLevels() {
+    var buildingQueueActive = JSON.parse(localStorage.getItem("building_queue_active"));
+    var buildIds = buildingQueueActive ? buildingQueueActive.map(item => item.replace(/[0-9]/g, '')) : [];
+    var fakeBuildingQueue = JSON.parse(localStorage.getItem("building_queue"));
+    var fakeBuildIds = fakeBuildingQueue ? fakeBuildingQueue.map(item => item.replace(/[0-9]/g, '')) : [];
+
+    document.querySelectorAll('.order-level').forEach(el => el.textContent = '');
+    Object.keys(infoOverview).forEach(key => {
+        let count = buildIds.filter(id => id === key).length;
+        let fakeCount = fakeBuildIds.filter(id => id === key).length;
+        if (count > 0) addToVisualLevelLabel(key, count);
+        if (fakeCount > 0) addToVisualLevelLabel(key, fakeCount, true);
+    });
+}
+
 function storeAvailableUnitsCosts(data) {
     let unitCosts = {};
     $(data).find(".recruit_req").each(function(index, reqEl) {
@@ -373,6 +383,8 @@ function updatePremiumInfoOverview() {
         infoOverview.market = getMarketInfo();
         infoOverview.place = getPlaceInfo();
         infoOverview.statue = getStatueInfo();
+        infoOverview.farm = getFarmInfo();
+        //setBuildingLevels();
 
         fetchTrainInfo();
 
@@ -383,7 +395,7 @@ function updatePremiumInfoOverview() {
     }
 }
 
-function addToVisualLabelExtra(buildingName, textContent, isTimer = false, endtime = 0) {
+function addToVisualLabelExtra(buildingName, newTextContent, isTimer = false, endtime = 0) {
     const labelStorage = document.getElementsByClassName(`visual-label-${buildingName}`)[0];
 
     if (labelStorage) {
@@ -392,8 +404,8 @@ function addToVisualLabelExtra(buildingName, textContent, isTimer = false, endti
         if (labelContent) {
             const div = document.createElement('div');
             div.style.whiteSpace = 'pre-line';
-            div.textContent = textContent;
-            div.style.fontSize = "10px";
+            div.textContent = newTextContent;
+            div.style.fontSize = "9px";
         
             labelContent.appendChild(div);
 
@@ -406,14 +418,16 @@ function addToVisualLabelExtra(buildingName, textContent, isTimer = false, endti
     }
 }
 
-function addToVisualLabel(buildingName, textContent) {
-    const labelStorage = document.getElementsByClassName(`visual-label-${buildingName}`)[0];
+function addToVisualLevelLabel(buildingName, level, fakeQueue) {
+    const labelStorage = document.querySelector(`.visual-label-${buildingName}`);
     if (labelStorage) {
-        const labelContent = labelStorage.querySelector('a');
-        const text = labelContent.firstChild;
-
-        if (labelContent) {
-            text.textContent = text.textContent + textContent;
+        const orderLevel = labelStorage.querySelector('.order-level');
+        if (orderLevel) {
+            orderLevel.textContent = orderLevel.textContent + `+${level}`;
+            if (fakeQueue) {
+                orderLevel.style.color = "orange";
+            }
         }
     }
 }
+

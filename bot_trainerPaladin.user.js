@@ -63,36 +63,36 @@ function injectScriptAutoTrainerPaladin() {
 }
 
 async function runAutoTrainer() {
-    const isAutoWaiting = localStorage.getItem('function_auto_trainer_paladin')
+    const isWaiting = localStorage.getItem('function_auto_trainer_paladin');
+    const cancelButton = document.querySelector('.knight_train_abort');
+    const showWarningPopup = !isWaiting && !cancelButton;
 
-    const userChoice = !isAutoWaiting ? await displayWarningPopup('Confirm Auto Paladin Train', 'Do you wish to continue with the paladin train automation?') : 'cancel';
+    const userChoice = showWarningPopup ? await displayWarningPopup('Confirm Auto Paladin Train', 'Do you wish to continue with the paladin train automation?') : 'cancel';
+  
     if (userChoice === 'cancel') {
         return;
     } else {
-        //var trainLevel = parseInt(localStorage.getItem('auto_trainer_paladin_level'));
+        var maxPaladinLevel = '8'; //train until X level
+        var currentPaladinLevel = document.querySelector('.level').textContent;
 
         var trainStartButton = document.querySelector('.knight_train_launch');
-        if (trainStartButton) {
+        if (trainStartButton && (maxPaladinLevel !== currentPaladinLevel)) {
             trainStartButton.click();
             wait(1).then(() => {
                 var trainLevelsButtons = document.querySelectorAll('.btn.knight_regimen_confirm:not([class*="btn-pp"])');
-                //var trainLevel = parseInt(localStorage.getItem('auto_trainer_knight_level'));
                 var trainLevel = 0;
                 if (trainLevelsButtons.length) {
                     trainLevelsButtons[trainLevel].click();
                     
-                    console.log("PaladinTrainer started at: " + new Date());
                     wait(1).then(() => {
                         var trainTime = document.querySelector('[data-endtime]');
                         if (trainTime) {
-                            var waitTime = timeToMilliseconds(trainTime.textContent) + 15000; //15 more sec
+                            var waitTime = timeToMilliseconds(trainTime.textContent);
 
                             if (waitTime > 0) {
                                 setFunctionOnTimeOut('auto_trainer_paladin', function () {
                                     window.location.href = game_data.link_base_pure + 'statue';
                                 }, waitTime);
-                                
-                                console.log("PaladinTrainer next at " + new Date(Date.now() + waitTime))
                             }
                         }
                     })
@@ -102,7 +102,7 @@ async function runAutoTrainer() {
         } else {
             var trainTime = document.querySelector('[data-endtime]');
             if (trainTime) {
-                var waitTime = timeToMilliseconds(trainTime.textContent) + 15000; //15 more sec
+                var waitTime = timeToMilliseconds(trainTime.textContent);
 
                 if (waitTime > 0) {
                     setFunctionOnTimeOut('auto_trainer_paladin', function () {

@@ -93,10 +93,12 @@ GM_addStyle(customCSS);
 const resizeObserver = new ResizeObserver(() => {
     const pageHeight = document.documentElement.scrollHeight;
     const dsBodyHeight = document.getElementById('ds_body').offsetHeight;
+    const htmlBody = document.querySelector('html');
     const bottom = document.querySelector('#bottom');
-
     if (dsBodyHeight !== pageHeight) {
         bottom.classList.add('bottom_sticky');
+        htmlBody.style.height = 'auto';
+
     } else {
         bottom.classList.remove('bottom_sticky');
     }

@@ -79,7 +79,7 @@ function injectNavigationBar() {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/scavenging/options/3.png",
                 href: "/game.php?village=" + game_data.village.id + "&screen=place&mode=scavenge"
             },
-            "Delete Misc Reports": {
+            "Del Misc Reports": {
                 img: "https://dspt.innogamescdn.com/asset/243a567d/graphic/delete.png",
                 run: async function() {
                     try {
@@ -106,7 +106,25 @@ function injectNavigationBar() {
             "Quests": {
                 img: "https://dsen.innogamescdn.com/asset/243a567d/graphic/quests_new/quest_icon.png",
                 run: function() {
-                      Questlines.showDialog(0, 'main-tab');
+                    Questlines.showDialog(0, 'main-tab');
+                    let checkExist = setInterval(function () {
+                        let questlineLists = document.querySelectorAll('.questline-list');
+                        
+                        if (questlineLists.length > 0) {
+                            clearInterval(checkExist); // Para o intervalo quando encontrar
+                            
+                            questlineLists.forEach(questlineList => {
+                                let listItems = questlineList.querySelectorAll('li');
+                                
+                                listItems.forEach(li => {
+                                    let ul = li.closest('ul'); // Encontra o <ul> mais próximo
+                                    if (ul) {
+                                        ul.classList.add('opened'); // Adiciona a classe "opened"
+                                    }
+                                });
+                            });
+                        }
+                    }, 500); // Verifica a cada 500ms
                 }
             },
         };

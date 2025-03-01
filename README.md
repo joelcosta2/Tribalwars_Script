@@ -71,18 +71,19 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 1. **Download project:**
    - Download or clone the project to your local machine.
 2. **Change you project file path:**
-   - Edit the **local_main.user** file, and replace {YOUR_PATH} with the correct path to your project.
+   - Edit the **main_local.user** file, and replace {YOUR_PATH} with the correct path to your project.
 3. **Import the main file on Tampermonkey:**
    - Open Tampermonkey and navigate to the "Utilities" tab.
-   - In the "Import from file" field, select the **local_main.user**.
+   - In the "Import from file" field, select the **main_local.user**.
    - Click "Install" to add the script to Tampermonkey.
 4. **Make your changes:**
-   - Edit the scripts and test them directly in your browser. You only need to reinstall the script if you make changes to the **local_main.user** file
+   - Edit the scripts and test them directly in your browser. You only need to reinstall the script if you make changes to the **main_local.user** file
 5. **Make sure you have Allow access to file URLs for Tampermonkey(TP):**
    - Go to Extensions on your browser and find the TM 'card'.
    - Click details and "Allow access to file URLs".
    
-  ![Allow access to file URLs](img/dkhgl.png)
+  ![Allow access to file URLs](img/dkHgL.png)
+
 6. **Notice the file:// URI scheme:**
       - for windows:
 
@@ -97,7 +98,7 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 - These features currently work only in the browser and have been tested with a single account/world. Support for multiple accounts or worlds may be added in the future.
 - All data is stored in the browser's local storage.
 - I have no idea how it works in languages other than PT-PT. Feel free to test it and let me know! :)
-- I doubt it works with a different time format...
+- I doubt it works with different time formats...
 - Some information is retrieved via AJAX calls to the relevant pages. For example, village hover info (such as recent attack details) is scraped from the corresponding report page and displayed on the map. I'm working on reducing the number of calls to avoid detection by TW’s bot-catching system and minimize the risk of bans.
 - I know this is basically spaghetti code, but I'm having a lot of fun getting it to work. I just wish my villages weren’t constantly being conquered—it makes it hard to test this with multiple villages. Maybe I should focus more on the game and less on the script!
 - Just a heads-up: I’m not responsible for any bans resulting from using this script. It’s meant for casual gameplay enhancement, not to provide an unfair advantage over other players.

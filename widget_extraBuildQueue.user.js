@@ -28,7 +28,17 @@ function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildin
         var buildLvel = url.match(/([^\/]+?)(?=\.\w+$)/)[1];
         var row = document.createElement('tr');
         row.id = 'main_buildrow_' + index;
-        const canAddToQueue = buildingImgs.includes(url);
+        
+        // get next level
+        let nextLevel = parseInt(availableBuildingLevels[index]) + 1;
+        const buildingQueue = JSON.parse(localStorage.getItem('building_queue')) || [];
+        const buildingActiveQueue = JSON.parse(localStorage.getItem('building_queue_active')) || [];
+        const queuedBuilding = buildingQueue.filter(id => id === buildId).length;
+        const activeQueuedCount = buildingActiveQueue.filter(id => id.replace(/\d+/g, '') === buildId).length;
+        nextLevel += queuedBuilding || 0;
+        nextLevel += activeQueuedCount || 0;
+        
+        const canAddToQueue = buildingImgs.includes(url) && buildingQueue.length === 0;
 
         var cell = document.createElement('td');
         cell.style.display = 'flex';
@@ -57,15 +67,15 @@ function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildin
         // Create the link for upgrading the building
         var upgradeLink = document.createElement('a');
         upgradeLink.className = canAddToQueue ? 'btn btn-build' : 'btn evt-cancel-btn btn-confirm-no';
-        upgradeLink.setAttribute('data-building', (buildId + availableBuildingLevels[index] + 1));
-        upgradeLink.setAttribute('data-level-next', (parseInt(availableBuildingLevels[index]) + 1));
+        upgradeLink.setAttribute('data-building', (buildId + nextLevel));
+        upgradeLink.setAttribute('data-level-next', nextLevel );
         
-        upgradeLink.id = 'main_buildlink_' + buildId + '_' + (parseInt(availableBuildingLevels[index]) + 1);
+        upgradeLink.id = 'main_buildlink_' + buildId + '_' + nextLevel;
         upgradeLink.style.width = '-webkit-fill-available';
         upgradeLink.style.margin = '0';
         upgradeLink.style.fontSize = '11px !important';
         upgradeLink.style.padding = '1px 3px';
-        upgradeLink.textContent = 'Level ' + (parseInt(availableBuildingLevels[index]) + 1);
+        upgradeLink.textContent = 'Level ' + nextLevel;
         upgradeLink.onclick = function () {
             addToBuildQueue(buildId);
         }
@@ -78,7 +88,10 @@ function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildin
         });
 
         var upgradeCell = document.createElement('td');
-        upgradeCell.setAttribute('data-title', canAddToQueue ? 'Add to queue' : 'Add to waiting queue');
+        const dataText = canAddToQueue ? 
+                    'Add to queue' + createResourceElementsString(buildId) : 
+                    'Add to waiting queue' + (!queuedBuilding ? createResourceElementsString(buildId) : '<div>no info, build alreday in waiting queue</div>');
+        upgradeCell.setAttribute('data-title', dataText);
         upgradeCell.appendChild(upgradeLink);
 
         row.appendChild(cell);
@@ -135,7 +148,26 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
     cancelButtons.forEach(function (element) {
         queueBuildIdsActive.push(element.parentElement.parentElement.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ''));
     })
-    
+
+
+    //MUDAR DE SITIO
+    const buildingsData = {};
+    tempElement.querySelectorAll("[id^='main_buildrow_']").forEach(row => {
+        const buildId = row.id.replace("main_buildrow_", "");
+        const tds = row.querySelectorAll("td");
+
+        if (tds.length > 2) {
+            const wood = parseInt(row.querySelector(".cost_wood")?.getAttribute("data-cost") || "0", 10);
+            const stone = parseInt(row.querySelector(".cost_stone")?.getAttribute("data-cost") || "0", 10);
+            const iron = parseInt(row.querySelector(".cost_iron")?.getAttribute("data-cost") || "0", 10);
+            const time = tds[4]?.innerText.trim() || "";
+            const population = tds[5]?.innerText.trim() || "";
+
+            buildingsData[buildId] = { wood, stone, iron, time, population };
+        }
+    });
+
+    localStorage.setItem('nextLevelBuildsQueueInfo', JSON.stringify(buildingsData))
     localStorage.setItem('building_queue_active', JSON.stringify(queueBuildIdsActive))
 
     // inject active real queue
@@ -145,6 +177,40 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
 
     return buildQueueElment;
 }
+
+function createResourceElementsString(buildId) {
+    const storedData = localStorage.getItem('nextLevelBuildsQueueInfo');
+    if (!storedData) return ''; 
+
+    const buildingsData = JSON.parse(storedData);
+    const buildInfo = buildingsData[buildId];
+    if (!buildInfo) return '';
+
+    function createSpan(className, value) {
+        const span = document.createElement("span");
+        span.className = `icon header ${className}`;
+        span.style.margin = '0';
+        const textNode = document.createTextNode(` ${value}`);
+        const wrapper = document.createElement("span"); // Wrapper para manter estrutura correta
+        wrapper.appendChild(span);
+        wrapper.appendChild(textNode);
+        wrapper.style.marginRight = '1px';
+        
+        return wrapper.outerHTML;
+    }
+
+    return (`<div>` +
+        createSpan("wood", buildInfo.wood) +
+        createSpan("stone", buildInfo.stone) +
+        createSpan("iron", buildInfo.iron) +
+        `<div>` +
+            createSpan("time", buildInfo.time) +
+            (buildInfo.population ? createSpan("population", buildInfo.population) : '') +
+        `</div>`+
+        `</div>`
+    );
+}
+
 
 function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueElment) {// inject active real queue
     if (queueBuildIdsActive.length) {
@@ -184,6 +250,7 @@ function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueE
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
             span.style.width = '24px';
+            span.style.marginRight = '4px';
             span.style.position = 'relative';
             span.style.display = 'inline-block';
             span.style.cursor = 'pointer';
@@ -250,6 +317,7 @@ function injectFakeQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueEl
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
             span.style.width = '24px';
+            span.style.marginRight = '4px';
             span.style.position = 'relative';
             span.style.display = 'inline-block';
             span.style.cursor = 'pointer';
@@ -283,7 +351,6 @@ function injectQueues(mainElement, update) {
         const parser = new DOMParser();
         const tempElement = parser.parseFromString(mainElement, 'text/html');
 
-
         localStorage.setItem('last_main_page', mainElement);
         var { availableBuildingsImgs, availableBuildingLevels, allBuildingsImgs, allAvailableBuildingLevels } = getAllBuildingsImages(tempElement);
         var buildQueueElment = getCurrentQueueListElement(tempElement, allBuildingsImgs);
@@ -293,6 +360,7 @@ function injectQueues(mainElement, update) {
         } else {
             injectBuildQueue(availableBuildingsImgs, availableBuildingsImgs, availableBuildingLevels, buildQueueElment, update);
         }
+        setBuildingLevels();
     }
 }
 
@@ -399,7 +467,7 @@ async function removeFromActiveBuildQueue(build_index) {
     const cancelIds = JSON.parse(localStorage.getItem('queue_cancelIds'));
     try {
         await callRemoveFromActiveBuildingQueue(cancelIds[build_index]);  // Wait for the promise to resolve
-    
+
         var building_active_queue = JSON.parse(localStorage.getItem('building_queue_active'));
         building_active_queue.splice(build_index, 1);
         localStorage.setItem('building_queue_active', JSON.stringify(building_active_queue));
@@ -407,7 +475,13 @@ async function removeFromActiveBuildQueue(build_index) {
         if (build_index === 0) {
             localStorage.setItem('building_queue_active', JSON.stringify({}));
         }
-        fetchBuildQueueWidget(settings_cookies.widgets.find(widget => widget.name === 'building_queue').column, true);
+
+        const mainElement = localStorage.getItem('last_main_page');
+        if (mainElement) {
+            injectQueues(mainElement, true);
+        } else {
+            fetchBuildQueueWidget(true);
+        }
     } catch (error) {
         showAutoHideBox('Error removing building:', error);
         console.error('Error removing building:', error);
@@ -421,26 +495,29 @@ function callUpgradeBuilding(id) {
         'success': function (data) {
             const parser = new DOMParser();
             const tempElement = parser.parseFromString(data, 'text/html');
+            var main = tempElement.querySelector('#building_wrapper');
 
             var isError = tempElement.querySelector('.error_box');
             var building_queue = JSON.parse(localStorage.getItem('building_queue') || '[]');
             building_queue.shift();
             localStorage.setItem('building_queue', JSON.stringify(building_queue || []));
             localStorage.setItem('waiting_for_queue', JSON.stringify({}));
-            if (isError !== null) {
+            if (isError !== null  || !main) {
                 var missingRessourceBuildRow = tempElement.querySelector('#main_buildrow_' + id + ' .inactive');
                 if (missingRessourceBuildRow) {
                     var timeAvailable = extractBuildTimeFromHTML(missingRessourceBuildRow.textContent);
                 }
                 
                 if (timeAvailable) {
-                    showAutoHideBox('Added to queue at ' + (timeAvailable[0] ? 'Tomorrow' : 'Today') + ' @ ' + timeAvailable[1] + ':' + timeAvailable[2]);
-                    var waiting_for_queue_temp = { buildId: id, time: timeAvailable };
-                    
-                    localStorage.setItem('waiting_for_queue', JSON.stringify(waiting_for_queue_temp));
-                    building_queue = JSON.parse(localStorage.getItem('building_queue'));
-                    building_queue.unshift(id);
-                    localStorage.setItem('building_queue', JSON.stringify(building_queue));
+                    showAutoHideBox('Added to queue at ' + (timeAvailable[0] == '0' ? 'Today' : 'Tomorrow' ) + ' @ ' + timeAvailable[1] + ':' + timeAvailable[2]);
+                    if (timeAvailable[0]) {
+                        var waiting_for_queue_temp = { buildId: id, time: timeAvailable };
+                        
+                        localStorage.setItem('waiting_for_queue', JSON.stringify(waiting_for_queue_temp));
+                        building_queue = JSON.parse(localStorage.getItem('building_queue'));
+                        building_queue.unshift(id);
+                        localStorage.setItem('building_queue', JSON.stringify(building_queue));
+                    }
                 }
                 updateBuildQueueTimers();
                 injectQueues(data, true);
@@ -480,8 +557,9 @@ function updateBuildQueueTimers() {
     if (waiting_for_queue.time) {
         //build waiting with missing ressources, .time is the time for the available ressources
         var nextTimeDate = waiting_for_queue.time;
+        debugger
         var addToQueueDate = new Date();
-        addToQueueDate.setDate(addToQueueDate.getDate() + nextTimeDate[0]);
+        addToQueueDate.setDate(addToQueueDate.getDate() + parseInt(nextTimeDate[0]));
         addToQueueDate.setHours(parseInt(nextTimeDate[1]), parseInt(nextTimeDate[2]));
         var waitTime = (addToQueueDate.getTime() - Date.now());
         if (waitTime > 0) {

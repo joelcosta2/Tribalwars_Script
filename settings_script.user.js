@@ -164,109 +164,207 @@ function injectScriptSettingsButtom(maincell) {
 
 function injectScriptSettingsPopUp() {
     var maincell = document.getElementsByClassName('maincell')[0];
-
     injectScriptSettingsButtom(maincell);
 
-    // Criar o elemento <div> do popup_helper
     var popupHelperDiv = document.createElement('div');
-    //popupHelperDiv.classList.add('popup_helper');
+    var popupStyleDiv = createPopupContainer();
+    var popupMenuDiv = createPopupHeader(popupStyleDiv);
+    var tabNavDiv = createTabNavigation();
 
-    // Criar o elemento <div> do popup_style
-    var popupStyleDiv = document.createElement('div');
-    popupStyleDiv.classList.add('popup_style', 'borderimage', 'popup_box');
-    popupStyleDiv.id = 'settings_popup';
-    popupStyleDiv.style.width = '700px';
-    popupStyleDiv.style.opacity = '1';
-    popupStyleDiv.style.position = 'absolute';
-    popupStyleDiv.style.top = '50%';
-    popupStyleDiv.style.left = '50%';
-    popupStyleDiv.style.transform = 'translate(-50%, -70%)';
-    popupStyleDiv.style.display = 'none';
+    var { tabButtons, tabContents } = createTabs(tabNavDiv);
+    var saveButtonDiv = createSaveButton();
 
-    // Criar o elemento <div> do popup_menu
-    var popupMenuDiv = document.createElement('div');
-    popupMenuDiv.style.fontSize = "17px";
-    popupMenuDiv.style.fontWeight = "bold";
-    popupMenuDiv.textContent = 'Script Settings';
+    popupStyleDiv.appendChild(popupMenuDiv);
+    popupStyleDiv.appendChild(tabNavDiv);
+    tabContents.forEach(content => popupStyleDiv.appendChild(content));
+    popupStyleDiv.appendChild(saveButtonDiv);
 
-    // Criar o elemento <a> para fechar o popup
+    popupHelperDiv.appendChild(popupStyleDiv);
+    document.body.appendChild(popupHelperDiv);
+}
+
+function createPopupContainer() {
+    var popup = document.createElement('div');
+    popup.classList.add('popup_style', 'borderimage', 'popup_box');
+    popup.id = 'settings_popup';
+    Object.assign(popup.style, {
+        width: '700px',
+        font: 'inherit',
+        opacity: '1',
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -70%)',
+        display: 'none',
+        padding: '10px',
+        overflow: 'hidden'
+    });
+    return popup;
+}
+
+function createPopupHeader(popup) {
+    var header = document.createElement('div');
+    Object.assign(header.style, {
+        fontSize: "17px",
+        fontWeight: "bold",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingBottom: "5px"
+    });
+    header.textContent = 'Script Settings';
+
     var closeLink = document.createElement('a');
     closeLink.onclick = function () {
-        var content = document.getElementById('settings_popup');
-        content.style.display = content.style.display === 'none' ? 'block' : 'none';
-    }
+        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    };
+    Object.assign(closeLink.style, {
+        cursor: 'pointer',
+        fontSize: "18px",
+        fontWeight: "bold"
+    });
     closeLink.textContent = 'X';
-    closeLink.style.float = 'right';
-    closeLink.style.cursor = 'pointer';
 
-    // Adicionar o link de fechar ao menu popup
-    popupMenuDiv.appendChild(closeLink);
+    header.appendChild(closeLink);
+    return header;
+}
 
-    // Criar o elemento <div> do popup_content
-    var popupContentDiv = document.createElement('div');
-    popupContentDiv.classList.add('popup_content');
-    popupContentDiv.style.height = 'auto';
-    popupContentDiv.style.overflowY = 'auto';
-    popupContentDiv.style.display = 'flex';
-    popupContentDiv.style.padding = '0';
-    popupContentDiv.style.paddingTop = '10px';
+function createTabNavigation() {
+    var tabNav = document.createElement('div');
+    tabNav.id = 'tabNav';
+    Object.assign(tabNav.style, {
+        display: 'flex',
+        justifyContent: 'space-around'
+    });
+    return tabNav;
+}
 
-    // Criar a tabela dentro do conteúdo do popup
+function createTabs(tabNav) {
+    var tabButtons = [];
+    var tabContents = [];
+    
+    var settingsGroups = getSettingsGroups();
+    
+    Object.keys(settingsGroups).forEach((groupName, index) => {
+        var tabButton = createTabButton(groupName, index, tabButtons, tabContents);
+        var tabContent = createTabContent(groupName, index);
+        
+        tabButtons.push(tabButton);
+        tabContents.push(tabContent);
+        
+        tabNav.appendChild(tabButton);
+    });
+
+    return { tabButtons, tabContents };
+}
+
+function createTabButton(groupName, index, tabButtons, tabContents) {
+    var tabButton = document.createElement('button');
+    tabButton.textContent = groupName;
+    tabButton.id = `tabButton_${groupName.replace(/\s/g, "_")}`;
+    Object.assign(tabButton.style, {
+        padding: '0',
+        border: 'none',
+        cursor: 'pointer',
+        background: index === 0 ? '#c1a264' : '#f4e4bc',
+        border: index === 0 ? '1px solid #7d510f' : 'none',
+        flex: '1'
+    });
+
+    tabButton.onclick = function () {
+        tabButtons.forEach(btn => {
+            btn.style.background = '#f4e4bc';
+            btn.style.border = 'none';
+        });
+
+        tabContents.forEach(content => {
+            content.style.display = 'none';
+        });
+
+        tabButton.style.background = '#c1a264';
+        tabButton.style.border = '1px solid #7d510f';
+
+        let activeContent = document.getElementById(`tabContent_${groupName.replace(/\s/g, "_")}`);
+        if (activeContent) {
+            activeContent.style.display = 'block';
+        }
+    };
+
+    return tabButton;
+}
+
+function createTabContent(groupName, index) {
+    var tabContent = document.createElement('div');
+    tabContent.id = `tabContent_${groupName.replace(/\s/g, "_")}`;
+    Object.assign(tabContent.style, {
+        display: index === 0 ? 'block' : 'none',
+        padding: '10px 0'
+    });
+
     var tableElement = document.createElement('table');
     tableElement.classList.add('vis');
     tableElement.style.width = '100%';
-    var tableElement2 = document.createElement('table');
-    tableElement2.classList.add('vis');
-    tableElement2.style.width = '100%';
 
+    var settingsGroups = getSettingsGroups();
 
-    //no max 9 por coluna, do lado direito tem de ter mais 1, e na ultima é um botao de salvar
     availableSettings.forEach(function (setting) {
-        var row = tableElement.insertRow();
-        var cell1 = row.insertCell(0);
-        var cell2 = row.insertCell(1);
+        if (settingsGroups[groupName].includes(setting.name)) {
+            var row = tableElement.insertRow();
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
 
-        cell1.textContent = setting.label;
-        var label = document.createElement('label');
-        var input = document.createElement('input');
-        input.type = 'checkbox';
-        input.name = setting.name;
-        if (typeof settings_cookies.general[setting.name] === 'object') {
-            input.checked = settings_cookies.general[setting.name].enabled;
-        } else {
-            input.checked = settings_cookies.general[setting.name];
+            cell1.textContent = setting.label;
+            var label = document.createElement('label');
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = setting.name;
+            input.checked = typeof settings_cookies.general[setting.name] === 'object'
+                ? settings_cookies.general[setting.name].enabled
+                : settings_cookies.general[setting.name];
+
+            var textDescription = document.createTextNode(setting.description);
+            label.append(input, textDescription);
+            cell2.appendChild(label);
         }
-        var textDescription = document.createTextNode(setting.description);
-        label.append(input);
-        label.append(textDescription);
-
-        cell2.appendChild(label);
-        //cell2.innerHTML = `<label><input type="checkbox" checked=${settings_cookies.general[setting.name]} name="${setting.name}">${setting.description}</label>`;
     });
 
-    // Adicionar o botão de "Guardar alterações" no último <tr> da tabela
-    var saveButtonRow = tableElement.insertRow();
-    var saveButtonCell = saveButtonRow.insertCell(0);
-    var inputButtonCell = document.createElement('input');
-    inputButtonCell.type = 'submit';
-    inputButtonCell.value = 'Save Changes';
-    inputButtonCell.className = 'btn';
-    inputButtonCell.style.margin = '4px';
-    inputButtonCell.onclick = function () {
-        saveScriptSettings();
-    }
-
-    saveButtonCell.colSpan = 2;
-    saveButtonCell.appendChild(inputButtonCell);
-
-    // Adicionar a tabela ao conteúdo do popup
-    popupContentDiv.appendChild(tableElement);
-
-    // Adicionar os elementos criados à hierarquia do DOM
-    popupStyleDiv.appendChild(popupMenuDiv);
-    popupStyleDiv.appendChild(popupContentDiv);
-    popupHelperDiv.appendChild(popupStyleDiv);
-
-    // Adicionar o popup_helper ao documento
-    document.body.appendChild(popupHelperDiv);
+    tabContent.appendChild(tableElement);
+    return tabContent;
 }
+
+function createSaveButton() {
+    var saveButtonDiv = document.createElement('div');
+    saveButtonDiv.id = 'saveButtonDiv';
+    Object.assign(saveButtonDiv.style, {
+        textAlign: 'center',
+        marginTop: '10px'
+    });
+
+    var saveButton = document.createElement('input');
+    saveButton.type = 'submit';
+    saveButton.value = 'Save Changes';
+    saveButton.className = 'btn';
+    Object.assign(saveButton.style, {
+        padding: '8px 16px',
+        fontSize: '14px',
+        cursor: 'pointer'
+    });
+
+    saveButton.onclick = function () {
+        saveScriptSettings();
+    };
+
+    saveButtonDiv.appendChild(saveButton);
+    return saveButtonDiv;
+}
+
+function getSettingsGroups() {
+    return {
+        "Widgets": ["show__village_list", "show__recruit_troops", "show__notepad", "show__building_queue", "show__building_queue_all"],
+        "UI Enhancements": ["show__navigation_arrows", "show__navigation_bar", "show__overview_premmium_info", "show__time_storage_full_hover"],
+        "Map Options": ["show__extra_options_map_hover"],
+        "Automation": ["show__auto_scavenging", "show__auto_paladin_train"],
+        "Other": ["keep_awake", "remove__premium_promo", "redirect__train_buildings"]
+    };
+}
+

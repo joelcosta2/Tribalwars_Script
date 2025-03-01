@@ -65,7 +65,7 @@ async function runAutoScavengingAll() {
     const userChoice = showWarningPopup ? await displayWarningPopup('Confirm Auto Scavenging', 'Do you wish to continue with the scavenging automation?') : 'cancel';
     if (userChoice === 'cancel') {
         if (returnTime) {
-            var waitTime = timeToMilliseconds(returnTime.textContent) + 15000; //15 more sec
+            var waitTime = Math.floor(timeToMilliseconds(returnTime.textContent) +  (Math.random() * 120000)); //2min random
             
             if (waitTime > 0) {
                 setFunctionOnTimeOut('scavenging-auto', function () {
@@ -92,17 +92,15 @@ async function runAutoScavengingAll() {
             
             startButton.style.color = 'red';
             startButton.click(); //click on last available free start
-            console.log("AutoScavengingAll started at: " + new Date());
             wait(1).then(() => {
                 const duration = document.querySelector('.return-countdown');
-                var waitTime = timeToMilliseconds(duration.textContent) + 15000; //15 more sec
+                var waitTime = timeToMilliseconds(duration.textContent);
                 
                 if (waitTime > 0) {
                     setFunctionOnTimeOut('scavenging-auto', function () {
                         window.location.href = game_data.link_base_pure + 'place&mode=scavenge';
                     }, waitTime);
                 }
-                console.log("AutoScavengingAll next at " + new Date(Date.now() + waitTime))
             })
         }
     }

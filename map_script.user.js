@@ -314,20 +314,15 @@ function createBigMapOption() {
     
     if (visTables.length > 1) {
         const tbody = visTables[1].querySelector('tbody');
-        console.log(tbody)
         if (tbody) {
             const secondTr = tbody.querySelectorAll('tr')[1];
-            
             if (secondTr) {
                 tbody.insertBefore(tr, secondTr);
             } else {
                 tbody.appendChild(tr);
             }
-
             tbody.insertBefore(trMapSize, secondTr);
-
         }
-        
     }
 }
 

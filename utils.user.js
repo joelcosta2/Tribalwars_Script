@@ -69,15 +69,15 @@ var availableSettings = [
     { "name": "redirect__train_buildings", "label": "Redirect Train Buildings", "description": "All buildings used for training purposes redirect directly to the train screen."},
     { "name": "show__navigation_arrows", "label": "Use Navigation Arrows", "description": "Enables navigation arrows for easier movement." },
 
-    { "name": "show__village_list", "label": "Show Village List Widget", "description": "Displays the village list on the main screen." },
-    { "name": "show__recruit_troops", "label": "Show Recruitment Widget", "description": "Displays a widget to recruit troops on overview page (NOT FULLY IMPLEMENTED)" },
-    { "name": "show__notepad", "label": "Show Notepad Widget", "description": "Displays a notepad for taking notes." },
-    { "name": "show__building_queue", "label": "Show Building Queue Widget", "description": "Displays the building queue and available upgrades on the overview page. Allows adding buildings to the queue from the overview screen." },
-    { "name": "show__building_queue_all", "label": "Show All Buildings in Queue", "description": "Displays all buildings in the queue, including those that cannot be upgraded due to a lack of resources or a full queue and allows to use the fake building queue. (IN TESTING)" },
+    { "name": "show__village_list", "label": "Village List Widget", "description": "Displays the village list widget on the overview screen." },
+    { "name": "show__recruit_troops", "label": "Recruitment Widget", "description": "Displays a widget to recruit troops on overview page (NOT FULLY IMPLEMENTED)" },
+    { "name": "show__notepad", "label": "Notepad Widget", "description": "Displays a notepad widget for taking notes." },
+    { "name": "show__building_queue", "label": "Building Queue Widget", "description": "Displays the building queue and available upgrades on the overview page. Allows adding buildings to the queue from the overview screen." },
+    { "name": "show__building_queue_all", "label": "All Buildings in Queue", "description": "Displays all buildings in the queue, including those that cannot be upgraded due to a lack of resources or a full queue and allows to use the fake building queue. (IN TESTING)" },
     
-    { "name": "show__extra_options_map_hover", "label": "Show Extra Map Hover Options", "description": "Displays additional options when hovering over the map." },
+    { "name": "show__extra_options_map_hover", "label": "Show Extra Map Hover Info", "description": "Displays additional info when hovering over a village on the map." },
     { "name": "show__overview_premmium_info", "label": "Displays Premium overview information", "description": "Displays additional premium information for buildings (graphical overview)" },
-    { "name": "show__navigation_bar", "label": "Show Navigation Bar", "description": "Displays the navigation bar at the top of the screen." },
+    { "name": "show__navigation_bar", "label": "Navigation Bar", "description": "Displays the navigation bar at the top of the screen." },
     { "name": "show__time_storage_full_hover", "label": "Show Time Until Full Storage on Hover", "description": "Displays the remaining time until storage is full when hovering over a resource." },
     
     { "name": "show__auto_scavenging", "label": "Enable Auto Scavenging", "description": "Automatically manages scavenging tasks. Requires the browser to be open." },
@@ -86,13 +86,6 @@ var availableSettings = [
     { "name": "remove__premium_promo", "label": "Remove Premium Promos", "description": "Removes premium promotional content from all pages." }
     // Add more settings as needed
 ];
-
-var widgetsInjectFunctions = {
-    'village_list': injectVillagesListWidget,
-    'notepad': injectNotepadWidget,
-    'building_queue': fetchBuildQueueWidget,
-    'recruit_troops': injectRecruitTroopsWidget
-};
 
 var currentVillageIndex,
     textSelected,
@@ -117,7 +110,6 @@ function prepareLocalStorageItems() {
     localStorage.setItem('villages_show', localStorage.getItem('villages_show') ?? '[]');
     localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
     localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
-    localStorage.setItem('auto_trainer_paladin_level', localStorage.getItem('auto_trainer_paladin_level') ?? 0);
     localStorage.setItem('map_custom_height', localStorage.getItem('map_custom_height') ?? '600');
     localStorage.setItem('map_custom_width', localStorage.getItem('map_custom_width') ?? '900');
 }
@@ -327,7 +319,7 @@ function toggleTooltip(element, isVisible) {
         tooltip.style.left = (Math.ceil(elementPosition.left) + 25) + 'px';
         tooltip.classList.add('tooltip-style');
         var h3 = tooltip.getElementsByTagName('h3')[0];
-        h3.innerText = element.parentNode.getAttribute('data-title');
+        h3.innerHTML = element.parentNode.getAttribute('data-title');
     } else {
         tooltip.style.display = 'none';
         tooltip.classList.remove('tooltip-style');
@@ -359,6 +351,8 @@ function toggleTooltipNoText(element, isVisible) {
 function extractBuildTimeFromHTML(stringHTML) {
     const stringToday = localStorage.getItem('today_build_time_string');
     const stringTomorow = localStorage.getItem('tomorrow_build_time_string');
+    var time;
+    debugger
     if (stringToday && stringTomorow) {
         const modelosStrings = [stringToday, stringTomorow];
         var day, hora, minuto;
@@ -370,17 +364,19 @@ function extractBuildTimeFromHTML(stringHTML) {
             const regex = new RegExp(regexString);
             const match = stringHTML.match(regex);
             if (match) {
-                day = index;
-                hora = match[1];
-                minuto = match[2];
+                day = index.toString();
+                hora = match[1].toString();
+                minuto = match[2].toString();
             }
         }
-        var time = [day, hora, minuto];
-        return time;
-    } else {
-        alert('erro no extractBuildTimeFromHTML');
-        return null;
-    }
+        if (day && hora && minuto) {
+            time = [day, hora, minuto];
+            return time;
+        }
+    } 
+    
+    showAutoHideBox('Error extractBuildTimeFromHTML: ')
+    return time;
 }
 
 function extractBuildTimestampFromHTML(stringHTML) {
@@ -458,7 +454,11 @@ function setFunctionOnTimeOut(id, func, timeToRun) {
         clearTimeout(activeTimeouts[id]);
     }
 
-    let endTime = Date.now() + timeToRun;
+    // Adiciona até 3 minutos (180000 ms) de aleatoriedade
+    let randomExtraTime = Math.random() * 180000;
+    let finalTimeToRun = Math.floor(timeToRun + randomExtraTime);  
+
+    let endTime = Math.floor(Date.now() + finalTimeToRun);
     localStorage.setItem('endTime_' + id, endTime);
     localStorage.setItem('function_' + id, func.toString());
 
@@ -467,7 +467,7 @@ function setFunctionOnTimeOut(id, func, timeToRun) {
         localStorage.removeItem('function_' + id);
         func();
         delete activeTimeouts[id];
-    }, timeToRun);
+    }, finalTimeToRun);
 }
 
 function restoreTimeouts() {
@@ -497,7 +497,7 @@ function restoreTimeouts() {
 
 function checkInactivity(minutes) {
     if (TribalWars.getIdleTime() >= minutes * 60 * 1000) {
-        showAutoHideBox('Inactivity detected! Reloading page...', error);
+        showAutoHideBox('Inactivity detected! Reloading page...');
         wait(5);
         location.reload();
     }
@@ -722,7 +722,6 @@ function sendScavengeAjax() {
             use_premium: false
         };
         
-        // Adiciona o token de segurança (`h`), necessário para a requisição
         const requestData = {
             squad_requests: [squadRequest],
             h: game_data.csrf
@@ -748,7 +747,6 @@ function sendScavengeAjax() {
             }
         });
         
-        // Agora faz o `fetch`
        fetch(game_data.link_base_pure + "scavenge_api&ajaxaction=send_squads", {
             headers: {
                 "tribalwars-ajax": "1",
@@ -760,224 +758,4 @@ function sendScavengeAjax() {
             credentials: "include"
         });
     }
-}
-
-//JUST FOR TESTING :)
-function testAntiBot() {
-    /*
-    quando apareceu a cena do bot, ao carregar na checkbox aquilo chamou o BotProtect.check() e depois de fazer o post:
-        TribalWars.post("botcheck", {
-                ajaxaction: "verify"
-                }, {
-                response: e
-            }, function(e) {
-                BotProtect.success()
-            })
-        se chamar o BotProtect.success() depois do ajax acho nem apareceu a cena do bot
-
-        aainda tenho de testar isto : document.querySelector('#bot_check a').click()
-        talvez timer para procurar pelo elemento, se sim, overide do check() e da click?
-    */
-    var checkBot = setInterval(function() {
-        if (typeof BotProtect !== "undefined") {
-            clearInterval(checkBot); // Para o timer
-            var originalBotCheeck = BotProtect.check;
-            BotProtect.check = function(e) {
-                TribalWars.post("botcheck", {
-                    ajaxaction: "verify"
-                }, {
-                    response: e
-                }, function(e) {
-                    debugger;
-                    BotProtect.success();
-                })
-            }
-
-            BotProtect.render = function() {
-                const t = $(".captcha")[0];
-                TribalWars.post("botcheck", {
-                    ajaxaction: "begin"
-                }, {}, function(e) {
-                    debugger;
-                    BotProtect.success();
-                })
-            }
-            BotProtect.success = function() {
-                Dialog.close(),
-                $("#botprotection_quest").remove(),
-                $("#bot_check").remove()
-            }
-            BotProtect.forced = false;
-            BotProtect.isForced = function(e) {
-                debugger;
-                return false;   
-            }
-    
-            console.log("Bot.check foi sobrescrito com sucesso!");
-        }
-    }, 100);
-
-    var clickBot = setInterval(function() {
-        if (document.querySelector('#bot_check a')) {
-            clearInterval(clickBot); // Para o timer
-            console.log("bot click!");
-            document.querySelector('#bot_check a').click()
-        }
-    }, 100);
-}
-
-function functionToCallTest() {
-    /* 
-    Getting info from twstats :D
-    GM_xmlhttpRequest({
-         method: 'GET',
-         url: 'https://pt.twstats.com/pt97/index.php?page=player&id=848974103&utm_source=pt&utm_medium=player&utm_campaign=dsref',
-         //url: game_data.link_base_pure + 'statue',
-         onload: function (responseDetails) {
-             var tempElement = document.createElement('div');
-             tempElement.innerHTML = responseDetails.responseText;
-             debugger;
-             console.log(
-                 "GM_xmlhttpRequest() response is:\n",
-                 responseDetails.responseText.substring(0, 80) + '...'
-             );
-         }
-     });*/
-     
-     //WORKING .....---------------------------------------------------------------------------------------------
-     /*GM_xmlhttpRequest({
-        method: 'GET',
-        url: 'https://pt.twstats.com/pt105/index.php?page=units',
-        mode: 'no-cors',
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        onload: function (responseDetails) {
-            var tempElement = document.createElement('div');
-            tempElement.id = 'tempElemtTwStats';
-            tempElement.innerHTML = responseDetails.responseText;
-
-            const unitsWidget = tempElement.querySelector('#main .widget');
-            var units = unitsWidget.querySelectorAll("tr:not(:first-child)");
-            var unitSpeeds = [];
-
-            units.forEach(unit => {
-                var speed = unit.querySelectorAll("td")[2];
-                if (speed) unitSpeeds.push(speed.textContent.trim());
-            });
-
-            var unitData = {};
-            game_data.units.forEach((unit, index) => {
-                unitData[unit] = unitSpeeds[index] || null;
-            });
-
-            localStorage.setItem("unitsSpeeds", JSON.stringify(unitData));
-            console.log(unitData)
-
-            const distance = parseInt(document.querySelector('#command-data-form .village-distance').textContent.match(/(\d+)/), 10);
-
-            const villageItems = document.querySelector('.village-item');
-
-            //empty
-            var spanDuration = document.createElement('span');
-            var strong = document.createElement('strong');
-            spanDuration.classList.add('village-name');
-            strong.textContent = 'Extra';
-            spanDuration.appendChild(strong);
-            spanDuration.appendChild(document.createTextNode(' '));
-            villageItems.appendChild(spanDuration);
-
-            //attack duration
-            var spanDuration = document.createElement('span');
-            spanDuration.classList.add('village-duration');
-            var strong = document.createElement('strong');
-            strong.textContent = 'Duration:';
-            spanDuration.appendChild(strong);
-            spanDuration.appendChild(document.createTextNode(' ------'));
-            villageItems.appendChild(spanDuration);
-
-            //attack carries
-            var spanDuration = document.createElement('span');
-            spanDuration.classList.add('village-caries');
-            var strong = document.createElement('strong');
-            strong.textContent = 'Caries:';
-            spanDuration.appendChild(strong);
-            spanDuration.appendChild(document.createTextNode(' ------'));
-            villageItems.appendChild(spanDuration);
-
-            //attack arrive
-            var spanDuration = document.createElement('span');
-            spanDuration.classList.add('village-arrive');
-            var strong = document.createElement('strong');
-            strong.textContent = 'Arrives:';
-            spanDuration.appendChild(strong);
-            spanDuration.appendChild(document.createTextNode(' ------'));
-            villageItems.appendChild(spanDuration);
-
-            const unitsInputs = document.querySelectorAll('.unitsInput');
-            unitsInputs.forEach(input => {
-                input.addEventListener('input', () => {
-                    const unitName = input.name;
-                    const unitSpeed = parseInt(unitData[unitName]);
-                    const storedSpeed = parseInt(sessionStorage.getItem('storedSpeed'));
-                    debugger;
-                    if (!storedSpeed || unitSpeed > storedSpeed) {
-                        sessionStorage.setItem('lastStoredSpeed', storedSpeed);
-                        sessionStorage.setItem('storedSpeed', unitSpeed);
-                    }
-                    
-                    if (input.value === '') {
-                        sessionStorage.setItem('storedSpeed', sessionStorage.getItem('lastStoredSpeed'));
-
-                        //procurar todos os preenchios e ver qual o mais lento
-                    }
-                    
-                    const speed = sessionStorage.getItem('storedSpeed');
-                    if (speed) {
-                        const result = distance * speed;
-
-                        const hours = Math.floor(result / 60);
-                        const minutes = Math.floor(result % 60);
-                        const seconds = Math.floor((result * 60) % 60);
-                        
-                        const formattedTime = ` ${hours}:${minutes}:${seconds}`;
-
-                        const spanDuration = document.querySelector('.village-duration');
-                        spanDuration.childNodes[1].textContent = formattedTime;
-                    }
-                });
-            });
-        }
-    });*/
-
-    /*TribalWars.get("api", {
-        ajax: "resources_schedule", // Identificador para o cronograma de recursos
-        id: game_data.village.id  // ID da vila
-    }, function(e) {
-        debugger
-    });*/
-    
-
-    /*$.ajax({
-        url: game_data.link_base_pure + 'overview_villages',
-        type: 'GET'
-    }).then(function (data) {
-        var tempElement = document.createElement('div');
-        tempElement.innerHTML = data;
-        let rows = tempElement.querySelectorAll('#production_table tbody tr');
-        let villageList = {};
-
-        rows.forEach(function (row, index) {
-            let link = row.querySelector('td:first-child span:first-child a');
-            let name = link.querySelector('span').innerText;
-            let url = link.href;
-
-            villageList[index] = { name: name, url: url };
-        });
-
-        let jsonToSave = JSON.stringify(villageList);
-        debugger;
-    }).catch(function (error) {
-        debugger;
-    });*/
 }
