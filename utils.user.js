@@ -87,6 +87,13 @@ var availableSettings = [
     // Add more settings as needed
 ];
 
+var widgetsInjectFunctions = {
+    'village_list': injectVillagesListWidget,
+    'notepad': injectNotepadWidget,
+    'building_queue': fetchBuildQueueWidget,
+    'recruit_troops': injectRecruitTroopsWidget
+};
+
 var currentVillageIndex,
     textSelected,
     isBuildQueueFull = false;
