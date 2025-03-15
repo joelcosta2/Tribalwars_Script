@@ -2,7 +2,7 @@
 //Village List
 function getVillagesDataURL() {
     var i = 0,
-        villages = JSON.parse(localStorage.getItem('villages_show') || '[]'),
+        villages = JSON.parse(localStorage.getItem('villages_info') || '[]'),
         villgersNum = sizeOfObject(villages);
 
     var villagesDataUrl = '';
@@ -30,15 +30,15 @@ function injectVillagesListWidget(columnToUse) {
         tbody.innerHTML = villagesDataUrl;
         table.appendChild(tbody);
 
-        createWidgetElement({ title: 'Village List', contents: table, columnToUse, update: '', extra_name: '', description: '' });
+        createWidgetElement({ identifier: 'Village List', contents: table, columnToUse, update: '', extra_name: '', description: '' });
     }
 }
 
 function prepareVillageList() {
-    const player_villages = localStorage.getItem('player_villages');
-    const villages_show = localStorage.getItem('villages_show');
+    const villages_info = JSON.parse(localStorage.getItem('villages_info'));
+    const villages_count = Object.keys(villages_info).length;
 
-    if(!player_villages || !villages_show || game_data.player.villages !== player_villages) {
+    if(!villages_info || game_data.player.villages !== villages_count) {
         var jsonToSave;
         $.ajax({
             url: game_data.link_base_pure + 'overview_villages',
@@ -49,20 +49,20 @@ function prepareVillageList() {
                 tempElement.innerHTML = data;
                 let rows = tempElement.querySelectorAll('#production_table tbody tr');
                 let villageList = {};
-
+                
                 rows.forEach(function (row, index) {
                     let link = row.querySelector('td:first-child span:first-child a');
                     let name = link.querySelector('span').innerText.split('(')[0];
+                    let coords = link.querySelector('span').innerText.split('(')[1];
                     let url = link.href;
 
-                    villageList[index] = { name: name, url: url };
+                    villageList[index] = { name: name, url: url, coords: coords.replace(')', '')};
                 });
 
                 jsonToSave = JSON.stringify(villageList);
             }
         });
-        localStorage.setItem('player_villages', game_data.player.villages);
-        localStorage.setItem('villages_show', jsonToSave);
+        localStorage.setItem('villages_info', jsonToSave);
     }
     return jsonToSave;
 }

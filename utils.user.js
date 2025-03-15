@@ -38,11 +38,12 @@ var default_settings_cookies = {
         redirect__train_buildings: false,
         remove__premium_promo: true,
         show__village_list: true,
-        show__recruit_troops: true,
+        show__recruit_troops: false,
         show__navigation_arrows: true,
         show__notepad: true,
         show__building_queue: true,
         show__extra_options_map_hover: true,
+        show__outgoingInfo_map: true,
         show__overview_premmium_info: true,
         show__time_storage_full_hover: true,
         show__big_map: false,
@@ -57,35 +58,13 @@ var default_settings_cookies = {
         },
         show__auto_paladin_train: {
             enabled: false,
-            level: 0,
+            maxLevel: 0,
         }
     }
 };
 
 var settings_cookies = JSON.parse(localStorage.getItem('settings_cookies')) || default_settings_cookies;
 
-var availableSettings = [
-    { "name": "keep_awake", "label": "Keep Awake", "description": "Refreshes the page after 5 minutes of inactivity." },
-    { "name": "redirect__train_buildings", "label": "Redirect Train Buildings", "description": "All buildings used for training purposes redirect directly to the train screen."},
-    { "name": "show__navigation_arrows", "label": "Use Navigation Arrows", "description": "Enables navigation arrows for easier movement." },
-
-    { "name": "show__village_list", "label": "Village List Widget", "description": "Displays the village list widget on the overview screen." },
-    { "name": "show__recruit_troops", "label": "Recruitment Widget", "description": "Displays a widget to recruit troops on overview page (NOT FULLY IMPLEMENTED)" },
-    { "name": "show__notepad", "label": "Notepad Widget", "description": "Displays a notepad widget for taking notes." },
-    { "name": "show__building_queue", "label": "Building Queue Widget", "description": "Displays the building queue and available upgrades on the overview page. Allows adding buildings to the queue from the overview screen." },
-    { "name": "show__building_queue_all", "label": "All Buildings in Queue", "description": "Displays all buildings in the queue, including those that cannot be upgraded due to a lack of resources or a full queue and allows to use the fake building queue. (IN TESTING)" },
-    
-    { "name": "show__extra_options_map_hover", "label": "Show Extra Map Hover Info", "description": "Displays additional info when hovering over a village on the map." },
-    { "name": "show__overview_premmium_info", "label": "Displays Premium overview information", "description": "Displays additional premium information for buildings (graphical overview)" },
-    { "name": "show__navigation_bar", "label": "Navigation Bar", "description": "Displays the navigation bar at the top of the screen." },
-    { "name": "show__time_storage_full_hover", "label": "Show Time Until Full Storage on Hover", "description": "Displays the remaining time until storage is full when hovering over a resource." },
-    
-    { "name": "show__auto_scavenging", "label": "Enable Auto Scavenging", "description": "Automatically manages scavenging tasks. Requires the browser to be open." },
-    { "name": "show__auto_paladin_train", "label": "Enable Auto Paladin Training", "description": "Automatically trains paladins. Requires the browser to be open." },
-    
-    { "name": "remove__premium_promo", "label": "Remove Premium Promos", "description": "Removes premium promotional content from all pages." }
-    // Add more settings as needed
-];
 
 var widgetsInjectFunctions = {
     'village_list': injectVillagesListWidget,
@@ -100,21 +79,12 @@ var currentVillageIndex,
 
 function prepareLocalStorageItems() {
     if (unsafeWindow.lang) {
-        const stringToday = unsafeWindow.lang['aea2b0aa9ae1534226518faaefffdaad'];
-        const stringTomorow = unsafeWindow.lang['57d28d1b211fddbb7a499ead5bf23079'];
         localStorage.setItem('tw_lang', JSON.stringify(unsafeWindow.lang));
-
-        if (stringToday) {
-            localStorage.setItem('today_build_time_string', stringToday);
-        }
-        if (stringTomorow) {
-            localStorage.setItem('tomorrow_build_time_string', stringTomorow);
-        }
     }
 
     localStorage.setItem('waiting_for_queue', localStorage.getItem('waiting_for_queue') ?? '{}');
     localStorage.setItem('building_queue', localStorage.getItem('building_queue') ?? '[]');
-    localStorage.setItem('villages_show', localStorage.getItem('villages_show') ?? '[]');
+    localStorage.setItem('villages_info', localStorage.getItem('villages_info') ?? '[]');
     localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
     localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
     localStorage.setItem('map_custom_height', localStorage.getItem('map_custom_height') ?? '600');
@@ -123,7 +93,7 @@ function prepareLocalStorageItems() {
 
 function setCookieCurrentVillage() {
     var villageID = game_data.village.id,
-        villages = JSON.parse(localStorage.getItem('villages_show') || '[]'),
+        villages = JSON.parse(localStorage.getItem('villages_info') || '[]'),
         villgersNum = sizeOfObject(villages);
 
     for (var i = 0; i < villgersNum; i++) {
@@ -184,12 +154,13 @@ function sizeOfObject(obj) {
     return size;
 }
 
-function createWidgetElement({ title, contents, columnToUse, update, extra_name = '', description = '' }) {
+function createWidgetElement({ identifier, contents, columnToUse, update, extra_name = '', description = '', title = ''}) {
     var columnElement = document.getElementById(columnToUse);
     
     if (columnElement) {
-        var elemId = title.toLowerCase().replace(/ /g, '_'); // Obtém o título do elemento
+        var elemId = identifier.toLowerCase().replace(/ /g, '_'); // Obtém o título do elemento
         var elemName = extra_name != '' ? elemId + '_' + extra_name : elemId;
+        title = title === '' ? identifier : title;
 
         // Create a container div
         var containerDiv = document.createElement('div');
@@ -258,6 +229,112 @@ function createWidgetElement({ title, contents, columnToUse, update, extra_name 
         }
     }
 
+}
+
+function displayWarningPopup(title, message, timeoutDuration = 5000) {
+    return new Promise((resolve, reject) => {
+        // Create the popup dynamically
+        const popupDiv = document.createElement('div');
+        popupDiv.classList.add('popup_style', 'borderimage', 'popup_box');
+        popupDiv.style.width = '556px';
+        popupDiv.style.position = 'absolute';
+        popupDiv.style.opacity = '1';
+        popupDiv.style.top = '50%';
+        popupDiv.style.left = '50%';
+        popupDiv.style.transform = 'translate(-50%, -70%)';
+        popupDiv.style.display = 'block';
+
+        const popupMenu = document.createElement('div');
+        popupMenu.style.fontSize = "17px";
+        popupMenu.style.fontWeight = "bold";
+        
+        const menuText = document.createElement('a');
+        menuText.style.cursor = 'pointer';
+        menuText.style.color = 'rgb(0 17 255)';
+        menuText.innerText = title;
+        
+        popupMenu.appendChild(menuText);
+
+        const popupContent = document.createElement('div');
+        popupContent.className = 'popup_content';
+        popupContent.style.height = 'auto';
+        popupContent.style.overflowY = 'auto';
+        popupContent.style.display = 'flex';
+        popupContent.style.padding = '0';
+        popupContent.style.paddingTop = '10px';
+        
+        const table = document.createElement('table');
+        table.className = 'vis';
+        table.style.width = '100%';
+        
+        const tbody = document.createElement('tbody');
+        const tr1 = document.createElement('tr');
+        const td1 = document.createElement('td');
+        const label = document.createElement('label');
+
+        let countdown = timeoutDuration / 1000;
+        label.innerText = message + ` It will continue in ${countdown} seconds.`;
+        const interval = setInterval(() => {
+            label.innerText = message + ` It will continue in ${countdown} seconds.`;
+            countdown--;
+            if (countdown < 0) {
+                clearInterval(interval);
+                label.innerText = "It will continue now!";
+            }
+        }, 1000);
+
+        td1.appendChild(label);
+        tr1.appendChild(td1);
+        
+        const tr2 = document.createElement('tr');
+        const td2 = document.createElement('td');
+        td2.colSpan = 2;
+
+        const continueButton = document.createElement('input');
+        continueButton.type = 'submit';
+        continueButton.value = 'Continue';
+        continueButton.className = 'btn';
+        continueButton.style.background = '#6bb000';
+        continueButton.style.margin = '4px';
+        continueButton.addEventListener('click', () => {
+            clearTimeout(timeoutId);  // Clear the timeout
+            resolve('continue');  // Resolve the promise with 'continue'
+            togglePopup(popupDiv);  // Hide the popup
+        });
+        
+        const cancelButton = document.createElement('input');
+        cancelButton.type = 'button';
+        cancelButton.value = 'Cancel';
+        cancelButton.className = 'btn';
+        cancelButton.style.background = '#d02c2c';
+        cancelButton.style.margin = '4px';
+        cancelButton.addEventListener('click', () => {
+            clearTimeout(timeoutId);  // Clear the timeout
+            resolve('cancel');  // Resolve the promise with 'cancel'
+            togglePopup(popupDiv);  // Hide the popup
+        });
+        
+        td2.appendChild(continueButton);
+        td2.appendChild(cancelButton);
+        tr2.appendChild(td2);
+
+        tbody.appendChild(tr1);
+        tbody.appendChild(tr2);
+        table.appendChild(tbody);
+
+        popupContent.appendChild(table);
+
+        popupDiv.appendChild(popupMenu);
+        popupDiv.appendChild(popupContent);
+
+        document.body.appendChild(popupDiv);
+
+        // Set a timeout for user choice
+        const timeoutId = setTimeout(() => {
+            resolve('timeout');  // Resolve the promise with 'timeout' after timeout
+            togglePopup(popupDiv);  // Hide the popup after timeout
+        }, timeoutDuration + 1000);
+    });
 }
 
 function saveColumnOrder() {
@@ -356,17 +433,20 @@ function toggleTooltipNoText(element, isVisible) {
 }
 
 function extractBuildTimeFromHTML(stringHTML) {
-    const stringToday = localStorage.getItem('today_build_time_string');
-    const stringTomorow = localStorage.getItem('tomorrow_build_time_string');
-    var time;
-    debugger
-    if (stringToday && stringTomorow) {
-        const modelosStrings = [stringToday, stringTomorow];
-        var day, hora, minuto;
+    const lang = JSON.parse(localStorage.getItem('tw_lang'));
+    const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
+    const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'];
+    let time;
+
+    if (stringToday && stringTomorrow) {
+        const modelosStrings = [stringToday, stringTomorrow];
+        let day, hora, minuto, segundo;
+
         for (const [index, modeloString] of modelosStrings.entries()) {
+            // Ajusta a regex para capturar também os segundos (se existirem)
             const regexString = modeloString
                 .replace(/\\/g, "\\\\")
-                .replace(/%s/, "(\\d{1,2}):(\\d{2})");
+                .replace(/%s/, "(\\d{1,2}):(\\d{2})(?::(\\d{2}))?"); // Segundos opcionais
 
             const regex = new RegExp(regexString);
             const match = stringHTML.match(regex);
@@ -374,30 +454,33 @@ function extractBuildTimeFromHTML(stringHTML) {
                 day = index.toString();
                 hora = match[1].toString();
                 minuto = match[2].toString();
+                segundo = match[3] ? match[3].toString() : "00"; // Se não houver segundos, assume "00"
             }
         }
-        if (day && hora && minuto) {
-            time = [day, hora, minuto];
+
+        if (day && hora && minuto && segundo) {
+            time = [day, hora, minuto, segundo];
             return time;
         }
     } 
-    
-    showAutoHideBox('Error extractBuildTimeFromHTML: ')
+
+    showAutoHideBox('Error extractBuildTimeFromHTML: ');
     return time;
 }
 
 function extractBuildTimestampFromHTML(stringHTML) {
-    const stringToday = localStorage.getItem('today_build_time_string');
-    const stringTomorow = localStorage.getItem('tomorrow_build_time_string');
+    const lang = JSON.parse(localStorage.getItem('tw_lang'));
+    const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
+    const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'];
 
-    if (stringToday && stringTomorow) {
-        const modelosStrings = [stringToday, stringTomorow];
-        let day, hora, minuto;
+    if (stringToday && stringTomorrow) {
+        const modelosStrings = [stringToday, stringTomorrow];
+        let day, hora, minuto, segundo;
 
         for (const [index, modeloString] of modelosStrings.entries()) {
             const regexString = modeloString
                 .replace(/\\/g, "\\\\")
-                .replace(/%s/, "(\\d{1,2}):(\\d{2})");
+                .replace(/%s/, "(\\d{1,2}):(\\d{2})(?::(\\d{2}))?");
 
             const regex = new RegExp(regexString);
             const match = stringHTML.match(regex);
@@ -406,19 +489,20 @@ function extractBuildTimestampFromHTML(stringHTML) {
                 day = index; // 0 = hoje, 1 = amanhã
                 hora = parseInt(match[1]);
                 minuto = parseInt(match[2]);
+                segundo = match[3] ? parseInt(match[3]) : 0; // Se não houver segundos, assume 0
                 break;
             }
         }
 
         if (day !== undefined && hora !== undefined && minuto !== undefined) {
             const now = new Date();
-            now.setHours(hora, minuto, 0, 0);
+            now.setHours(hora, minuto, segundo, 0);
 
             if (day === 1) { // Se for amanhã, adicionar 1 dia
                 now.setDate(now.getDate() + 1);
             }
 
-            return now.getTime(); // Retorna o timestamp em milissegundos
+            return now.getTime(); // Retorna o timestamp corrigido
         }
     } else {
         alert('Erro no extractBuildTimestampFromHTML');
@@ -606,12 +690,39 @@ function injectAttackCalculations() {
     console.log(parseInt(document.querySelector('#command-data-form .village-distance').textContent.match(/(\d+)/), 10));
 }
 
+function convertBBCodeToHTML(text) {
+    const bbcodeMap = {
+        '\\[b\\](.*?)\\[/b\\]': '<strong>$1</strong>',   // [b]negrito[/b] -> <strong>negrito</strong>
+        '\\[i\\](.*?)\\[/i\\]': '<em>$1</em>',         // [i]itálico[/i] -> <em>itálico</em>
+        '\\[u\\](.*?)\\[/u\\]': '<u>$1</u>',           // [u]sublinhado[/u] -> <u>sublinhado</u>
+        '\\[s\\](.*?)\\[/s\\]': '<del>$1</del>',       // [s]riscado[/s] -> <del>riscado</del>
+        '\\[url\\](.*?)\\[/url\\]': '<a href="$1" target="_blank">$1</a>' // [url]link[/url] -> <a>
+    };
+
+    if (text) {
+        for (const bbcode in bbcodeMap) {
+            const regex = new RegExp(bbcode, 'gi');
+            text = text.replace(regex, bbcodeMap[bbcode]);
+        }
+
+        // Tratamento especial para [url=link]Texto[/url]
+        text = text.replace(/\[url=(.*?)\](.*?)\[\/url\]/gi, function(match, link, text) {
+            if (!link.startsWith("http://") && !link.startsWith("https://")) {
+                link = "https://" + link;
+            }
+            return `<a href="${link}" target="_blank">${text}</a>`;
+        });
+    }
+    
+    return text;
+}
+
 function start() {
     var urlPage = document.location.href;
     //validation to session expired, automatically select active world (not yet :D)
     if (!urlPage.includes('?session_expired') && typeof game_data != 'undefined') {
         prepareVillageList();
-        villageList = localStorage.getItem('villages_show') ? JSON.parse(localStorage.getItem('villages_show')) : [];
+        villageList = localStorage.getItem('villages_info') ? JSON.parse(localStorage.getItem('villages_info')) : [];
         settings_cookies = localStorage.getItem('settings_cookies') ? JSON.parse(localStorage.getItem('settings_cookies')) : settings_cookies;
         listenTextAreas();
         setCookieCurrentVillage();
@@ -640,9 +751,10 @@ function start() {
             });
         }
         insertNavigationArrows();
+        insertListVillagesPopup();
+        injectNavigationBar();
         defineKeyboardShortcuts();
         injectScriptSettingsPopUp();
-        injectNavigationBar();
 
         if (settings_cookies.general['keep_awake']) {
             var maxInactiveMin = Math.floor(Math.random() * (10 - 5 + 1)) + 5;
@@ -677,7 +789,7 @@ if (settings_cookies.general['redirect__train_buildings']) {
             const url = new URL(link.href);
             const screenParam = url.searchParams.get("screen");
 
-            if (screenParam === "barracks" || screenParam === "stables") {
+            if (screenParam === "barracks" || screenParam === "stable") {
                 event.preventDefault();
                 url.searchParams.set("screen", "train");
                 window.location.href = url.href;

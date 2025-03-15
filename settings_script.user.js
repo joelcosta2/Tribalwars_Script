@@ -1,125 +1,52 @@
 
 
 // Settings PopUp
-
 function saveScriptSettings() {
-    var allSettings = document.querySelectorAll('input[type="checkbox"]');
+    var allSettings = document.querySelectorAll('input[type="checkbox"], input[type="number"]');
+
     for (var i = 0; i < allSettings.length; i++) {
-        if (typeof settings_cookies.general[allSettings[i].name] === 'object') {
-            settings_cookies.general[allSettings[i].name].enabled = allSettings[i].checked;
+        var settingName = allSettings[i].name;
+        var settingValue = allSettings[i].type === "checkbox" ? allSettings[i].checked : parseInt(allSettings[i].value, 10);
+        
+        var parts = settingName.split("__");
+
+        // Verifica se a configuração tem extraSettings
+        var settingConfig = availableSettings.find(s => s.name === parts[0] + (parts[1] ? "__" + parts[1] : ""));
+        var hasExtraSettings = settingConfig && settingConfig.extraSettings;
+
+        if (parts.length === 3) {
+            // Exemplo: show__auto_paladin_train__level
+            var parentKey = parts.slice(0, -1).join("__");
+            var childKey = parts[2];
+
+            if (!settings_cookies.general[parentKey] || typeof settings_cookies.general[parentKey] !== "object") {
+                settings_cookies.general[parentKey] = {};  
+            }
+
+            settings_cookies.general[parentKey][childKey] = settingValue;
+
+        } else if (hasExtraSettings) {
+            // Se tiver extraSettings, salva como "enabled"
+            if (!settings_cookies.general[settingName] || typeof settings_cookies.general[settingName] !== "object") {
+                settings_cookies.general[settingName] = {};
+            }
+            settings_cookies.general[settingName]["enabled"] = settingValue;
         } else {
-            settings_cookies.general[allSettings[i].name] = allSettings[i].checked;
+            // Configurações simples (exemplo: "show__overview_premmium_info")
+            settings_cookies.general[settingName] = settingValue;
         }
     }
 
+    // Remove chaves vazias (caso algo tenha sido criado errado)
+    Object.keys(settings_cookies.general).forEach(key => {
+        if (key === "" || settings_cookies.general[key] === undefined) {
+            delete settings_cookies.general[key];
+        }
+    });
+
+    // Salva no localStorage mantendo toda a estrutura original
     localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
     location.reload();
-}
-
-function displayWarningPopup(title, message, timeoutDuration = 5000) {
-    return new Promise((resolve, reject) => {
-        // Create the popup dynamically
-        const popupDiv = document.createElement('div');
-        popupDiv.classList.add('popup_style', 'borderimage', 'popup_box');
-        popupDiv.style.width = '556px';
-        popupDiv.style.position = 'absolute';
-        popupDiv.style.opacity = '1';
-        popupDiv.style.top = '50%';
-        popupDiv.style.left = '50%';
-        popupDiv.style.transform = 'translate(-50%, -70%)';
-        popupDiv.style.display = 'block';
-
-        const popupMenu = document.createElement('div');
-        popupMenu.style.fontSize = "17px";
-        popupMenu.style.fontWeight = "bold";
-        
-        const menuText = document.createElement('a');
-        menuText.style.cursor = 'pointer';
-        menuText.style.color = 'rgb(0 17 255)';
-        menuText.innerText = title;
-        
-        popupMenu.appendChild(menuText);
-
-        const popupContent = document.createElement('div');
-        popupContent.className = 'popup_content';
-        popupContent.style.height = 'auto';
-        popupContent.style.overflowY = 'auto';
-        popupContent.style.display = 'flex';
-        popupContent.style.padding = '0';
-        popupContent.style.paddingTop = '10px';
-        
-        const table = document.createElement('table');
-        table.className = 'vis';
-        table.style.width = '100%';
-        
-        const tbody = document.createElement('tbody');
-        const tr1 = document.createElement('tr');
-        const td1 = document.createElement('td');
-        const label = document.createElement('label');
-
-        let countdown = timeoutDuration / 1000;
-        label.innerText = message + ` It will continue in ${countdown} seconds.`;
-        const interval = setInterval(() => {
-            label.innerText = message + ` It will continue in ${countdown} seconds.`;
-            countdown--;
-            if (countdown < 0) {
-                clearInterval(interval);
-                label.innerText = "It will continue now!";
-            }
-        }, 1000);
-
-        td1.appendChild(label);
-        tr1.appendChild(td1);
-        
-        const tr2 = document.createElement('tr');
-        const td2 = document.createElement('td');
-        td2.colSpan = 2;
-
-        const continueButton = document.createElement('input');
-        continueButton.type = 'submit';
-        continueButton.value = 'Continue';
-        continueButton.className = 'btn';
-        continueButton.style.background = '#6bb000';
-        continueButton.style.margin = '4px';
-        continueButton.addEventListener('click', () => {
-            clearTimeout(timeoutId);  // Clear the timeout
-            resolve('continue');  // Resolve the promise with 'continue'
-            togglePopup(popupDiv);  // Hide the popup
-        });
-        
-        const cancelButton = document.createElement('input');
-        cancelButton.type = 'button';
-        cancelButton.value = 'Cancel';
-        cancelButton.className = 'btn';
-        cancelButton.style.background = '#d02c2c';
-        cancelButton.style.margin = '4px';
-        cancelButton.addEventListener('click', () => {
-            clearTimeout(timeoutId);  // Clear the timeout
-            resolve('cancel');  // Resolve the promise with 'cancel'
-            togglePopup(popupDiv);  // Hide the popup
-        });
-        
-        td2.appendChild(continueButton);
-        td2.appendChild(cancelButton);
-        tr2.appendChild(td2);
-
-        tbody.appendChild(tr1);
-        tbody.appendChild(tr2);
-        table.appendChild(tbody);
-
-        popupContent.appendChild(table);
-
-        popupDiv.appendChild(popupMenu);
-        popupDiv.appendChild(popupContent);
-
-        document.body.appendChild(popupDiv);
-
-        // Set a timeout for user choice
-        const timeoutId = setTimeout(() => {
-            resolve('timeout');  // Resolve the promise with 'timeout' after timeout
-            togglePopup(popupDiv);  // Hide the popup after timeout
-        }, timeoutDuration + 1000);
-    });
 }
 
 function injectScriptSettingsButtom(maincell) {
@@ -136,9 +63,8 @@ function injectScriptSettingsButtom(maincell) {
         questIcon.className = 'quest';
         questIcon.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/b56f49d7/graphic/icons/settings.png)';
 
-        questIcon.onmouseover = function () {
-            questIcon.style.opacity = '0.7'; // Reduz a opacidade ao passar o mouse
-        };
+        questIcon.addEventListener('mouseover', () => questIcon.style.opacity = '0.7');
+        questIcon.addEventListener('mouseleave', () => questIcon.style.opacity = '1');
 
         settingsPopupButton.appendChild(questIcon);
         questLogElem[0].appendChild(settingsPopupButton);
@@ -296,11 +222,8 @@ function createTabButton(groupName, index, tabButtons, tabContents) {
 function createTabContent(groupName, index) {
     var tabContent = document.createElement('div');
     tabContent.id = `tabContent_${groupName.replace(/\s/g, "_")}`;
-    Object.assign(tabContent.style, {
-        display: index === 0 ? 'block' : 'none',
-        padding: '10px 0'
-    });
-
+    tabContent.style.display = index === 0 ? 'block' : 'none';
+    
     var tableElement = document.createElement('table');
     tableElement.classList.add('vis');
     tableElement.style.width = '100%';
@@ -314,6 +237,8 @@ function createTabContent(groupName, index) {
             var cell2 = row.insertCell(1);
 
             cell1.textContent = setting.label;
+            cell1.style.fontWeight = 'bold';
+
             var label = document.createElement('label');
             var input = document.createElement('input');
             input.type = 'checkbox';
@@ -322,9 +247,29 @@ function createTabContent(groupName, index) {
                 ? settings_cookies.general[setting.name].enabled
                 : settings_cookies.general[setting.name];
 
-            var textDescription = document.createTextNode(setting.description);
-            label.append(input, textDescription);
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(setting.description));
             cell2.appendChild(label);
+
+            // Se houver extraSettings, adicionamos dinamicamente
+            if (setting.extraSettings) {
+                Object.keys(setting.extraSettings).forEach(extraKey => {
+                    let extraRow = tableElement.insertRow();
+                    let extraCell1 = extraRow.insertCell(0);
+                    let extraCell2 = extraRow.insertCell(1);
+                    
+                    extraCell1.textContent = setting.extraSettings[extraKey].label;
+                    
+                    let extraInput = document.createElement('input');
+                    extraInput.type = setting.extraSettings[extraKey].type;
+                    extraInput.name = `${setting.name}__${extraKey}`;
+                    
+                    let savedValue = settings_cookies.general[setting.name]?.[extraKey];
+                    extraInput.value = savedValue !== undefined ? savedValue : setting.extraSettings[extraKey].default;
+
+                    extraCell2.appendChild(extraInput);
+                });
+            }
         }
     });
 
@@ -358,11 +303,40 @@ function createSaveButton() {
     return saveButtonDiv;
 }
 
+var availableSettings = [
+    { "name": "keep_awake", "label": "Keep Awake", "description": "Refreshes the page after 5 minutes of inactivity." },
+    { "name": "redirect__train_buildings", "label": "Redirect Train Buildings", "description": "All buildings used for training purposes redirect directly to the train screen."},
+    { "name": "show__navigation_arrows", "label": "Use Navigation Arrows", "description": "Enables navigation arrows for easier switch between villages." },
+
+    { "name": "show__village_list", "label": "Village List Widget", "description": "Displays the village list widget on the overview screen." },
+    { "name": "show__recruit_troops", "label": "Recruitment Widget", "description": "Displays a widget to recruit troops on overview page (NOT FULLY IMPLEMENTED)" },
+    { "name": "show__notepad", "label": "Notepad Widget", "description": "Displays a notepad widget for taking notes (per village)." },
+    { "name": "show__building_queue", "label": "Building Queue Widget", "description": "Displays the building queue and available upgrades on the overview page. Allows adding/removing buildings to the queue from the overview screen." },
+    { "name": "show__building_queue_all", "label": "All Buildings in Queue", "description": "Displays all buildings in the queue, including those that cannot be upgraded due to a lack of resources or a full queue and allows to use the fake building queue. Requires the browser to be open. (IN TESTING)" },
+    
+    { "name": "show__extra_options_map_hover", "label": "Show Extra Map Hover Info", "description": "Displays additional info when hovering over a village on the map." },
+    { "name": "show__outgoingInfo_map", "label": "Show Outgoing Commands Info", "description": "Displays additional info about outgoing units per village." },
+
+    { "name": "show__overview_premmium_info", "label": "Displays Premium overview information", "description": "Displays additional premium information for buildings, similar to what we get with premium (graphical overview)" },
+    { "name": "show__navigation_bar", "label": "Navigation Bar", "description": "Displays the navigation bar at the top of the screen." },
+    { "name": "show__time_storage_full_hover", "label": "Show Time Until Full Storage on Hover", "description": "Displays the remaining time until storage is full when hovering over a resource." },
+    
+    { "name": "show__auto_scavenging", "label": "Enable Auto Scavenging", "description": "Automatically manages scavenging tasks. Requires the browser to be open." },
+    { "name": "show__auto_paladin_train", "label": "Enable Auto Paladin Training", "description": "Automatically trains paladins. Requires the browser to be open.", 
+        "extraSettings": { 
+            "maxLevel": { "label": "Train Paladin until level:", "type": "number", "default": 0 },
+        }
+    },
+    
+    { "name": "remove__premium_promo", "label": "Remove Premium Promos", "description": "Removes premium promotional content from all pages." }
+    // Add more settings as needed
+];
+
 function getSettingsGroups() {
     return {
         "Widgets": ["show__village_list", "show__recruit_troops", "show__notepad", "show__building_queue", "show__building_queue_all"],
-        "UI Enhancements": ["show__navigation_arrows", "show__navigation_bar", "show__overview_premmium_info", "show__time_storage_full_hover"],
-        "Map Options": ["show__extra_options_map_hover"],
+        "UI Enhancements": ["show__navigation_arrows", "show__time_storage_full_hover", "show__overview_premmium_info", "show__navigation_bar"],
+        "Map Options": ["show__extra_options_map_hover", "show__outgoingInfo_map"],
         "Automation": ["show__auto_scavenging", "show__auto_paladin_train"],
         "Other": ["keep_awake", "remove__premium_promo", "redirect__train_buildings"]
     };

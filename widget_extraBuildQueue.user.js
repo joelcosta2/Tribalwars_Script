@@ -100,45 +100,34 @@ function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildin
     });
     var extraBuildDiv = document.createElement('div');
 
-    // Create the build queue error container
-    /*var extraBuildDivTemp = document.createElement('div');
-    var errorBuildDiv = document.createElement('div');
-    var errorBuildContent = document.createElement('div');
-    errorBuildContent.id = 'error_build_queue_content';
-    errorBuildContent.className = 'content';
-    errorBuildDiv.style.display = 'none'
-    errorBuildDiv.className = 'error_box';
-    errorBuildDiv.appendChild(errorBuildContent);
-    extraBuildDivTemp.appendChild(errorBuildDiv);
-    extraBuildDiv.appendChild(extraBuildDivTemp);*/
-
     extraBuildDiv.appendChild(extraBuildQueueTable);
     extraBuildDiv.appendChild(buildsListTable);
 
-    createWidgetElement({ title: 'Building Queue', contents: extraBuildDiv, columnToUse, update, extra_name: '', description: '' });
+    createWidgetElement({ identifier: 'Building Queue', contents: extraBuildDiv, columnToUse, update, extra_name: '', description: '' });
 }
 
 function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
     var buildQueueElment = document.createElement('td');
     var queueBuildIdsActive = [];
     var cancelButtons = tempElement.querySelectorAll('.btn-cancel');
-    var dateNextSlot;
+    var dateNextSlot, dateLastSlot;
 
     //Get times from the cancel buttons row and check if the queue is full
     if (cancelButtons.length == 2) {
         isBuildQueueFull = true;
 
-        var nextSlotTime = extractBuildTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
-        dateNextSlot = new Date().setDate(new Date().getDate() + nextSlotTime[0]);
-        dateNextSlot = new Date(dateNextSlot).setHours(nextSlotTime[1], nextSlotTime[2]);
+        dateNextSlot = extractBuildTimestampFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
+        dateLastSlot = extractBuildTimestampFromHTML(cancelButtons[1].parentElement.parentElement.children[3].textContent);
+
         localStorage.setItem('building_queue_next_slot', dateNextSlot);
+        localStorage.setItem('building_queue_last_slot', dateLastSlot);
         setCancelBuildIds(cancelButtons);
     } else if (cancelButtons.length == 1) {
         isBuildQueueFull = false;
-        var nextSlotTime = extractBuildTimeFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
-        dateNextSlot = new Date().setDate(new Date().getDate() + nextSlotTime[0]);
-        dateNextSlot = new Date(dateNextSlot).setHours(nextSlotTime[1], nextSlotTime[2]);
+
+        dateNextSlot = extractBuildTimestampFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
         localStorage.setItem('building_queue_next_slot', dateNextSlot);
+        localStorage.removeItem('building_queue_last_slot');
         setCancelBuildIds(cancelButtons);
     } else {
         isBuildQueueFull = false;
@@ -171,9 +160,9 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
     localStorage.setItem('building_queue_active', JSON.stringify(queueBuildIdsActive))
 
     // inject active real queue
-    injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueElment)
+    injectAtiveQueueList(queueBuildIdsActive, buildQueueElment)
     // inject waiting fake queue
-    injectFakeQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueElment);
+    injectFakeQueueList(queueBuildIdsActive, buildQueueElment, allBuildingsImgs);
 
     return buildQueueElment;
 }
@@ -211,41 +200,55 @@ function createResourceElementsString(buildId) {
     );
 }
 
-
-function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueElment) {// inject active real queue
+// inject active real queue
+function injectAtiveQueueList(queueBuildIdsActive, buildQueueElment) {
     if (queueBuildIdsActive.length) {
         queueBuildIdsActive.forEach(function (id, index) {
             var anchor = document.createElement('a');
             anchor.className = '';
             anchor.style.display = 'inline-flex';
-            anchor.setAttribute('data-title', 'Cancel build');
+            anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span>`);
+            
+            function updateCountdown(event) {
+                const now = Date.now();
+                //const remainingTime = (index == 0 ? parseInt(localStorage.getItem('building_queue_next_slot')) : parseInt(localStorage.getItem('building_queue_last_slot'))) - now;
+                const remainingTime = parseInt(localStorage.getItem('building_queue_next_slot')) - now;
+        
+                if (remainingTime <= 0) {
+                    anchor.setAttribute('data-title', 'Construção concluída!');
+                    return; // Para a contagem quando chegar a zero
+                }
+        
+                const seconds = Math.floor((remainingTime / 1000) % 60);
+                const minutes = Math.floor((remainingTime / 1000 / 60) % 60);
+                const hours = Math.floor((remainingTime / 1000 / 60 / 60) % 24);
+                const days = Math.floor(remainingTime / 1000 / 60 / 60 / 24);
+        
+                const formattedCountdown = 
+                    (days > 0 ? `${days}d ` : '') +
+                    (hours > 0 ? `${hours}h ` : '') +
+                    (minutes > 0 ? `${minutes}m ` : '') +
+                    `${seconds}s`;
+        
+                    if (index == 0) {
+                        anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span></br> ${formattedCountdown}`); 
+                    } else {
+                        anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span></br> Starts in ${formattedCountdown}`); 
+                    }
+                toggleTooltip(event.target, true);
+        
+                event.target.countdownTimeout = setTimeout(() => updateCountdown(event), 1000);
+            }
+
             anchor.style.border = '1px solid #7d510f';
 
             anchor.onclick = function () {
                 removeFromActiveBuildQueue(index);
             }
 
-            /*anchor.addEventListener('mouseenter', function (event) {
-                var interval = setInterval(function () {
-                    var storedDate = new Date(JSON.parse(localStorage.getItem('building_queue_last_slot')));
-                    var currentDate = new Date();
-                    var differenceInMilliseconds = storedDate - currentDate;
-                    var differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
-                    differenceInMinutes = Math.floor(differenceInMinutes * 60);
-                    var tooltip = document.querySelector('#tooltip h3');
-                    tooltip.textContent = differenceInMinutes + ' _min';
-                    toggleTooltipNoText(event.target, true);
-                }, 1000);
-    
-                anchor.addEventListener('mouseleave', function () {
-                    clearInterval(interval);
-                    toggleTooltip(event.target, false);
-                });
-            });*/
-
             var span = document.createElement('span');
             span.className = 'icon header village active_queue';
-            span.style.backgroundImage = 'url(' + allBuildingsImgs.find(element => element.includes(id)) + ')';
+            span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/95eda994/graphic/buildings/mid/' + id + '.png)'
             span.style.backgroundPosition = '0px 0px';
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
@@ -257,9 +260,11 @@ function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueE
             
             span.addEventListener('mouseenter', function (event) {
                 toggleTooltip(event.target, true);
+                updateCountdown(event)
             });
             span.addEventListener('mouseleave', function (event) {
                 toggleTooltip(event.target, false);
+                clearTimeout(event.target.countdownTimeout);
             });
 
 
@@ -269,7 +274,7 @@ function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueE
             progressBar.style.left = '0';
             progressBar.style.width = '100%';
             progressBar.style.height = '4px';
-            progressBar.style.backgroundColor = index != 0 ? '#ffb400' : '#4caf50';
+            progressBar.style.backgroundColor = '#4caf50';
 
             span.appendChild(progressBar);
             anchor.appendChild(span);
@@ -278,7 +283,7 @@ function injectAtiveQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueE
     }
 }
 
-function injectFakeQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueElment) {
+function injectFakeQueueList(queueBuildIdsActive, buildQueueElment, allBuildingsImgs) {
     var queueBuildIds = JSON.parse(localStorage.getItem('building_queue') || '[]');
     if (queueBuildIds.length) {
         queueBuildIds.forEach(function (id) {
@@ -292,27 +297,10 @@ function injectFakeQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueEl
                 removeFromBuildQueue(index - queueBuildIdsActive.length);
             }
 
-            /*anchor.addEventListener('mouseenter', function (event) {
-                var interval = setInterval(function () {
-                    var storedDate = new Date(JSON.parse(localStorage.getItem('building_queue_last_slot')));
-                    var currentDate = new Date();
-                    var differenceInMilliseconds = storedDate - currentDate;
-                    var differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
-                    differenceInMinutes = Math.floor(differenceInMinutes * 60);
-                    var tooltip = document.querySelector('#tooltip h3');
-                    tooltip.textContent = differenceInMinutes + ' _min';
-                    toggleTooltipNoText(event.target, true);
-                }, 1000);
-    
-                anchor.addEventListener('mouseleave', function () {
-                    clearInterval(interval);
-                    toggleTooltip(event.target, false);
-                });
-            });*/
-
             var span = document.createElement('span');
             span.className = 'icon header village';
             span.style.backgroundImage = 'url(' + allBuildingsImgs.find(element => element.includes(id)) + ')';
+            //span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/95eda994/graphic/buildings/mid/' + id + '.png)'
             span.style.backgroundPosition = '0px 0px';
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
@@ -328,7 +316,7 @@ function injectFakeQueueList(queueBuildIdsActive, allBuildingsImgs, buildQueueEl
             progressBar.style.left = '0';
             progressBar.style.width = '100%';
             progressBar.style.height = '4px';
-            progressBar.style.backgroundColor = 'red';
+            progressBar.style.backgroundColor = 'orange';
 
             span.appendChild(progressBar);
             
@@ -360,7 +348,7 @@ function injectQueues(mainElement, update) {
         } else {
             injectBuildQueue(availableBuildingsImgs, availableBuildingsImgs, availableBuildingLevels, buildQueueElment, update);
         }
-        setBuildingLevels();
+        setOngoingBuildingLevels();
     }
 }
 
@@ -518,6 +506,11 @@ function callUpgradeBuilding(id) {
                         building_queue.unshift(id);
                         localStorage.setItem('building_queue', JSON.stringify(building_queue));
                     }
+                } else {
+                    showAutoHideBox('Just added? What happenend?', true);
+                    building_queue = JSON.parse(localStorage.getItem('building_queue'));
+                    building_queue.unshift(id);
+                    if (building_queue) localStorage.setItem('building_queue', JSON.stringify(building_queue));
                 }
                 updateBuildQueueTimers();
                 injectQueues(data, true);
@@ -557,7 +550,6 @@ function updateBuildQueueTimers() {
     if (waiting_for_queue.time) {
         //build waiting with missing ressources, .time is the time for the available ressources
         var nextTimeDate = waiting_for_queue.time;
-        debugger
         var addToQueueDate = new Date();
         addToQueueDate.setDate(addToQueueDate.getDate() + parseInt(nextTimeDate[0]));
         addToQueueDate.setHours(parseInt(nextTimeDate[1]), parseInt(nextTimeDate[2]));

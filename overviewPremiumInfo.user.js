@@ -64,12 +64,6 @@ function addRessourcesHover(fullStorageTimes) {
             if (element) {
                 var parentInfoBox = element.parentElement;
                 var iconBox = parentInfoBox.previousElementSibling;
-
-                //Check if storage is getting full
-                /*var remaining = getRemainingHours(parseInt(fullStorageTimes[resourceId]));
-                if (remaining < 2) {
-                    parentInfoBox.classList.add('warn_90');
-                }*/
                 
                 var tooltip = document.getElementById("tooltip");
                 if (tooltip) {
@@ -177,6 +171,19 @@ function getSmithTime() {
 }
 
 function getMainQueueTime() {
+    const building_queue_next_slot = parseInt(localStorage.getItem('building_queue_next_slot'));
+    const building_queue_last_slot = parseInt(localStorage.getItem('building_queue_last_slot'));
+    
+    if (building_queue_next_slot || building_queue_last_slot) {
+        var lastSlot = Math.floor((building_queue_last_slot ? building_queue_last_slot  : building_queue_next_slot) / 1000);
+        var remaining = endTimeToTimer(lastSlot);
+        let labelVisual;
+        
+        if(remaining) {
+            labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+            addToVisualLabelExtra('main', labelVisual, true, lastSlot);
+        }
+    }
     return "Última construção em 5 horas";
 }
 
@@ -220,11 +227,11 @@ function getStatueInfo() {
     const endTime_paladin = localStorage.getItem('endTime_auto_trainer_paladin');
     if (endTime_paladin) {
         //get all timmings
-            var endTime = Math.floor(endTime_paladin / 1000);
-            var remaining = endTimeToTimer(endTime);
-            const labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
-            
-            addToVisualLabelExtra('statue', labelVisual, true, endTime);
+        var endTime = Math.floor(endTime_paladin / 1000);
+        var remaining = endTimeToTimer(endTime);
+        const labelVisual = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
+        
+        addToVisualLabelExtra('statue', labelVisual, true, endTime);
 
     }
     return "Última construção em 5 horas";
@@ -276,7 +283,7 @@ function getFarmInfo() {
     return ''
 }
 
-function setBuildingLevels() {
+function setOngoingBuildingLevels() {
     var buildingQueueActive = JSON.parse(localStorage.getItem("building_queue_active"));
     var buildIds = buildingQueueActive ? buildingQueueActive.map(item => item.replace(/[0-9]/g, '')) : [];
     var fakeBuildingQueue = JSON.parse(localStorage.getItem("building_queue"));
@@ -328,8 +335,11 @@ function fetchTrainInfo() {
             url: game_data.link_base_pure + 'train',
             method: "GET",
             success: function (data) {
-                const todayString = localStorage.getItem('today_build_time_string')?.replace('%s', '\\d{1,2}:\\d{2}');
-                const tomorrowString = localStorage.getItem('tomorrow_build_time_string')?.replace('%s', '\\d{1,2}:\\d{2}');
+                const lang = JSON.parse(localStorage.getItem('tw_lang'));
+                const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
+                const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'];
+                const todayString = stringToday?.replace('%s', '\\d{1,2}:\\d{2}');
+                const tomorrowString = stringTomorrow?.replace('%s', '\\d{1,2}:\\d{2}');
                 const regex = new RegExp(`${todayString}|${tomorrowString}`, 'i');
                 let barrracksTimes = [],
                     stableTimes = [],
@@ -384,7 +394,7 @@ function updatePremiumInfoOverview() {
         infoOverview.place = getPlaceInfo();
         infoOverview.statue = getStatueInfo();
         infoOverview.farm = getFarmInfo();
-        //setBuildingLevels();
+        //setOngoingBuildingLevels();
 
         fetchTrainInfo();
 
