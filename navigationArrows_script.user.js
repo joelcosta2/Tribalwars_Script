@@ -1,5 +1,5 @@
 // Villages Arrows
-function prepareLinkToArrows(goToUrl) {
+function getVillageLinkCurrentScreen(goToUrl) {
     var str = document.location.href,
         temp = str.indexOf("="),
         temp2 = str.indexOf("&", temp),
@@ -16,7 +16,7 @@ function prepareLinkToArrows(goToUrl) {
 
 function nextVillage() {
     var goToUrl,
-        villages = JSON.parse(localStorage.getItem('villages_show') || '[]');
+        villages = JSON.parse(localStorage.getItem('villages_info') || '[]');
     if (villages) {
         if (villages[currentVillageIndex + 1]) {
             goToUrl = villages[currentVillageIndex + 1].url;
@@ -24,12 +24,12 @@ function nextVillage() {
             goToUrl = villages[0].url;
         }
     }
-    document.location.href = prepareLinkToArrows(goToUrl);
+    document.location.href = getVillageLinkCurrentScreen(goToUrl);
 }
 
 function previousVillage() {
     var goToUrl,
-        villages = JSON.parse(localStorage.getItem('villages_show') || '[]');
+        villages = JSON.parse(localStorage.getItem('villages_info') || '[]');
     if (villages) {
         if (villages[currentVillageIndex - 1]) {
             goToUrl = villages[currentVillageIndex - 1].url;
@@ -37,7 +37,7 @@ function previousVillage() {
             goToUrl = villages[sizeOfObject(villages) - 1].url;
         }
     }
-    document.location.href = prepareLinkToArrows(goToUrl);
+    document.location.href = getVillageLinkCurrentScreen(goToUrl);
 }
 
 function insertNavigationArrows() {
@@ -55,9 +55,202 @@ function insertNavigationArrows() {
     }
 }
 
+function insertListVillagesPopup() {
+    if (settings_cookies.general['show__navigation_arrows']) {
+        var menuRow2 = document.getElementById("menu_row2");
+
+        if (menuRow2) {
+            var td = document.createElement("td");
+            td.className = "box-item";
+            td.style.paddingRight = "3px";
+
+            var img = document.createElement("img");
+            img.src = "https://dspt.innogamescdn.com/asset/95eda994/graphic//icons/slide_down.png";
+            img.alt = "Open Village List";
+            img.style.cursor = "pointer";
+            img.style.width = "18px";
+            img.style.height = "18px";
+            img.style.maxWidth = "18px";
+            img.style.maxHeight = "18px";
+            img.style.float = "right";
+
+            // Adicionar evento de clique para abrir o popup
+            img.addEventListener("click", function () {
+                openVillageListPopup();
+            });
+
+            td.appendChild(img);
+            menuRow2.appendChild(td);
+        }
+    }
+}
+
+function openVillageListPopup() {
+    const lang = JSON.parse(localStorage.getItem('tw_lang'));
+
+    // Remover o popup se já existir
+    var existingPopup = document.getElementById("group_popup");
+    if (existingPopup) {
+        existingPopup.remove();
+        return;
+    }
+
+    // Criar o container principal
+    var popupHelper = document.createElement("div");
+    popupHelper.className = "popup_helper";
+
+    var popup = document.createElement("div");
+    popup.id = "group_popup";
+    popup.className = "popup_style ui-draggable";
+    popup.style.width = "320px";
+    popup.style.position = "fixed";
+    popup.style.top = "165.75px";
+    popup.style.left = "493.648px";
+    popup.style.display = "block";
+    popup.style.zIndex = "1000"; // Para garantir que fique acima de outros elementos
+
+    // Criar o cabeçalho do popup
+    var popupMenu = document.createElement("div");
+    popupMenu.id = "group_popup_menu";
+    popupMenu.className = "popup_menu ui-draggable-handle";
+    popupMenu.innerHTML = lang['49f8eff5b37c62212f0b7870b07af7bb'];
+
+    var closeLink = document.createElement("a");
+    closeLink.id = "closelink_group_popup";
+    closeLink.href = "#";
+    closeLink.innerText = "X";
+    closeLink.style.float = "right";
+    closeLink.style.cursor = "pointer";
+
+    // Evento para fechar o popup
+    closeLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        popup.remove();
+    });
+
+    popupMenu.appendChild(closeLink);
+    popup.appendChild(popupMenu);
+
+    // Criar o conteúdo do popup
+    var popupContent = document.createElement("div");
+    popupContent.id = "group_popup_content";
+    popupContent.className = "popup_content";
+    popupContent.style.height = "380px";
+    popupContent.style.overflowY = "auto";
+
+    /*// Criar o formulário
+    var form = document.createElement("form");
+    form.id = "select_group_box";
+    form.action = "/game.php?village=15844&screen=groups&ajax=load_villages_from_group&mode=overview";
+    form.method = "POST";
+
+    var hiddenInput = document.createElement("input");
+    hiddenInput.type = "hidden";
+    hiddenInput.name = "mode";
+    hiddenInput.value = "overview";
+
+    form.appendChild(hiddenInput);
+
+    var label = document.createElement("p");
+    label.style.margin = "0 0 10px 0";
+    label.style.fontWeight = "bold";
+    label.innerHTML = 'Grupos:';
+
+    var select = document.createElement("select");
+    select.id = "group_id";
+    select.name = "group_id";
+    select.style.marginLeft = "3px";
+
+    var options = [
+        { value: "16606", text: "Ofensiva completa" },
+        { value: "16607", text: "Ataque a chegar" },
+        { value: "16608", text: "Contém nobre" },
+        { value: "0", text: "todos", selected: true }
+    ];
+
+    options.forEach(optionData => {
+        var option = document.createElement("option");
+        option.value = optionData.value;
+        option.textContent = optionData.text;
+        if (optionData.selected) option.selected = true;
+        select.appendChild(option);
+    });
+
+    label.appendChild(select);
+    form.appendChild(label);
+    popupContent.appendChild(form);*/
+
+    // Criar tabela de aldeias
+    var tableContainer = document.createElement("div");
+    tableContainer.id = "group_list_content";
+    tableContainer.style.overflow = "auto";
+    tableContainer.style.height = "340px";
+
+    var table = document.createElement("table");
+    table.id = "group_table";
+    table.className = "vis";
+    table.width = "100%";
+    table.cellPadding = "5";
+    table.cellSpacing = "0";
+
+    var tbody = document.createElement("tbody");
+
+    var headerRow = document.createElement("tr");
+    var headerTh = document.createElement("th");
+    headerTh.className = "group_label";
+    headerTh.colSpan = "2";
+    headerTh.textContent = "Aldeia";
+
+    headerRow.appendChild(headerTh);
+    tbody.appendChild(headerRow);
+    table.appendChild(tbody);
+    tableContainer.appendChild(table);
+
+    // Obter dados do localStorage
+    var villagesInfo = JSON.parse(localStorage.getItem("villages_info")) || {};
+    
+    // Criar dinamicamente as linhas das aldeias
+    Object.keys(villagesInfo).forEach(index => {
+        var village = villagesInfo[index];
+
+        var villageRow = document.createElement("tr");
+
+        var villageTd1 = document.createElement("td");
+        villageTd1.className = "selected";
+
+        var villageLink = document.createElement("a");
+        villageLink.href = getVillageLinkCurrentScreen(village.url);
+        villageLink.className = "select-village";
+        villageLink.textContent = village.name.trim();
+
+        villageTd1.appendChild(villageLink);
+
+        var villageTd2 = document.createElement("td");
+        villageTd2.style.fontWeight = "bold";
+        villageTd2.style.width = "100px";
+        villageTd2.style.textAlign = "right";
+        villageTd2.className = "selected";
+        villageTd2.textContent = village.coords ? village.coords : "N/A"; // Aqui pode ser ajustado para exibir coordenadas se disponíveis
+
+        villageRow.appendChild(villageTd1);
+        villageRow.appendChild(villageTd2);
+        tbody.appendChild(villageRow);
+    });
+
+    table.appendChild(tbody);
+    tableContainer.appendChild(table);
+    popupContent.appendChild(tableContainer);
+    popup.appendChild(popupContent);
+    popupHelper.appendChild(popup);
+
+    document.body.appendChild(popupHelper);
+}
+
+
 function injectNavigationBar() {
-    const tw_lang = JSON.parse(localStorage.getItem('tw_lang'));
     if (settings_cookies.general['show__navigation_bar']) {
+        const tw_lang = JSON.parse(localStorage.getItem('tw_lang'));
+        // Objeto com os links e imagens
         var urlsObject = {
             "Main": {
                 img: "https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/buildings/mid/main3.png",
@@ -107,138 +300,168 @@ function injectNavigationBar() {
                 img: "https://dsen.innogamescdn.com/asset/243a567d/graphic/quests_new/quest_icon.png",
                 run: function() {
                     Questlines.showDialog(0, 'main-tab');
-                    let checkExist = setInterval(function () {
-                        let questlineLists = document.querySelectorAll('.questline-list');
-                        
-                        if (questlineLists.length > 0) {
-                            clearInterval(checkExist); // Para o intervalo quando encontrar
-                            
-                            questlineLists.forEach(questlineList => {
-                                let listItems = questlineList.querySelectorAll('li');
-                                
-                                listItems.forEach(li => {
-                                    let ul = li.closest('ul'); // Encontra o <ul> mais próximo
-                                    if (ul) {
-                                        ul.classList.add('opened'); // Adiciona a classe "opened"
-                                    }
-                                });
-                            });
-                        }
-                    }, 500); // Verifica a cada 500ms
                 }
-            },
+            }
         };
 
-        var table = document.createElement('table');
-        table.id = 'header_info';
-        table.setAttribute('align', 'center');
-        table.setAttribute('width', '100%');
-        table.setAttribute('cellspacing', '0');
-        table.setAttribute('style', 'display: flex; align-content: inherit; justify-content: space-around;');
+        // Seleciona o elemento com a classe 'maincell'
+        const mainCell = document.querySelector('.maincell');
 
-        var tbody = document.createElement('tbody');
+        // Criar tabela principal
+        const tableOuter = document.createElement('table');
+        tableOuter.id = 'quickbar_outer';
+        tableOuter.align = 'center';
+        tableOuter.width = '100%';
+        tableOuter.cellSpacing = '0';
 
-        var innerTable = document.createElement('table');
-        innerTable.classList.add('header-border', 'menu_block_right');
-        innerTable.setAttribute('style', 'border-collapse: collapse; background-size: auto 77%;');
+        // Criar tbody
+        const tbodyOuter = document.createElement('tbody');
+        const trOuter = document.createElement('tr');
+        const tdOuter = document.createElement('td');
 
-        var innerTr = document.createElement('tr');
-        var innerTd = document.createElement('td');
+        // Criar tabela interna
+        const tableInner = document.createElement('table');
+        tableInner.id = 'quickbar_inner';
+        tableInner.style.borderCollapse = 'collapse';
+        tableInner.width = '100%';
 
-        var innerTrShadow = document.createElement('tr');
-        var innerTdShadow = document.createElement('td');
-        var divLeftShadow = document.createElement('div');
-        var divRightShadow = document.createElement('div');
+        // Criar tbody interno
+        const tbodyInner = document.createElement('tbody');
 
-        divLeftShadow.classList.add('leftshadow');
-        divRightShadow.classList.add('rightshadow');
-        innerTdShadow.classList.add('shadow');
-        innerTdShadow.appendChild(divLeftShadow);
-        innerTdShadow.appendChild(divRightShadow);
-        innerTrShadow.appendChild(innerTdShadow);
+        // Criar a linha superior
+        const trTopBorder = document.createElement('tr');
+        trTopBorder.className = 'topborder';
+        ['left', 'main', 'right'].forEach(cls => {
+            const td = document.createElement('td');
+            td.className = cls;
+            trTopBorder.appendChild(td);
+        });
 
-        var boxTable = document.createElement('table');
-        boxTable.classList.add('box', 'box-nav-bar');
-        boxTable.setAttribute('cellspacing', '0');
+        // Criar a linha de conteúdo
+        const trContent = document.createElement('tr');
+        const tdLeft = document.createElement('td');
+        tdLeft.className = 'left';
+        const tdMain = document.createElement('td');
+        tdMain.id = 'quickbar_contents';
+        tdMain.className = 'main';
+        const tdRight = document.createElement('td');
+        tdRight.className = 'right';
+        tdRight.style.padding = '0 5px';
 
-        var boxTr = document.createElement('tr');
-        var index = 0;
-        for (let key in urlsObject) {
-            index++;
-            if (urlsObject.hasOwnProperty(key)) {
-                var boxTd = document.createElement('td');
-                boxTd.classList.add('box-item', 'icon-box', 'nav-bar-item');
-                boxTd.style.cursor = 'pointer';
-                boxTd.style.width = 'auto';
-                boxTd.style.minWidth = 'max-content';
-                boxTd.setAttribute('data-title', key);
-                var link = document.createElement('a');
-                if (urlsObject[key].href) {
-                    link.href = urlsObject[key].href;
-                } else {
-                    if (!localStorage.getItem(key)) {
-                        link.onclick = (function(currentKey) {
-                            return async function(event) {
-                                if (typeof urlsObject[currentKey].run === "function") {
-                                    urlsObject[currentKey].run();
-                                }
-                            };
-                        })(key);
+        // Criar o ícone de edição no lado direito
+        const editIcon = document.createElement('img');
+        editIcon.src = "https://pt106.tribalwars.com.pt/graphic/plus.png";
+        editIcon.alt = "Edit";
+        editIcon.style.cursor = "pointer";
+        editIcon.style.width = "18px";
+        editIcon.style.height = "18px";
+        editIcon.style.maxWidth = "18px";
+        editIcon.style.maxHeight = "18px";
+        editIcon.style.float = "right"; // Mantém o ícone o mais à direita possível
+        editIcon.title = "Edit Navigation Bar";
+        editIcon.addEventListener("click", function () {
+            alert("Editar navegação (ação futura)"); // Aqui podes substituir pelo código de edição real
+        });
 
-                    }
-                }
-                link.setAttribute('data-title', key);
-                link.style.display = 'flex';
-                link.style.alignItems = 'center';
-                link.style.minWidth = 'fit-content';
+        // Adicionar o ícone na célula da direita
+        tdRight.appendChild(editIcon);
 
-                var img = document.createElement('img');
-                img.src = urlsObject[key].img;
-                img.classList.add('menu-event-icon')
-                img.style.maxHeight = '18px';
-                img.style.marginRight = '2px';
-                link.appendChild(img);
+        // Criar a lista UL
+        const quickbarUL = document.createElement('ul');
+        quickbarUL.className = 'menu quickbar';
 
-                var titleSpan = document.createElement('span');
-                titleSpan.textContent = key;
-                titleSpan.style.whiteSpace = 'nowrap';
-                titleSpan.style.textAlign = 'center';
-                titleSpan.style.flexGrow = '1';
-
-                link.appendChild(titleSpan);
-
-                boxTd.appendChild(link);
-                boxTr.appendChild(boxTd);
-                [titleSpan, img].forEach(element => {
-                    element.addEventListener('mouseover', event => toggleTooltip(event.target, true));
-                    element.addEventListener('mouseleave', event => toggleTooltip(event.target, false));
+        // Adicionar os itens dinamicamente
+        let hotkeyIndex = 1;
+        for (const [name, data] of Object.entries(urlsObject)) {
+            const listItem = document.createElement('li');
+            listItem.className = 'quickbar_item';
+            listItem.setAttribute('data-hotkey', hotkeyIndex++);
+        
+            const span = document.createElement('span');
+            const link = document.createElement('a');
+            link.className = 'quickbar_link';
+        
+            if (data.href) {
+                link.href = data.href;
+            } else if (data.run) {
+                link.href = "#"; // Adiciona um link "falso" para parecer clicável
+                link.addEventListener("click", (e) => {
+                    e.preventDefault(); // Evita navegação para "#"
+                    data.run(); // Executa a função
                 });
             }
+        
+            const img = document.createElement('img');
+            img.className = 'quickbar_image';
+            img.src = data.img;
+            img.alt = '';
+            img.style.width = "18px";
+            img.style.height = "18px";
+            img.style.maxWidth = "18px";
+            img.style.maxHeight = "18px";
+        
+            link.appendChild(img);
+            link.appendChild(document.createTextNode(name));
+        
+            span.appendChild(link);
+            listItem.appendChild(span);
+            quickbarUL.appendChild(listItem);
         }
+        
 
-        boxTable.appendChild(boxTr);
-        innerTd.appendChild(boxTable);
-        innerTr.appendChild(innerTd);
-        innerTable.appendChild(innerTr);
-        innerTable.appendChild(innerTrShadow);
-        tbody.appendChild(innerTable);
-        table.appendChild(tbody);
+        // Adicionar a UL na célula central
+        tdMain.appendChild(quickbarUL);
 
-        if (true) {
-            var existingHeaderInfo = document.getElementById('header_info');
-            existingHeaderInfo.parentNode.insertBefore(table, existingHeaderInfo);
-        } else {
-            var existingTopAlign = document.querySelectorAll('#header_info .topAlign')[0];
-            existingTopAlign.parentNode.insertBefore(table, existingTopAlign.nextSibling);
+        // Criar a linha inferior
+        const trBottomBorder = document.createElement('tr');
+        trBottomBorder.className = 'bottomborder';
+        ['left', 'main', 'right'].forEach(cls => {
+            const td = document.createElement('td');
+            td.className = cls;
+            trBottomBorder.appendChild(td);
+        });
+
+        // Criar sombra
+        const trShadow = document.createElement('tr');
+        const tdShadow = document.createElement('td');
+        tdShadow.className = 'shadow';
+        tdShadow.colSpan = '3';
+
+        const divLeftShadow = document.createElement('div');
+        divLeftShadow.className = 'leftshadow';
+        const divRightShadow = document.createElement('div');
+        divRightShadow.className = 'rightshadow';
+
+        tdShadow.appendChild(divLeftShadow);
+        tdShadow.appendChild(divRightShadow);
+        trShadow.appendChild(tdShadow);
+
+        // Montar estrutura da tabela interna
+        trContent.appendChild(tdLeft);
+        trContent.appendChild(tdMain);
+        trContent.appendChild(tdRight);
+        tbodyInner.appendChild(trTopBorder);
+        tbodyInner.appendChild(trContent);
+        tbodyInner.appendChild(trBottomBorder);
+        tbodyInner.appendChild(trShadow);
+        tableInner.appendChild(tbodyInner);
+
+        // Montar estrutura da tabela externa
+        tdOuter.appendChild(tableInner);
+        trOuter.appendChild(tdOuter);
+        tbodyOuter.appendChild(trOuter);
+        tableOuter.appendChild(tbodyOuter);
+
+        const newStyleOnlyElement = document.querySelector('.newStyleOnly');
+        if (newStyleOnlyElement) {
+            newStyleOnlyElement.insertAdjacentElement('afterend', tableOuter);
         }
     }
+}
 
-
-    //delete premium promotion
-    if (settings_cookies.general['remove__premium_promo']) {
-        const style = document.createElement("style"); 
-        style.innerHTML = ".premium_account_hint { display: none !important; }"; 
-        document.head.appendChild(style);
-    }
-
+//delete premium promotion
+if (settings_cookies.general['remove__premium_promo']) {
+    const style = document.createElement("style"); 
+    style.innerHTML = ".premium_account_hint { display: none !important; }"; 
+    document.head.appendChild(style);
 }

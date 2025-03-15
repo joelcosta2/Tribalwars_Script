@@ -2,7 +2,7 @@
 
 ## Description
 
-Tribalwars_Script is a collection of scripts designed to enhance the Tribalwars gaming experience. It introduces several premium-like features, such as an expanded building queue, additional navigation options, a larger map, and extra village information. The script adds a new column to the left of the main screen, and the widgets it introduces will remember their position on the screen. With these features, the gameplay experience is streamlined, offering users more control and convenience while playing, even without a premium account.
+Tribalwars_Script is a collection of scripts designed to enhance the Tribalwars gaming experience. It introduces several premium like features, such as an expanded building queue, additional navigation options, a larger map, and extra village information. The script adds a new column to the left of the main screen, and the widgets it introduces will remember their position on the screen. With these features, the gameplay experience is streamlined, offering users more control and convenience while playing, even without a premium account.
 
 ## Key Features
 
@@ -22,6 +22,10 @@ Tribalwars_Script is a collection of scripts designed to enhance the Tribalwars 
   
   ![Extra Large Map](img/largeMap.png)
 
+- **Outgoing Units Info on Map:** Icons added on map to show outgoing units per village
+  
+  ![Outgoing Units Info on Map](img/largeMap2.png)
+
 - **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
   
   ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
@@ -30,12 +34,17 @@ Tribalwars_Script is a collection of scripts designed to enhance the Tribalwars 
   
   ![Building queue](img/extraBuildQueue0.png)
 
-- **Extra Building queue:** The idea is to create an expanded queue that allows programming the queue with more than two buildings (similar to what is possible with premium). You can disable this and use it only to add/remove from the actual game's queue from the overview page.
-Currently, it works as follows: green represents the building being upgraded, orange indicates buildings in the game's actual queue, and red shows buildings in the fake queue. Requires the browser to be open. CURRENTLY IN BUG FIXING
+- **Extra Building Queue:** This feature expands the standard queue, allowing you to schedule more than two buildings at a time—similar to the premium option. You can disable it or use it solely for managing the in-game queue from the overview page.
+  - **Green**: The building is currently being upgraded.  
+  - **Orange**: The building is waiting for the next available slot (resources are available).  
+  - **Red**: The building is in the "fake" queue and will attempt to join the real queue once resources are available.  
+
+  **Note:** The browser must remain open for this feature to function. **Currently in bug fixing.**
+
   
   ![Extra Building queue](img/extraBuildQueue2.png)
 
-- **Navigation Bar:** Possibility of having a navigation bar, where you can add shortcuts to various pages. Currently, the shortcuts are hardcoded (you can edit them directly in the code).
+- **Navigation Bar:** Possibility of having a navigation bar, where you can add shortcuts to various pages. Similar to premium navbar. Currently, the shortcuts are hardcoded (you can edit them directly in the code).
   ![Navigation Bar](img/navigationBar.png)
 
 - **Storage Fill Time on Resource Hover:** Monitor your resource storage more effectively by hovering over the resource bar, you can now see the estimated time remaining until each resource (wood, stone and iron) reaches maximum capacity. 
@@ -116,7 +125,7 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 - All data is stored in the browser's local storage.
 - I have no idea how it works in languages other than PT-PT. Feel free to test it and let me know! :)
 - I doubt it works with different time formats...
-- Some information is retrieved via AJAX calls to the relevant pages. For example, village hover info (such as recent attack details) is scraped from the corresponding report page and displayed on the map. I'm working on reducing the number of calls to avoid detection by TW’s bot-catching system and minimize the risk of bans.
+- Some information is retrieved via AJAX calls to the relevant pages. For example, village hover info (such as recent attack details) is scraped from the corresponding report page and displayed on the map.
 - I know this is basically spaghetti code, but I'm having a lot of fun getting it to work. I just wish my villages weren’t constantly being conquered—it makes it hard to test this with multiple villages. Maybe I should focus more on the game and less on the script!
 - Just a heads-up: I’m not responsible for any bans resulting from using this script. It’s meant for casual gameplay enhancement, not to provide an unfair advantage over other players.
 
