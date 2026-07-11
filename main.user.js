@@ -1,16 +1,19 @@
 // ==UserScript==
-// @name         Script Extra Widgets Premium
-// @version      4.9.10
-// @description  Widgets available: Village Navigation Arrors; Adds a new column on the left of the main screen with: Village List, Notepad, Extra Build Queue(experimental); Maps extra options & Larger map view; Auto-Scavenging; Auto-Train Paladin and auto Paladins Training;
+// @name         Tribalwars: Premium Features
+// @version      4.15.0
+// @description  Feature-rich enhancement suite for TribalWars. Widgets: Village List, Notepad, Extra Build Queue, Recruit Troops, Resource Dashboard. Map: hover details, outgoing command overlay, attack heat-map, custom CTX attack template buttons, large map view. Automation: Auto-Scavenging (per-level & per-village config), Auto-Paladin Trainer, Auto Daily Bonus collection. UI: Custom Navigation Bar, Navigation Arrows, Visual Building Overview. Settings: full import/export support.
 // @author       killwilll
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/custom_css.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/settings_script.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/navigationArrows_script.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/map_script.user.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/overviewPremiumInfo.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/core_utils.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/core_css.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/core_settings.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widget_villageArrows.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widget_navigationBar.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/feature_map.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/feature_overview.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bot_trainerPaladin.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bot_scavenging.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bot_dailyBonus.user.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bot_buildInstantFree.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widget_villageList.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widget_notepad.user.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widget_extraBuildQueue.user.js

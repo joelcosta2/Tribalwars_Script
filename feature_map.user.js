@@ -1,6 +1,4 @@
 
-var coords, mapPopUpBody;
-
 /**
  * Fetches outgoing commands from the overview page and stores them in localStorage.
  * Updates map icons if the relevant setting is enabled.
@@ -55,6 +53,11 @@ async function getOutgoingCommandsFromOverview() {
         if (general['show__outgoingInfo_map'] && typeof mapReady === 'function') {
             await mapReady();
             addOutgoingIcons();
+        }
+
+        if (general['show__heatmap_reports'] && typeof mapReady === 'function') {
+            await mapReady();
+            addReportHeatmap();
         }
 
     } catch (error) {
@@ -135,6 +138,74 @@ function addOutgoingIcons() {
     });
 }
 
+/**
+ * Overlays a heat-map on the map based on attack report frequency and recency.
+ * Intensity = 70% frequency weight + 30% recency weight over a 14-day window.
+ */
+function addReportHeatmap() {
+    if (!settings_cookies.general['show__heatmap_reports']) return;
+
+    const savedData = localStorage.getItem('reports_list');
+    if (!savedData) return;
+
+    const reports = JSON.parse(savedData);
+    const mapContainer = document.getElementById('map_container');
+    if (!mapContainer) return;
+
+    // Remove existing dots to avoid duplicates on re-render
+    document.querySelectorAll('.report-heatmap-dot').forEach(el => el.remove());
+
+    // Aggregate attack counts and latest timestamp per coordinate
+    const attackCounts = {};
+    const latestAttack = {};
+    reports.forEach(report => {
+        if (!report.coords) return;
+        attackCounts[report.coords] = (attackCounts[report.coords] || 0) + 1;
+        const ts = new Date(convertDateToISO(report.date) || 0).getTime();
+        if (!latestAttack[report.coords] || ts > latestAttack[report.coords]) {
+            latestAttack[report.coords] = ts;
+        }
+    });
+
+    const maxCount = Math.max(...Object.values(attackCounts), 1);
+    const now = Date.now();
+    const maxAge = 14 * 24 * 60 * 60 * 1000;
+
+    Object.keys(attackCounts).forEach(coords => {
+        const villageCoords = coords.replace('|', '');
+        const villageInfo = TWMap.villages[villageCoords];
+        if (!villageInfo) return;
+
+        const villageElement = document.getElementById('map_village_' + villageInfo.id);
+        if (!villageElement) return;
+
+        const count = attackCounts[coords];
+        const ageRatio = Math.max(0, 1 - (now - (latestAttack[coords] || 0)) / maxAge);
+        const intensity = Math.min(1, (count / maxCount) * 0.7 + ageRatio * 0.3);
+        const alpha = (0.15 + intensity * 0.3).toFixed(2);
+
+        const dot = document.createElement('div');
+        dot.className = 'report-heatmap-dot';
+        Object.assign(dot.style, {
+            position: 'absolute',
+            top: villageElement.style.top,
+            left: villageElement.style.left,
+            width: '53px',
+            height: '38px',
+            backgroundColor: 'rgba(220,50,50,' + alpha + ')',
+            zIndex: '5',
+            pointerEvents: 'none'
+        });
+        // Insert after the village img so it overlays it (z-index 5 > img z-index 2).
+        villageElement.parentNode.insertBefore(dot, villageElement.nextSibling);
+    });
+}
+
+/**
+ * Fetches attack reports from the server for the default and "all" groups,
+ * merges them with any previously stored data (keeping the most recent per coordinate),
+ * and saves the result to localStorage.
+ */
 async function getReportsList() {
     if (!settings_cookies.general?.['show__extra_options_map_hover']) return;
 
@@ -164,6 +235,11 @@ async function getReportsList() {
         });
 
         localStorage.setItem('reports_list', JSON.stringify([...reportsMap.values()]));
+        // Refresh the heatmap overlay with the newly fetched report data.
+        if (settings_cookies.general?.['show__heatmap_reports']) {
+            await mapReady();
+            addReportHeatmap();
+        }
     } catch (err) {
         console.error("[Report Manager] Error syncing reports:", err);
     }
@@ -311,10 +387,13 @@ function convertDateToISO(dateStr) {
         const timeMatch = dateStr.match(/(\d{1,2}):(\d{2})/);
         if (!timeMatch) return null;
 
-        if (lowerDate.includes('yesterday')) {
-            targetDate.setDate(now.getDate() - 1);
-        }
-        targetDate.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
+        const dayOffset = lowerDate.includes('yesterday') ? -1 : 0;
+        targetDate.setTime(twWallClockToEpochMs(
+            parseInt(timeMatch[1], 10),
+            parseInt(timeMatch[2], 10),
+            0,
+            dayOffset
+        ));
     }
     // 2. Handle standard format: "mar. 14, 17:56"
     else {
@@ -332,15 +411,15 @@ function convertDateToISO(dateStr) {
         const hour = parseInt(parts[3], 10);
         const minute = parseInt(parts[4], 10);
 
-        // setFullYear(year, monthIndex, day)
-        targetDate.setFullYear(now.getFullYear(), month, day);
-        targetDate.setHours(hour, minute, 0, 0);
-
-        // Year Wrap-around: If the report is "Dec 31" but it's currently Jan 1st, 
+        // Build UTC epoch using server timezone: "mon. 14, 17:56" is 17:56 server-local time
+        let yearToUse = now.getFullYear();
+        let epochMs = Date.UTC(yearToUse, month, day) + hour * 3600000 + minute * 60000 - serverTimezoneOffsetMs;
+        // Year Wrap-around: If the report is "Dec 31" but it's currently Jan 1st,
         // the report belongs to last year.
-        if (targetDate > now) {
-            targetDate.setFullYear(now.getFullYear() - 1);
+        if (epochMs > Timing.getCurrentServerTime()) {
+            epochMs = Date.UTC(yearToUse - 1, month, day) + hour * 3600000 + minute * 60000 - serverTimezoneOffsetMs;
         }
+        targetDate.setTime(epochMs);
     }
 
     return targetDate.toISOString();
@@ -350,8 +429,8 @@ function convertDateToISO(dateStr) {
  * Injects report data (last attack date, loot, and spy results) into the Map Popup.
  * @param {Object} report - The report object containing date and HTML strings.
  */
-function insertReportData(report) {
-    if (!mapPopUpBody) return;
+function insertReportData(report, popUpBody) {
+    if (!popUpBody) return;
 
     // 1. Cleanup: Remove existing "Last Attack" info to prevent row stacking
     const existingEntry = document.getElementById("info_last_attack");
@@ -369,7 +448,7 @@ function insertReportData(report) {
     data.textContent = report.date;
 
     lastAttackRow.append(header, data);
-    mapPopUpBody.appendChild(lastAttackRow);
+    popUpBody.appendChild(lastAttackRow);
 
     // 3. Helper to parse and inject cached HTML rows (Loot/Discovery)
     const injectCachedRow = (htmlString) => {
@@ -383,7 +462,7 @@ function insertReportData(report) {
         if (row) {
             // Apply a class for potential custom CSS styling
             row.classList.add('premium-report-row');
-            mapPopUpBody.appendChild(row);
+            popUpBody.appendChild(row);
         }
     };
 
@@ -391,93 +470,158 @@ function insertReportData(report) {
     injectCachedRow(report.attackLootDiscoverResults);
 }
 
-function getReportInfoToMap() {
-    if (settings_cookies.general['show__extra_options_map_hover']) {
-        var reports_list = localStorage.getItem('reports_list') ? JSON.parse(localStorage.getItem('reports_list')) : null;
-        var outgoing_units_saved = localStorage.getItem('outgoing_units_saved') ? JSON.parse(localStorage.getItem('outgoing_units_saved')) : null;
+/**
+ * Injects report data (last attack, loot, outgoing units) into the active map popup
+ * for the village currently under the cursor. Fetches and caches full report details
+ * on first access via fetch.
+ */
+async function getReportInfoToMap(currentCoords, currentPopUpBody) {
+    if (!settings_cookies.general['show__extra_options_map_hover']) return;
 
-        if (reports_list) {
-            for (var i = 0; i < reports_list.length; i++) {
-                var report = reports_list[i];
+    // --- Morale estimate (points-based TW formula: ~25–100%) ---
+    document.getElementById('info_morale')?.remove();
+    const tgtCoords = currentCoords.replace('|', '');
+    const tgtVillage = TWMap?.villages?.[tgtCoords];
+    if (tgtVillage?.owner && tgtVillage.owner !== game_data?.player?.id) {
+        const defPoints = TWMap.players?.[tgtVillage.owner]?.points;
+        const atkPoints = game_data?.player?.points;
+        if (defPoints > 0 && atkPoints > 0) {
+            const morale = Math.max(25, Math.min(100, Math.round(Math.cbrt(defPoints / atkPoints) * 75 + 25)));
+            const color = morale >= 90 ? '#4caf50' : morale >= 70 ? '#ff9800' : morale >= 50 ? '#ff5722' : '#f44336';
+            const moraleRow = document.createElement('tr');
+            moraleRow.id = 'info_morale';
+            const moraleTh = document.createElement('th');
+            moraleTh.textContent = '⚖ Morale:';
+            const moraleTd = document.createElement('td');
+            moraleTd.textContent = `~${morale}%`;
+            moraleTd.style.cssText = `color:${color};font-weight:bold`;
+            moraleRow.append(moraleTh, moraleTd);
+            currentPopUpBody.appendChild(moraleRow);
+        }
+    }
 
-                if ((report.coords).includes(coords)) {
-                    // Se já tem os dados salvos, usa-os diretamente
-                    if (report.attackLootResults || report.attackLootDiscoverResults) {
-                        insertReportData(report);
-                    } else {
-                        // Caso contrário, faz o fetch e armazena os dados
-                        $.ajax({
-                            'url': '/game.php?screen=report&view=' + report.id,
-                            'type': 'GET',
-                            'success': function (data) {
-                                var tempElement = document.createElement('div');
-                                tempElement.innerHTML = data;
+    const reports_list = localStorage.getItem('reports_list') ? JSON.parse(localStorage.getItem('reports_list')) : null;
+    const outgoing_units_saved = localStorage.getItem('outgoing_units_saved') ? JSON.parse(localStorage.getItem('outgoing_units_saved')) : null;
 
-                                // Criar linha com a data do último ataque
-                                var tr = document.createElement('tr');
-                                tr.id = "info_last_attack";
-                                var th = document.createElement('th');
-                                th.innerHTML = '↓ Last Attack:  ';
-                                var td = document.createElement('td');
-                                td.innerHTML = report.date;
-                                tr.appendChild(th);
-                                tr.appendChild(td);
-                                mapPopUpBody.appendChild(tr);
+    if (reports_list) {
+        for (let i = 0; i < reports_list.length; i++) {
+            const report = reports_list[i];
 
-                                // Coletar informações do loot
-                                var attackLootResults = tempElement.querySelector('#attack_results tr');
-                                if (attackLootResults) {
-                                    attackLootResults.querySelectorAll('th')[0].innerHTML += ' (' + attackLootResults.querySelectorAll('td')[1].textContent + ')';
-                                    attackLootResults.removeChild(attackLootResults.querySelectorAll('td')[1]);
-                                    mapPopUpBody.appendChild(attackLootResults);
+            if (report.coords.includes(currentCoords)) {
+                // Use cached data if already fetched for this report
+                if (report.attackLootResults || report.attackLootDiscoverResults) {
+                    insertReportData(report, currentPopUpBody);
+                } else {
+                    // No cached data — fetch the full report page and extract the rows
+                    try {
+                        const response = await fetch('/game.php?screen=report&view=' + report.id);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const html = await response.text();
 
-                                    // Armazena os dados no report
-                                    report.attackLootResults = attackLootResults.outerHTML;
-                                }
+                        const parser = new DOMParser();
+                        const tempDoc = parser.parseFromString(html, 'text/html');
 
-                                // Coletar informações do espionagem
-                                var attackLootDiscoverResults = tempElement.querySelectorAll('#attack_spy_resources tr');
-                                attackLootDiscoverResults = attackLootDiscoverResults[attackLootDiscoverResults.length - 1]
-                                if (attackLootDiscoverResults) {
-                                    mapPopUpBody.appendChild(attackLootDiscoverResults);
+                        // Build the "Last Attack" date row
+                        const tr = document.createElement('tr');
+                        tr.id = "info_last_attack";
+                        const th = document.createElement('th');
+                        th.textContent = '↓Last Attack:  ';
+                        const td = document.createElement('td');
+                        td.textContent = report.date;
+                        tr.appendChild(th);
+                        tr.appendChild(td);
+                        currentPopUpBody.appendChild(tr);
 
-                                    // Armazena os dados no report
-                                    report.attackLootDiscoverResults = attackLootDiscoverResults.outerHTML;
-                                }
+                        // Extract loot results row from the report
+                        const attackLootResults = tempDoc.querySelector('#attack_results tr');
+                        if (attackLootResults) {
+                            attackLootResults.querySelectorAll('th')[0].innerHTML += ' (' + attackLootResults.querySelectorAll('td')[1].textContent + ')';
+                            attackLootResults.removeChild(attackLootResults.querySelectorAll('td')[1]);
+                            currentPopUpBody.appendChild(attackLootResults);
+                            report.attackLootResults = attackLootResults.outerHTML;
+                        }
 
-                                // Atualiza localStorage com as novas informações
-                                localStorage.setItem('reports_list', JSON.stringify(reports_list));
-                            }
-                        });
+                        // Extract spy/discovery results row from the report
+                        const attackLootDiscoverResults = tempDoc.querySelector('#attack_spy_resources tr');
+                        if (attackLootDiscoverResults) {
+                            currentPopUpBody.appendChild(attackLootDiscoverResults);
+                            report.attackLootDiscoverResults = attackLootDiscoverResults.outerHTML;
+                        }
+
+                        localStorage.setItem('reports_list', JSON.stringify(reports_list));
+                    } catch (error) {
+                        console.error('[Report] Failed to fetch report:', error);
                     }
-                    break;
                 }
+                break;
             }
         }
+    }
 
-        if (outgoing_units_saved) {
-            outgoing_units_saved.forEach(function (unit) {
-                if ((unit.name).includes(coords)) {
-                    var tdElement = document.createElement('td');
-                    tdElement.id = "info_outgoing_units";
-                    var span1Element = document.createElement('span');
-                    span1Element.className = 'icon-container';
-                    var icons = unit.imgs.split(',');
-                    icons.forEach(function (icon) {
-                        if (icon !== '') {
-                            var img1Element = document.createElement('img');
-                            img1Element.src = 'https://dspt.innogamescdn.com/asset/7fe7ab60/graphic/command/' + icon + '.png';
-                            img1Element.alt = '';
-                            span1Element.appendChild(img1Element);
-                        }
-                    })
-                    tdElement.appendChild(span1Element);
+    // --- Travel time: all units, compact grid (icons row + H:MM times row) ---
+    document.getElementById('info_travel_time')?.remove();
+    if (typeof calculateDistanceToTarget === 'function' && game_data?.units) {
+        const unitSpeeds = JSON.parse(localStorage.getItem('units_speed') || '{}');
+        const distance = calculateDistanceToTarget(currentCoords);
+        const units = game_data.units.filter(u => unitSpeeds[u] > 0 && unitSpeeds[u] * distance >= 1);
 
-                    var popUpTitle = mapPopUpBody.querySelector('th');
-                    popUpTitle.insertBefore(span1Element, popUpTitle.firstChild);
-                }
-            })
+        if (units.length > 0 && distance > 0) {
+            const assetBase = _getNavAssetBase();
+            const travelRow = document.createElement('tr');
+            travelRow.id = 'info_travel_time';
+            const travelTd = document.createElement('td');
+            travelTd.colSpan = 2;
+            travelTd.style.padding = '3px 0';
+
+            const grid = document.createElement('div');
+            grid.style.cssText = `display:grid;grid-template-columns:repeat(${units.length},1fr);gap:2px;text-align:center`;
+
+            // Row 1: unit icons
+            units.forEach(unit => {
+                const img = document.createElement('img');
+                img.src = `${assetBase}unit/unit_${unit}.png`;
+                img.title = unit;
+                img.style.cssText = 'width:16px;height:16px;display:block;margin:0 auto';
+                grid.appendChild(img);
+            });
+
+            // Row 2: H:MM travel times — hover each cell for full H:MM:SS
+            units.forEach(unit => {
+                const totalMins = unitSpeeds[unit] * distance;
+                const h = Math.floor(totalMins / 60);
+                const m = Math.floor(totalMins % 60);
+                const span = document.createElement('span');
+                span.textContent = `${h}:${String(m).padStart(2, '0')}`;
+                span.title = typeof formatMinutesToTime === 'function' ? formatMinutesToTime(totalMins) : '';
+                span.style.cssText = 'font-size:9px;display:block';
+                grid.appendChild(span);
+            });
+
+            travelTd.appendChild(grid);
+            travelRow.appendChild(travelTd);
+            currentPopUpBody.appendChild(travelRow);
         }
+    }
+
+    if (outgoing_units_saved) {
+        outgoing_units_saved.forEach(function (unit) {
+            if (unit.name.includes(currentCoords)) {
+                const span1Element = document.createElement('span');
+                span1Element.className = 'icon-container';
+                const icons = unit.imgs.split(',');
+                icons.forEach(function (icon) {
+                    if (icon !== '') {
+                        const img1Element = document.createElement('img');
+                        img1Element.src = _getNavAssetBase() + 'command/' + icon + '.png';
+                        img1Element.alt = '';
+                        span1Element.appendChild(img1Element);
+                    }
+                });
+
+                const popUpTitle = currentPopUpBody.querySelector('th');
+                if (popUpTitle) popUpTitle.insertBefore(span1Element, popUpTitle.firstChild);
+            }
+        });
     }
 }
 
@@ -558,7 +702,8 @@ function setMapSize() {
  * Injects UI controls for the Large Map feature into the game's map configuration table.
  */
 function createBigMapOption() {
-    const mapConfigTable = document.querySelectorAll('#map_config .vis')[1];
+    const visTables = document.querySelectorAll('#map_config .vis');
+    const mapConfigTable = visTables[visTables.length - 1];
     if (!mapConfigTable) return;
 
     const tbody = mapConfigTable.querySelector('tbody');
@@ -646,8 +791,9 @@ function createBigMapOption() {
     }
 }
 
-// Simple cache to store the last result and avoid repeated heavy regex operations
-let _villageCache = { coord: null, id: null };
+// Map-based LRU cache for village ID lookups (max 10 entries)
+const _villageCache = new Map();
+const _VILLAGE_CACHE_MAX = 10;
 
 /**
  * Retrieves a village ID based on "X|Y" coordinates from the cached map data.
@@ -657,9 +803,12 @@ let _villageCache = { coord: null, id: null };
 function getVillageIDByCoord(coords) {
     if (!coords) return null;
 
-    // 1. Check if we just looked this up (Performance optimization)
-    if (_villageCache.coord === coords) {
-        return _villageCache.id;
+    // 1. Check cache (LRU: re-insert on hit to mark as most recently used)
+    if (_villageCache.has(coords)) {
+        const id = _villageCache.get(coords);
+        _villageCache.delete(coords);
+        _villageCache.set(coords, id);
+        return id;
     }
 
     const rawData = localStorage.getItem('map_villages');
@@ -684,8 +833,11 @@ function getVillageIDByCoord(coords) {
     if (match && match[1]) {
         const villageId = match[1];
 
-        // Update cache for the next call
-        _villageCache = { coord: coords, id: villageId };
+        // LRU eviction: remove oldest entry if at capacity
+        if (_villageCache.size >= _VILLAGE_CACHE_MAX) {
+            _villageCache.delete(_villageCache.keys().next().value);
+        }
+        _villageCache.set(coords, villageId);
         return villageId;
     }
 
@@ -709,11 +861,15 @@ function startMapContextWatcher() {
         if (currentFocus !== undefined && currentFocus !== lastFocusId) {
             lastFocusId = currentFocus;
             if (currentFocus !== -1) {
-                const villageId = getVillageIDByCoord(coords);
+                // _curFocus encodes coords as XXXYYYY (e.g. 457370 → "457|370")
+                const focusStr = currentFocus.toString().padStart(6, '0');
+                const focusCoords = focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6);
 
-                GM_setValue('target_village', villageId)
+                const villageId = getVillageIDByCoord(focusCoords);
 
-                const distance = calculateDistanceToTarget(coords);
+                GM_setValue('target_village', villageId);
+
+                const distance = calculateDistanceToTarget(focusCoords);
                 GM_setValue("target_distance", distance);
 
                 initializeTroopTemplates(villageId);
@@ -721,6 +877,8 @@ function startMapContextWatcher() {
         }
     }, 200); // Checks 5 times per second
 }
+
+let _troopTemplateAbortController = null;
 
 /**
  * Fetches and initializes troop templates for a specific target village.
@@ -730,6 +888,13 @@ function startMapContextWatcher() {
 async function initializeTroopTemplates(targetID) {
     if (!targetID) return;
 
+    // Cancel any in-flight request for a previous village
+    if (_troopTemplateAbortController) {
+        _troopTemplateAbortController.abort();
+    }
+    _troopTemplateAbortController = new AbortController();
+    const signal = _troopTemplateAbortController.signal;
+
     // Remove existing "fake" buttons before re-rendering to avoid UI clutter
     document.querySelectorAll('.fake-farm-assistant-button').forEach(el => el.remove());
 
@@ -737,7 +902,7 @@ async function initializeTroopTemplates(targetID) {
 
     try {
         // 1. Modern fetch instead of $.ajax for better async handling
-        const response = await fetch(url);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
         const data = await response.json();
@@ -765,7 +930,7 @@ async function initializeTroopTemplates(targetID) {
             });
 
             // 4. Generate buttons for each template found
-            const templatesArray = Object.values(templatesData);
+            const templatesArray = Object.values(templatesData).filter(t => t.player_id);
 
             templatesArray.forEach((template, index) => {
                 // We pass the template object and index to the button creator
@@ -779,6 +944,7 @@ async function initializeTroopTemplates(targetID) {
             console.warn("[Templates] Could not find TroopTemplates in the response dialog.");
         }
     } catch (error) {
+        if (error.name === 'AbortError') return; // Intentionally cancelled, not an error
         console.error("[Templates] Critical error during initialization:", error);
     }
 }
@@ -795,55 +961,64 @@ if (typeof TWMap !== 'undefined') {
             TWMap.popup.extraInfo = true;
             originalHandleMouseMove.call(this, e);
             var villageHoverCoords = TWMap.map.coordByEvent(e);
-            coords = villageHoverCoords.join('|');
+            const currentCoords = villageHoverCoords.join('|');
             var mapPopupElement = document.getElementById('map_popup');
-            mapPopUpBody = mapPopupElement.getElementsByTagName('tbody')[0];
+            const currentPopUpBody = mapPopupElement.getElementsByTagName('tbody')[0];
 
             var tr = document.createElement('tr');
             tr.className = 'nowrap';
             tr.id = 'map_popup_extra';
 
-            if (mapPopUpBody && !mapPopUpBody.querySelector('#map_popup_extra')) {
-                mapPopUpBody.appendChild(tr);
-                document.querySelectorAll("#info_last_attack, #info_outgoing_units").forEach(el => el.remove());
-                getReportInfoToMap();
+            if (currentPopUpBody && !currentPopUpBody.querySelector('#map_popup_extra')) {
+                currentPopUpBody.appendChild(tr);
+                document.querySelectorAll("#info_last_attack, #info_outgoing_units, #info_travel_time, #info_morale").forEach(el => el.remove());
+                getReportInfoToMap(currentCoords, currentPopUpBody);
             }
         };
     }
     if (settings_cookies.general['show__big_map']) {
         setMapSize();
     }
-    if (settings_cookies.general['show__outgoingInfo_map']) {
+    if (settings_cookies.general['show__outgoingInfo_map'] || settings_cookies.general['show__heatmap_reports']) {
         if (TWMap.map) {
             //on map drag move
             var originalMapOnMove = TWMap.map.handler.onMovePixel;
             TWMap.map.handler.onMovePixel = async function (e, a) {
                 originalMapOnMove.call(this, e, a);
                 await mapReady();
-                addOutgoingIcons();
+                if (settings_cookies.general['show__outgoingInfo_map']) addOutgoingIcons();
+                if (settings_cookies.general['show__heatmap_reports']) addReportHeatmap();
             }
         }
     }
 
-    startMapContextWatcher();
+    if (settings_cookies.general['show__ctx_attack_buttons']) {
+        startMapContextWatcher();
+    }
 }
 
 
-// TODO: testing new ctx button on map
+/**
+ * Creates and injects a custom attack button into the map context menu for a given troop template.
+ * @param {Object} template - A TroopTemplate object.
+ * @param {number} index - Zero-based index; index 0 also clears buttons from the previous village.
+ */
 function addFakeFarmAssistantButton(template, index) {
     const ctxButtons = document.getElementById("map-ctx-buttons");
     const referenceElement = document.getElementById("mp_att"); // use mp_att as reference, since we just want this new ctx for villages that we can attack
 
     //remove previous buttons
-    if (index === 0) document.querySelectorAll('.custom-map-ctx-button').forEach(element => element.remove());
+    if (index === 0) {
+        document.querySelectorAll('.custom-map-ctx-button').forEach(element => element.remove());
+    }
 
     if (!ctxButtons) {
-        console.warn("Elemento #map-ctx-buttons não encontrado.");
+        console.warn("[MapCTX] #map-ctx-buttons not found.");
         return;
     }
 
     if (!referenceElement) {
-        console.warn("Elemento #mp_info não encontrado.");
+        console.warn("[MapCTX] #mp_att reference element not found.");
         return;
     }
 
@@ -857,7 +1032,7 @@ function addFakeFarmAssistantButton(template, index) {
     if (index === 0) {
         newButton.style.backgroundImage = 'url(data:image/png;base64,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)'
     } else {
-        //number 2
+        // Subsequent templates (index > 0) use a different icon
         newButton.style.backgroundImage = 'url(data:image/png;base64,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)'
     }
 
@@ -899,6 +1074,28 @@ function addFakeFarmAssistantButton(template, index) {
             // 4. Call the previously defined launch function
             await launchAttack(unitsToLaunch, targetId);
 
+            // 5. Optimistically update map outgoing icons for immediate visual feedback.
+            // lastFocusId encodes the target coords as XXXYYYY — derive them back.
+            if (lastFocusId > 0) {
+                const focusStr = lastFocusId.toString().padStart(6, '0');
+                const targetCoords = focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6);
+                const launchedUnits = Object.keys(unitsToLaunch).join(',');
+
+                const savedOutgoing = JSON.parse(localStorage.getItem('outgoing_units_saved') || '[]');
+                const existingIdx = savedOutgoing.findIndex(u => u.name === targetCoords);
+                if (existingIdx >= 0) {
+                    // Merge new unit types into the existing entry (no duplicates)
+                    const iconSet = new Set(savedOutgoing[existingIdx].imgs.split(',').filter(Boolean));
+                    Object.keys(unitsToLaunch).forEach(u => iconSet.add(u));
+                    savedOutgoing[existingIdx].imgs = [...iconSet].join(',');
+                } else {
+                    savedOutgoing.push({ name: targetCoords, imgs: launchedUnits });
+                }
+                localStorage.setItem('outgoing_units_saved', JSON.stringify(savedOutgoing));
+
+                if (typeof addOutgoingIcons === 'function') addOutgoingIcons();
+            }
+
         } catch (error) {
             console.warn("Error sending attack:", error);
         }
@@ -914,39 +1111,28 @@ function addFakeFarmAssistantButton(template, index) {
         const ref = referenceElement;
         const btn = newButton;
 
-        // Safety check: exit if elements are missing
         if (!ref || !btn) return;
 
-        // Use getComputedStyle to read the actual rendered state (even during animations)
         const refStyle = window.getComputedStyle(ref);
 
-        // Sync visibility properties
         btn.style.display = refStyle.display;
         btn.style.visibility = refStyle.visibility;
-        btn.style.opacity = refStyle.opacity;
 
-        // Logic for hidden vs visible state
         if (refStyle.display === 'none' || refStyle.opacity === '0') {
-            // Disable interactions if invisible to prevent accidental clicks
+            btn.style.opacity = refStyle.opacity;
             btn.style.pointerEvents = 'none';
         } else {
             btn.style.pointerEvents = 'auto';
 
-            // Use getBoundingClientRect for precise screen coordinates
-            // This is much more "fireproof" than reading style.left/top
-            const rect = ref.getBoundingClientRect();
+            // Use the reference element's own style coordinates (same container as native TW buttons)
+            const refLeft = parseFloat(ref.style.left) || 0;
+            const refTop = parseFloat(ref.style.top) || 0;
 
-            // Calculate position relative to the button's offset parent
-            const parentRect = ref.offsetParent.getBoundingClientRect();
-
-            // Apply calculated position with your specific offsets
-            if (index === 0) {
-                btn.style.left = `${(rect.left - parentRect.left) + 32}px`;
-                btn.style.top = `${(rect.top - parentRect.top) - 15}px`;
-            } else {
-                btn.style.left = `${(rect.left - parentRect.left) + 32}px`;
-                btn.style.top = `${(rect.top - parentRect.top) + 53}px`;
-            }
+            btn.style.left = `${refLeft + 32}px`;
+            btn.style.top = index === 0
+                ? `${refTop - 15}px`
+                : `${refTop + 53 + (index - 1) * 36}px`;
+            btn.style.opacity = refStyle.opacity;
         }
     }
 
@@ -998,6 +1184,12 @@ function addFakeFarmAssistantButton(template, index) {
         parentObserver.observe(referenceElement.parentElement, { childList: true });
     }
 
+    /**
+     * Builds the HTML tooltip content for a troop template button.
+     * Shows unit icons, counts, total carry capacity, and travel time to the target.
+     * @param {Object} template - A TroopTemplate object.
+     * @returns {string} HTML string for use in data-tooltip-tpl.
+     */
     function generateTemplateTooltipData(template) {
         let tooltipHtml = "";
         const units = game_data.units;
@@ -1015,7 +1207,7 @@ function addFakeFarmAssistantButton(template, index) {
             const isUseAll = template.use_all && template.use_all.includes(unit);
 
             if (value > 0 || isUseAll) {
-                const iconUrl = `https://dspt.innogamescdn.com/asset/95eda994/graphic/unit/unit_${unit}.png`;
+                const iconUrl = `${_getNavAssetBase()}unit/unit_${unit}.png`;
                 const displayValue = isUseAll ? "All" : value;
 
                 tooltipHtml += `<img src="${iconUrl}" alt="${unit}" /> ${displayValue}<br />`;
@@ -1039,7 +1231,7 @@ function addFakeFarmAssistantButton(template, index) {
         // ---- Carry Capacity Display ----
         const carryDisplay = hasVariableCarry ? `${totalCarry}+` : totalCarry;
         tooltipHtml += `
-            <img src="https://dspt.innogamescdn.com/asset/95eda994/graphic/res.png" title="Resources" />
+            <img src="${_getNavAssetBase()}res.png" title="Resources" />
             ${carryDisplay}<br />
         `;
 
@@ -1061,6 +1253,6 @@ function addFakeFarmAssistantButton(template, index) {
         return tooltipHtml;
     }
 
-    //Adds new button
+    // Append the new CTX button to the map context menu
     ctxButtons.appendChild(newButton);
 }

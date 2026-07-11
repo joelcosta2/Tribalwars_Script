@@ -21,6 +21,8 @@ To optimize your workflow, the script injects a persistent sidebar on the left s
 - **Outgoing Units Info on Map:** Icons added on the map to show outgoing units per village.
   ![Outgoing Units Info on Map](img/largeMap2.png)
 
+- **Attack Heat-Map:** Colour-coded overlay on the map showing attack frequency and recency per village. Intensity reflects how often and how recently a village has been attacked over the last 14 days.
+
 ### 🏰 Village & Overview Management
 - **Premium info Overview Screen:** Access additional details directly on the overview page, such as the time remaining for the storage to fill or the status of each individual resource. (In progress – replicating features typically available only to Premium users).
   ![Overview Info](img/overviewExtraInfo.png)
@@ -50,7 +52,9 @@ To optimize your workflow, the script injects a persistent sidebar on the left s
 - **Script Settings:** Customize your experience with in-game settings to control various aspects of the script. Adjust options to suit your gameplay style.
   ![Script Settings](img/scriptSettings.png)
 
-### 🛠️ Building & Construction Queue
+### 🛠️ Building, Construction & Troops
+
+- **Recruit Troops Widget:** Train troops directly from the sidebar without navigating to the barracks. Shows per-unit costs, live population availability, and updates the maximum affordable quantity in real time as you adjust values.
 - **Building Queue Manager:** Conveniently manage your building queue from the overview page by easily adding or removing buildings without navigating through multiple menus.
   ![Building queue](img/extraBuildQueue0.png)
 
@@ -64,6 +68,8 @@ To optimize your workflow, the script injects a persistent sidebar on the left s
 ### 📊 Resources & Automation
 
 - **Auto Scavenging / Paladin Train:** Automation for training the Paladin (always choosing the cheapest option) and automating Scavenging (using all available troops at the highest available level).
+
+- **Auto Daily Bonus:** Automatically collects the daily login bonus as soon as it becomes available. If already collected for the day, it schedules the next collection for the following server midnight (with a small random delay to mimic human behaviour).
 
 ## How to Use
 
@@ -82,20 +88,20 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 2. **Change you project file path:**
    - Edit the **main_local.user** file, and past follow settings on the file, replacing YOUR_PATH:
         ```javascript
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\utils.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\custom_css.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\settings_script.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\navigationArrows_script.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\map_script.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\overviewPremiumInfo.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_utils.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_css.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_settings.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_navigationArrows.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\feature_map.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\feature_overview.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_trainerPaladin.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_scavenging.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_villageList.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_notepad.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_extraBuildQueue.user.js
       // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_recruitTroops.user.js
-      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
-      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars_Script\1main.user.js
+      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars_Script\main_local.user.js
+      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars_Script\main_local.user.js
 
    
 3. **Import the main file on Tampermonkey:**
@@ -133,7 +139,7 @@ Enjoy the enhanced features while playing Tribalwars!
 
 ## ⚠️ Disclaimer & Warning
 
-**Important:** Some features included in this script, specifically those involving automation (such as Auto-Scavenging, Auto-Train Paladin, and Extra Building Queue), may violate the Terms of Service (ToS) of certain TribalWars servers. 
+**Important:** Some features included in this script, specifically those involving automation (such as Auto-Scavenging, Auto-Train Paladin, Auto Daily Bonus, and Extra Building Queue), may violate the Terms of Service (ToS) of certain TribalWars servers. 
 
 - **Use at your own risk:** I'm are not responsible for any bans or account restrictions.
 - **Fair Play:** I recommend using automation features sparingly and in a way that mimics human behavior to minimize the risk of detection.

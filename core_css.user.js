@@ -4,6 +4,14 @@ var customCSS = `
 .not-hidden {
     display: block;
 }
+.btn-build.current-quest {
+    min-width: 0;
+    padding: 3px 9px;
+    background: linear-gradient(to bottom, #0bac00 0%,#0e7a1e 100%);
+}
+.btn-build.current-quest:hover {
+    background: linear-gradient(to bottom, #13c600 0%,#129e23 100%);
+}
 
 #toggleButton.toggle-on {
     background-color: green;
@@ -117,15 +125,17 @@ var customCSS = `
 #group_popup {
     width: 320px;
     position: fixed;
-    top: 20%;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -50%);
     display: block;
+    max-height: 90vh;
+    overflow: hidden;
     z-index: 1000;
 }
 
 #group_popup_content {
-    height: 380px;
+    max-height: calc(90vh - 80px);
     overflow-y: auto;
 }
 
@@ -170,16 +180,18 @@ var customCSS = `
 
 .script-settings-popup {
     width: 700px;
+    max-width: 95vw;
     font: inherit;
     opacity: 1;
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -70%);
+    transform: translate(-50%, -50%);
     display: none; /* Hidden by default */
     padding: 10px;
-    overflow: hidden;
-    z-index: 10000; /* Ensures it stays above other game elements */
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 99999; /* Ensures it stays above other game elements */
 }
 
 .script-popup-header {

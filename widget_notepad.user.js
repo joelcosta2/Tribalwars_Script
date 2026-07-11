@@ -1,17 +1,26 @@
 
 // Notepad Module
+
+/**
+ * Loads the saved note for the current village from localStorage and renders it
+ * as HTML (converting BBCode) inside the notepad display area.
+ */
 function loadNote() {
     var cookieNotepadJson = localStorage.getItem('vilagges_notepad');
     var notepadArray = cookieNotepadJson ? JSON.parse(cookieNotepadJson) : [];
     var textPlacer = document.getElementById('village-note-body_script');
     var notepadText = notepadArray[currentVillageIndex];
 
-    if (notepadText !== '' && textPlacer) {
+    if (notepadText != null && notepadText !== '' && textPlacer) {
         toggleElement('village_note_script');
         textPlacer.innerHTML = convertBBCodeToHTML(notepadText);
     }
 }
 
+/**
+ * Saves the current textarea content to localStorage for the active village.
+ * @param {boolean} [closeNotepad=true] - If true, hides the edit form and reloads the display view.
+ */
 function saveNote(closeNotepad = true) {
     var textToSave = document.getElementById('message_note_script').value;
     var currentCookieValue = localStorage.getItem('vilagges_notepad');
@@ -26,6 +35,10 @@ function saveNote(closeNotepad = true) {
     }
 }
 
+/**
+ * Switches the notepad into edit mode: sets up BBCode targets, populates the textarea
+ * with the stored note, shows the editor, and moves focus to the end of the text.
+ */
 function openEditModeNote() {
     const lang = JSON.parse(localStorage.getItem('tw_lang'));
     //set target BBCodes
@@ -46,31 +59,37 @@ function openEditModeNote() {
     noteElem.setSelectionRange(noteElem.value.length, noteElem.value.length);
 }
 
+/**
+ * Builds and injects the notepad widget into the given column.
+ * Creates the BBCode toolbar, the textarea, the save button, and the read-only
+ * display area, then loads any existing note for the current village.
+ * @param {string} columnToUse - Target column identifier passed to createWidgetElement.
+ */
 function injectNotepadWidget(columnToUse) {
     if (settings_cookies.general['show__notepad']) {
         var editLink = document.createElement('a');
         editLink.id = 'edit_notepad_link_script';
         editLink.classList.add('btn');
-        editLink.textContent = '» Editar';
+        editLink.textContent = '» Edit';
         editLink.addEventListener('click', openEditModeNote);
 
-        // Criando a div principal para os BBcodes
+        // Create the main BBCode toolbar container
         let BBCodesArea = document.createElement("div");
         BBCodesArea.id = "bb_bar";
         BBCodesArea.style.textAlign = "left";
         BBCodesArea.style.overflow = "visible";
         BBCodesArea.setAttribute("data-target", "message");
 
-        // Lista de botões e suas configurações
+        // Button definitions: BBCode tag, tooltip title, and sprite sheet offset
         const bbButtons = [
-            { id: "bb_button_bold", tag: "b", title: "Negrito", pos: "0px" },
-            { id: "bb_button_italic", tag: "i", title: "Itálico", pos: "-20px" },
-            { id: "bb_button_underline", tag: "u", title: "Sublinhado", pos: "-40px" },
-            { id: "bb_button_strikethrough", tag: "s", title: "Riscado", pos: "-60px" },
-            { id: "bb_button_url", tag: "url", title: "Endereço", pos: "-160px" },
+            { id: "bb_button_bold",          tag: "b",   title: "Bold",          pos: "0px" },
+            { id: "bb_button_italic",        tag: "i",   title: "Italic",        pos: "-20px" },
+            { id: "bb_button_underline",     tag: "u",   title: "Underline",     pos: "-40px" },
+            { id: "bb_button_strikethrough", tag: "s",   title: "Strikethrough", pos: "-60px" },
+            { id: "bb_button_url",           tag: "url", title: "URL",           pos: "-160px" },
         ];
 
-        // Criando os botões dinamicamente
+        // Build each BBCode button dynamically from the definitions above
         bbButtons.forEach(btn => {
             let button = document.createElement("a");
             button.id = btn.id;
@@ -166,6 +185,10 @@ function injectNotepadWidget(columnToUse) {
     }
 }
 
+/**
+ * Toggles the visibility of a DOM element between hidden and visible.
+ * @param {string} element - The id of the element to toggle.
+ */
 function toggleElement(element) {
     var elementToToggle = document.getElementById(element);
     if (elementToToggle) {
