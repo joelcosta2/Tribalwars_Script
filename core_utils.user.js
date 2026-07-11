@@ -6,6 +6,10 @@ var RIGHT_COLUMN = "rightcolumn";
 var CENTER_COLUMN = "leftcolumn";
 var LEFT_COLUMN = "script_column";
 
+// Server-to-UTC timezone offset in ms (e.g. BRT=UTC-3 → -10800000).
+// Detected once on start() by comparing the TW server clock with Timing.getCurrentServerTime().
+var serverTimezoneOffsetMs = 0;
+
 var default_settings_cookies = {
     widgets: [
         {
@@ -55,8 +59,8 @@ var default_settings_cookies = {
         show__big_map: false,
         show__resource_dashboard: false,
         show__heatmap_reports: false,
-        show__ctx_attack_buttons: true,
         show__auto_daily_bonus: false,
+        show__auto_build_instant_free: false,
         show__auto_scavenging: {
             enabled: false,
             level: 0,
@@ -90,13 +94,17 @@ var currentVillageIndex,
 
 //-----
 
+/**
+ * Initialises required localStorage keys with defaults and migrates saved settings
+ * to include any new keys added since the user last saved.
+ */
 function prepareLocalStorageItems() {
     if (unsafeWindow.lang) {
         localStorage.setItem('tw_lang', JSON.stringify(unsafeWindow.lang));
     }
 
-    localStorage.setItem('waiting_for_queue', localStorage.getItem('waiting_for_queue') ?? '{}');
-    localStorage.setItem('building_queue', localStorage.getItem('building_queue') ?? '[]');
+    localStorage.setItem(getBuildQueueKey('waiting_for_queue'), localStorage.getItem(getBuildQueueKey('waiting_for_queue')) ?? '{}');
+    localStorage.setItem(getBuildQueueKey('building_queue'), localStorage.getItem(getBuildQueueKey('building_queue')) ?? '[]');
     localStorage.setItem('villages_info', localStorage.getItem('villages_info') ?? '[]');
     localStorage.setItem('full_storage_times', localStorage.getItem('full_storage_times') ?? '[]');
     localStorage.setItem('mapConfig', localStorage.getItem('mapConfig') ?? '{}');
@@ -129,6 +137,10 @@ function prepareLocalStorageItems() {
     }
 }
 
+/**
+ * Finds the current village in the villages_info list and stores its index
+ * in localStorage as 'current_village'.
+ */
 function setCookieCurrentVillage() {
     var villageID = game_data.village?.id,
         villages = JSON.parse(localStorage.getItem('villages_info') || '[]'),
@@ -144,6 +156,10 @@ function setCookieCurrentVillage() {
     }
 }
 
+/**
+ * Reads the current page's displayed resource amounts (wood/stone/iron) and saves
+ * them to villages_resources in localStorage, keyed by village ID.
+ */
 function captureCurrentVillageResources() {
     const villageId = game_data?.village?.id;
     if (!villageId) return;
@@ -162,6 +178,10 @@ function captureCurrentVillageResources() {
     localStorage.setItem('villages_resources', JSON.stringify(resources));
 }
 
+/**
+ * Toggles a DOM element's visibility between 'block' and 'none'.
+ * @param {HTMLElement} popup
+ */
 function togglePopup(popup) {
     if (popup.style.display === 'none' || !popup.style.display) {
         popup.style.display = 'block';  // Show the popup
@@ -170,8 +190,12 @@ function togglePopup(popup) {
     }
 }
 
+/**
+ * Tracks focus on all textarea and input elements so keyboard shortcuts
+ * can be suppressed while the user is typing.
+ */
 function listenTextAreas() {
-    // get all inputs || textareas
+    // Track focus state for all textareas and inputs
     var textAreas = document.getElementsByTagName('textarea');
     var i = 0;
     for (i = 0; i < textAreas.length; i++) {
@@ -185,6 +209,10 @@ function listenTextAreas() {
     }
 }
 
+/**
+ * Registers A/D keyboard shortcuts for cycling between villages.
+ * Only active when the navigation arrows setting is enabled and no input has focus.
+ */
 function defineKeyboardShortcuts() {
     if (settings_cookies.general['show__navigation_arrows']) {
         $(document).keydown(function (evt) {
@@ -202,6 +230,11 @@ function defineKeyboardShortcuts() {
     }
 }
 
+/**
+ * Returns the number of own enumerable properties in an object.
+ * @param {Object} obj
+ * @returns {number}
+ */
 function sizeOfObject(obj) {
     var size = 0, key;
     for (key in obj) {
@@ -210,11 +243,16 @@ function sizeOfObject(obj) {
     return size;
 }
 
+/**
+ * Builds a collapsible widget container and inserts it into the specified column
+ * at the position saved in settings_cookies. Replaces the existing widget if update is true.
+ * @param {Object} options
+ */
 function createWidgetElement({ identifier, contents, columnToUse, update, extra_name = '', description = '', title = '' }) {
     var columnElement = document.getElementById(columnToUse);
 
     if (columnElement) {
-        var elemId = identifier.toLowerCase().replace(/ /g, '_'); // Get the element title
+        var elemId = identifier.toLowerCase().replace(/ /g, '_'); // Derive a stable element ID from the identifier
         var elemName = extra_name != '' ? elemId + '_' + extra_name : elemId;
         title = title === '' ? identifier : title;
 
@@ -237,12 +275,10 @@ function createWidgetElement({ identifier, contents, columnToUse, update, extra_
             content.style.display = content.style.display === 'none' ? 'block' : 'none';
             if (miniElem.src.includes('minus')) {
                 miniElem.src = miniElem.src.replace('minus', 'plus');
-                // Find the matching widget and update 'open' to false
-                settings_cookies.widgets.find(widget => widget.name === elemName).open = false;
+                settings_cookies.widgets.find(widget => widget.name === elemName).open = false; // Persist collapsed state
             } else {
                 miniElem.src = miniElem.src.replace('plus', 'minus');
-                // Find the matching widget and update 'open' to true
-                settings_cookies.widgets.find(widget => widget.name === elemName).open = true;
+                settings_cookies.widgets.find(widget => widget.name === elemName).open = true; // Persist expanded state
             }
             localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
         };
@@ -274,7 +310,7 @@ function createWidgetElement({ identifier, contents, columnToUse, update, extra_
             }
         }
 
-        // Validate the provided index
+        // Insert at the saved position if valid, otherwise append to the column
         var widgetIndex = settings_cookies.widgets.find(widget => widget.name === elemName).pos;
         var children = columnElement.childNodes;
         if (widgetIndex >= 0 && widgetIndex <= children.length) {
@@ -287,17 +323,29 @@ function createWidgetElement({ identifier, contents, columnToUse, update, extra_
 
 }
 
+/**
+ * Shows a modal confirmation popup with a countdown timer.
+ * Resolves with 'continue' (confirmed), 'cancel' (dismissed), or 'timeout' (countdown elapsed).
+ * @param {string} title
+ * @param {string} message
+ * @param {number} [timeoutDuration=5000] - Auto-resolve delay in ms.
+ * @returns {Promise<'continue'|'cancel'|'timeout'>}
+ */
 function displayWarningPopup(title, message, timeoutDuration = 5000) {
     return new Promise((resolve, reject) => {
         // Create the popup dynamically
         const popupDiv = document.createElement('div');
         popupDiv.classList.add('popup_style', 'borderimage', 'popup_box');
         popupDiv.style.width = '556px';
-        popupDiv.style.position = 'absolute';
+        popupDiv.style.maxWidth = '95vw';
+        popupDiv.style.position = 'fixed';
         popupDiv.style.opacity = '1';
         popupDiv.style.top = '50%';
         popupDiv.style.left = '50%';
-        popupDiv.style.transform = 'translate(-50%, -70%)';
+        popupDiv.style.transform = 'translate(-50%, -50%)';
+        popupDiv.style.maxHeight = '90vh';
+        popupDiv.style.overflowY = 'auto';
+        popupDiv.style.zIndex = '10000';
         popupDiv.style.display = 'block';
 
         const popupMenu = document.createElement('div');
@@ -385,6 +433,22 @@ function displayWarningPopup(title, message, timeoutDuration = 5000) {
 
         document.body.appendChild(popupDiv);
 
+        // Close on ESC key (= cancel)
+        const warningEscHandler = (e) => {
+            if (e.key !== 'Escape') return;
+            if (popupDiv.style.display === 'none') { document.removeEventListener('keydown', warningEscHandler); return; }
+            document.removeEventListener('keydown', warningEscHandler);
+            cancelButton.click();
+        };
+        document.addEventListener('keydown', warningEscHandler);
+
+        // Close on click outside the popup (= cancel)
+        const warningOutsideClick = (e) => {
+            if (popupDiv.style.display === 'none') { document.removeEventListener('mousedown', warningOutsideClick); return; }
+            if (!popupDiv.contains(e.target)) cancelButton.click();
+        };
+        document.addEventListener('mousedown', warningOutsideClick);
+
         // Set a timeout for user choice
         const timeoutId = setTimeout(() => {
             resolve('timeout');  // Resolve the promise with 'timeout' after timeout
@@ -393,6 +457,10 @@ function displayWarningPopup(title, message, timeoutDuration = 5000) {
     });
 }
 
+/**
+ * Reads the current DOM position of all widgets and persists their column assignment
+ * and position index to settings_cookies.
+ */
 function saveColumnOrder() {
     var childDivs = Array.from(document.getElementById('script_column').children);
     var childDivIds = childDivs.map(function (div) {
@@ -429,6 +497,9 @@ function saveColumnOrder() {
     localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
 }
 
+/**
+ * Prepends a script_column <td> to the overview table to house custom widgets.
+ */
 function injectScriptColumn() {
     var overviewtableElement = document.getElementById('overviewtable');
     if (overviewtableElement) {
@@ -441,8 +512,12 @@ function injectScriptColumn() {
     }
 }
 
-// allows to show/hide tooltip element from TW
-// reads info from data-title and data-tooltip-tpl
+/**
+ * Shows or hides the TW native tooltip, positioned next to the target element.
+ * Reads content from data-title (header) and data-tooltip-tpl (body) attributes.
+ * @param {HTMLElement} element
+ * @param {boolean} isVisible
+ */
 function toggleTooltip(element, isVisible) {
     var rect = element.getBoundingClientRect();
     var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -490,6 +565,11 @@ function toggleTooltip(element, isVisible) {
     }
 }
 
+/**
+ * Shows or hides the TW tooltip without modifying its content.
+ * @param {HTMLElement} element
+ * @param {boolean} isVisible
+ */
 function toggleTooltipNoText(element, isVisible) {
     var rect = element.getBoundingClientRect();
     var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -512,6 +592,71 @@ function toggleTooltipNoText(element, isVisible) {
     }
 }
 
+/**
+ * Detects the server's UTC offset in milliseconds by comparing the TW header clock
+ * (server-local H:M:S) with Timing.getCurrentServerTime() (UTC epoch).
+ * Example: BR server (BRT = UTC-3) returns -10800000.
+ */
+function detectServerTimezoneOffsetMs() {
+    const clockEl = document.getElementById('serverTime') ||
+                    document.querySelector('.servertimer');
+    if (!clockEl) {
+        console.warn('[TW] Server clock element not found — timezone offset defaults to 0');
+        return 0;
+    }
+    const timeText = clockEl.textContent.trim();
+    const parts = timeText.split(':');
+    if (parts.length < 2) return 0;
+    const displayedH = parseInt(parts[0], 10);
+    const displayedM = parseInt(parts[1], 10);
+    const displayedS = parts[2] ? parseInt(parts[2], 10) : 0;
+    if (isNaN(displayedH) || isNaN(displayedM) || isNaN(displayedS)) return 0;
+
+    const serverNowMs = Timing.getCurrentServerTime();
+    const d = new Date(serverNowMs);
+    const utcH = d.getUTCHours();
+    const utcM = d.getUTCMinutes();
+    const utcS = d.getUTCSeconds();
+
+    let offsetS = (displayedH * 3600 + displayedM * 60 + displayedS) -
+                  (utcH * 3600 + utcM * 60 + utcS);
+    // Wrap to [-12h, +12h] to handle day-boundary reads
+    const halfDayS = 12 * 3600;
+    if (offsetS > halfDayS) offsetS -= 86400;
+    if (offsetS < -halfDayS) offsetS += 86400;
+    return offsetS * 1000;
+}
+
+/**
+ * Converts a TW wall-clock time string (displayed in server timezone) to a UTC epoch in ms.
+ * Use this instead of new Date().setHours() everywhere TW time strings are parsed.
+ * @param {number} hora - Hour (0-23)
+ * @param {number} minuto - Minute (0-59)
+ * @param {number} segundo - Second (0-59)
+ * @param {number} dayOffset - 0 = today, 1 = tomorrow, -1 = yesterday (relative to server's day)
+ * @returns {number} UTC epoch in milliseconds
+ */
+function twWallClockToEpochMs(hora, minuto, segundo, dayOffset) {
+    const serverNowMs = Timing.getCurrentServerTime();
+    // Shift into server-local space so UTC arithmetic gives server-local H/M/S
+    const serverLocalMs = serverNowMs + serverTimezoneOffsetMs;
+    // Midnight of the server's current day (in server-local space)
+    const serverLocalMidnightMs = serverLocalMs - (serverLocalMs % 86400000);
+    // Build target in server-local space, then shift back to UTC
+    return serverLocalMidnightMs
+        + hora * 3600000
+        + minuto * 60000
+        + segundo * 1000
+        + dayOffset * 86400000
+        - serverTimezoneOffsetMs;
+}
+
+/**
+ * Parses a TW localised build-time string (e.g. "hoje às 14:30:00") using tw_lang keys
+ * and returns [dayOffset, H, M, S] as strings. dayOffset is "0" for today, "1" for tomorrow.
+ * @param {string} stringHTML
+ * @returns {string[]|undefined}
+ */
 function extractBuildTimeFromHTML(stringHTML) {
     const lang = JSON.parse(localStorage.getItem('tw_lang'));
     const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
@@ -523,7 +668,7 @@ function extractBuildTimeFromHTML(stringHTML) {
         let day, hora, minuto, segundo;
 
         for (const [index, modeloString] of modelosStrings.entries()) {
-            // Adjust regex to also capture seconds (if present)
+            // Build a regex that also captures optional seconds
             const regexString = modeloString
                 .replace(/\\/g, "\\\\")
                 .replace(/%s/, "(\\d{1,2}):(\\d{2})(?::(\\d{2}))?"); // Segundos opcionais
@@ -534,7 +679,7 @@ function extractBuildTimeFromHTML(stringHTML) {
                 day = index.toString();
                 hora = match[1].toString();
                 minuto = match[2].toString();
-                segundo = match[3] ? match[3].toString() : "00"; // If no seconds, default to "00"
+                segundo = match[3] ? match[3].toString() : "00"; // default to "00" if seconds are absent
                 break;
             }
         }
@@ -549,6 +694,12 @@ function extractBuildTimeFromHTML(stringHTML) {
     return time;
 }
 
+/**
+ * Like extractBuildTimeFromHTML but returns a UTC epoch in milliseconds,
+ * corrected for the server timezone via twWallClockToEpochMs.
+ * @param {string} stringHTML
+ * @returns {number|null}
+ */
 function extractBuildTimestampFromHTML(stringHTML) {
     const lang = JSON.parse(localStorage.getItem('tw_lang'));
     const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
@@ -570,27 +721,26 @@ function extractBuildTimestampFromHTML(stringHTML) {
                 day = index; // 0 = today, 1 = tomorrow
                 hora = parseInt(match[1]);
                 minuto = parseInt(match[2]);
-                segundo = match[3] ? parseInt(match[3]) : 0; // If no seconds, default to 0
+                segundo = match[3] ? parseInt(match[3]) : 0; // default to 0 if seconds are absent
                 break;
             }
         }
 
         if (day !== undefined && hora !== undefined && minuto !== undefined) {
-            const now = new Date();
-            now.setHours(hora, minuto, segundo, 0);
-
-            if (day === 1) { // If tomorrow, add 1 day
-                now.setDate(now.getDate() + 1);
-            }
-
-            return now.getTime(); // Retorna o timestamp corrigido
+            return twWallClockToEpochMs(hora, minuto, segundo, day);
         }
     } else {
-        alert('Error in extractBuildTimestampFromHTML');
+        alert('Erro no extractBuildTimestampFromHTML');
         return null;
     }
 }
 
+/**
+ * Returns remaining time until a Unix timestamp (seconds) as [HH, MM, SS] strings,
+ * or null if already elapsed. Uses the server's current time as 'now'.
+ * @param {number} endtime - Unix timestamp in seconds.
+ * @returns {string[]|null}
+ */
 function endTimeToTimer(endtime) {
     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
     var remaining = endtime - now;
@@ -604,6 +754,11 @@ function endTimeToTimer(endtime) {
     }
 }
 
+/**
+ * Converts an "HH:MM:SS" duration string to milliseconds.
+ * @param {string} timeString
+ * @returns {number}
+ */
 function timeToMilliseconds(timeString) {
     var parts = timeString.split(':');
 
@@ -614,6 +769,11 @@ function timeToMilliseconds(timeString) {
     return hours + minutes + seconds;
 }
 
+/**
+ * Converts a fractional-minutes value to an "H:MM:SS" string.
+ * @param {number} minutes
+ * @returns {string}
+ */
 function formatMinutesToTime(minutes) {
     const totalSeconds = Math.round(minutes * 60);
 
@@ -624,6 +784,11 @@ function formatMinutesToTime(minutes) {
     return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+/**
+ * Returns a Promise that resolves after the given number of seconds.
+ * @param {number} seconds
+ * @returns {Promise<void>}
+ */
 function wait(seconds) {
     return new Promise(resolve => {
         setTimeout(resolve, seconds * 1000);
@@ -631,12 +796,20 @@ function wait(seconds) {
 }
 
 var activeTimeouts = {};
+/**
+ * Schedules a function with a random extra delay (up to 3 min) to reduce bot patterns.
+ * Persists the end time and serialised function to localStorage so the timeout
+ * survives page reloads and can be restored by restoreTimeouts().
+ * @param {string} id - Unique key for deduplication and storage.
+ * @param {Function} func
+ * @param {number} timeToRun - Base delay in milliseconds.
+ */
 function setFunctionOnTimeOut(id, func, timeToRun) {
     if (activeTimeouts[id]) {
         clearTimeout(activeTimeouts[id]);
     }
 
-    // Add up to 3 minutes (180000 ms) of randomness
+    // Add up to 3 minutes of random delay to avoid predictable bot patterns
     let randomExtraTime = Math.random() * 180000;
     let finalTimeToRun = Math.floor(timeToRun + randomExtraTime);
 
@@ -652,8 +825,12 @@ function setFunctionOnTimeOut(id, func, timeToRun) {
     }, finalTimeToRun);
 }
 
+/**
+ * Re-schedules any pending timeouts stored in localStorage by setFunctionOnTimeOut.
+ * If a timeout has already elapsed, the function is executed immediately.
+ */
 function restoreTimeouts() {
-    //general timeouts
+    // Restore all pending timeouts from previous page loads
     for (var key in localStorage) {
         if (key.startsWith('endTime_')) {
             var id = key.replace('endTime_', '');
@@ -677,6 +854,10 @@ function restoreTimeouts() {
     }
 }
 
+/**
+ * Reloads the page if TW's idle timer exceeds the threshold (keep_awake feature).
+ * @param {number} minutes - Inactivity threshold in minutes.
+ */
 async function checkInactivity(minutes) {
     if (TribalWars.getIdleTime() >= minutes * 60 * 1000) {
         showAutoHideBox('Inactivity detected! Reloading page...');
@@ -685,15 +866,15 @@ async function checkInactivity(minutes) {
     }
 }
 
-//Keep quests tabs open
+// Auto-expand all quest group lists when the quest panel is opened
 var questButton = document.getElementById('new_quest');
 if (questButton) {
-    // Store reference to the original function
+    // Store a reference to the original onclick handler
     var originalOnClick = questButton.onclick;
 
-    // Define new onclick that calls the original then runs the custom logic
+    // Override onclick to call the original first, then auto-expand quest groups
     questButton.onclick = function (event) {
-        // Call the original function (if it exists)
+        // Call the original handler if it exists
         if (originalOnClick) {
             originalOnClick.call(this, event);
         }
@@ -702,23 +883,29 @@ if (questButton) {
             let questlineLists = document.querySelectorAll('.questline-list');
 
             if (questlineLists.length > 0) {
-                clearInterval(checkExist); // Stop the interval once found
+                clearInterval(checkExist); // Stop polling once the quest lists are found
 
                 questlineLists.forEach(questlineList => {
                     let listItems = questlineList.querySelectorAll('li');
 
                     listItems.forEach(li => {
-                        let ul = li.closest('ul'); // Find the closest <ul>
+                        let ul = li.closest('ul'); // Find the nearest parent <ul>
                         if (ul) {
-                            ul.classList.add('opened'); // Add the "opened" class
+                            ul.classList.add('opened'); // Force the quest group open
                         }
                     });
                 });
             }
-        }, 500); // Check every 500ms
+        }, 500); // Poll every 500 ms until the lists appear
     };
 }
 
+/**
+ * Updates an element's text with the countdown to endtime, or 'END' when elapsed.
+ * Intended to be called on a repeating interval.
+ * @param {number} endtime - Unix timestamp in seconds.
+ * @param {HTMLElement} element
+ */
 function startResourceTimerFull(endtime, element) {
     var remaining = endTimeToTimer(endtime);
     if (!remaining) {
@@ -728,9 +915,14 @@ function startResourceTimerFull(endtime, element) {
         element.textContent = `${remaining[0]}:${remaining[1]}:${remaining[2]}`;
     }
     element.style.display = "block";
-    //element.classList.toggle('not-hidden');
 }
 
+/**
+ * Replaces the HH:MM:SS portion of an element's text content in-place with the
+ * current countdown to endtime. Intended to be called on a repeating interval.
+ * @param {number} endtime - Unix timestamp in seconds.
+ * @param {HTMLElement} element
+ */
 function startTimerOnLabel(endtime, element) {
     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
     var remaining = endtime - now;
@@ -750,12 +942,22 @@ function startTimerOnLabel(endtime, element) {
     element.style.display = "block";
 }
 
+/**
+ * Returns the whole number of hours remaining until a Unix timestamp.
+ * @param {number} endtime - Unix timestamp in seconds.
+ * @returns {number}
+ */
 function getRemainingHours(endtime) {
     var now = Math.floor(Timing.getCurrentServerTime() / 1000);
     var remaining = endtime - now;
     return Math.floor(remaining / 3600);
 }
 
+/**
+ * Displays a transient notification bar that auto-removes after 3 seconds.
+ * @param {string} text
+ * @param {boolean} [isError=true] - Uses error styling; pass false for success.
+ */
 function showAutoHideBox(text, isError = true) {
     let divAutoHideBox = document.querySelector('.autoHideBox');
 
@@ -777,10 +979,19 @@ function showAutoHideBox(text, isError = true) {
     divAutoHideBox.dataset.timeout = setTimeout(() => divAutoHideBox.remove(), 3000);
 }
 
+/**
+ * Stub for attack-distance injection on the place screen. Not fully implemented.
+ */
 function injectAttackCalculations() {
     console.log(parseInt(document.querySelector('#command-data-form .village-distance').textContent.match(/(\d+)/), 10));
 }
 
+/**
+ * Converts common BBCode tags in a string to equivalent HTML markup.
+ * Supports [b], [i], [u], [s], [url] and [url=link]Text[/url].
+ * @param {string} text
+ * @returns {string}
+ */
 function convertBBCodeToHTML(text) {
     const bbcodeMap = {
         '\\[b\\](.*?)\\[/b\\]': '<strong>$1</strong>',   // [b]bold[/b] -> <strong>bold</strong>
@@ -796,7 +1007,7 @@ function convertBBCodeToHTML(text) {
             text = text.replace(regex, bbcodeMap[bbcode]);
         }
 
-        // Special handling for [url=link]Text[/url]
+        // Handle [url=link]Text[/url] with an explicit label
         text = text.replace(/\[url=(.*?)\](.*?)\[\/url\]/gi, function (match, link, text) {
             if (!link.startsWith("http://") && !link.startsWith("https://")) {
                 link = "https://" + link;
@@ -808,6 +1019,11 @@ function convertBBCodeToHTML(text) {
     return text;
 }
 
+/**
+ * Fetches the server's village.txt data and caches it in localStorage.
+ * Skips the fetch if the cache is less than 1 hour old, unless force is true.
+ * @param {boolean} [force=false]
+ */
 async function updateMapInfoVillages(force = false) {
     const STORAGE_KEY = 'map_villages';
     const TIMESTAMP_KEY = 'map_villages_last_update';
@@ -818,7 +1034,6 @@ async function updateMapInfoVillages(force = false) {
 
     // Check if we already have data and if it's still "fresh" (less than 1 hour old)
     if (!force && (lastUpdate && (now - lastUpdate < ONE_HOUR) && localStorage.getItem(STORAGE_KEY))) {
-        console.log("Map villages data is up to date (less than 1h old).");
         return;
     }
 
@@ -841,6 +1056,11 @@ async function updateMapInfoVillages(force = false) {
     }
 }
 
+/**
+ * Calculates the Euclidean distance from the current village to a target coordinate.
+ * @param {string} targetCoords - Target village in "X|Y" format.
+ * @returns {number} Distance rounded to 2 decimal places.
+ */
 function calculateDistanceToTarget(targetCoords) {
     // 1. Get current village coordinates from game_data
     const currentCoords = game_data.village.coord; // Format: "454|369"
@@ -858,7 +1078,10 @@ function calculateDistanceToTarget(targetCoords) {
     return parseFloat(distance.toFixed(2));
 }
 
-// Get unit info from server and store unit speeds and carry capacity
+/**
+ * Fetches unit speed and carry capacity from the server API and caches them
+ * in localStorage. Skips the fetch if values are already stored.
+ */
 function storeUnitsInfo() {
     const hasSpeeds = localStorage.getItem('units_speed');
     const hasCarry = localStorage.getItem('units_carry');
@@ -1022,10 +1245,15 @@ async function launchAttack(units, targetId) {
     }
 }
 
+/**
+ * Main entry point called after all scripts load. Detects server timezone, initialises
+ * settings, runs page-specific feature injection, and restores persisted timeouts.
+ */
 function start() {
     var urlPage = document.location.href;
-    //check for expired session, automatically select last active world
+    // Check for expired session and auto-redirect to the last active world if so
     if (!urlPage.includes('?session_expired') && typeof game_data != 'undefined') {
+        serverTimezoneOffsetMs = detectServerTimezoneOffsetMs();
         prepareVillageList();
         villageList = localStorage.getItem('villages_info') ? JSON.parse(localStorage.getItem('villages_info')) : [];
         settings_cookies = localStorage.getItem('settings_cookies') ? JSON.parse(localStorage.getItem('settings_cookies')) : settings_cookies;
@@ -1033,6 +1261,11 @@ function start() {
         setCookieCurrentVillage();
         captureCurrentVillageResources();
         if (typeof checkEarlyBuildOpportunity === 'function') checkEarlyBuildOpportunity();
+        // On overview, the widget re-fetches the main page and calls checkAndScheduleBuildInstantFree()
+        // via scheduleCompletionNotification with fresh data — skip here to avoid a duplicate call.
+        if (typeof checkAndScheduleBuildInstantFree === 'function' && !urlPage.includes('screen=overview')) {
+            checkAndScheduleBuildInstantFree();
+        }
         addRessourcesHover(localStorage.getItem('full_storage_times') ? JSON.parse(localStorage.getItem('full_storage_times')) : null);
         if (urlPage.includes("screen=overview") && !urlPage.includes("screen=overview_villages")) {
             injectScriptColumn();
@@ -1096,6 +1329,10 @@ function start() {
             checkAndScheduleDailyBonus();
         }
 
+        if (settings_cookies.general['show__auto_paladin_train']?.enabled) {
+            checkAndSchedulePaladinTrainer();
+        }
+
     } else {
         // get from TM storage
         let lastWorld = GM_getValue("current_world");
@@ -1109,7 +1346,7 @@ function start() {
     }
 }
 
-//redirect barracks and stable to train screen
+// Intercept Barracks/Stable link clicks and redirect to the unified training screen
 if (settings_cookies.general['redirect__train_buildings']) {
     document.addEventListener("click", (event) => {
         const link = event.target.closest("a[href], area[href]");
@@ -1128,102 +1365,13 @@ if (settings_cookies.general['redirect__train_buildings']) {
 }
 
 
-/*<----------- Not fully implementeded functions ------------>*/
-async function checkAndScheduleDailyBonus() {
-    if (!settings_cookies.general['show__auto_daily_bonus']) return;
 
-    try {
-        const serverNow = new Date(Timing.getCurrentServerTime());
-        const todayKey = serverNow.toISOString().split('T')[0]; // e.g. "2026-06-30"
-        const lastDate = localStorage.getItem('daily_bonus_last_date');
-
-        if (lastDate !== todayKey) {
-            // New day (or never run) — attempt collection
-            await autoDailyBonusCollect();
-            // Mark today as attempted regardless of outcome
-            // (autoDailyBonusCollect handles the "already collected" case silently)
-            localStorage.setItem('daily_bonus_last_date', todayKey);
-        }
-
-        // Schedule next run at next server midnight + random delay (up to 2 min)
-        const nextMidnight = new Date(serverNow);
-        nextMidnight.setDate(nextMidnight.getDate() + 1);
-        nextMidnight.setHours(0, 0, 0, 0);
-        const msUntilMidnight = nextMidnight.getTime() - serverNow.getTime();
-        const randomDelay = Math.random() * 120000; // up to 2 minutes
-
-        setTimeout(() => checkAndScheduleDailyBonus(), msUntilMidnight + randomDelay);
-        console.log(`[DailyBonus] Next check scheduled in ${Math.round((msUntilMidnight + randomDelay) / 60000)} min.`);
-
-    } catch (err) {
-        console.error('[DailyBonus] Schedule error:', err);
-    }
-}
-
-async function autoDailyBonusCollect() {
-    if (!game_data) return;
-
-    try {
-        // Step 1: Load the daily bonus page to find today's collectible chest
-        const pageRes = await fetch(game_data.link_base_pure + "info_player&mode=daily_bonus", {
-            credentials: "include"
-        });
-        const html = await pageRes.text();
-
-        // Step 2: Parse HTML — find the chest with class "unlocked" (ready to collect, shows "Abrir" button)
-        // Classes: "opened" = already collected | "unlocked" = collect now | (none) = still locked
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const unlockedChest = doc.querySelector('.db-chest.unlocked');
-
-        if (!unlockedChest) {
-            console.log('[DailyBonus] No chest available to collect today (already collected or all locked).');
-            return;
-        }
-
-        // Day number is in the parent element's class, e.g. "reward day_2"
-        const rewardEl = unlockedChest.closest('[class*="day_"]');
-        const dayMatch = rewardEl?.className.match(/\bday_(\d+)\b/);
-
-        if (!dayMatch) {
-            console.warn('[DailyBonus] Could not determine day number from DOM.');
-            return;
-        }
-
-        const day = dayMatch[1];
-        console.log(`[DailyBonus] Collecting day ${day}...`);
-
-        // Step 3: POST to collect the chest
-        const collectRes = await fetch(game_data.link_base_pure + "daily_bonus&ajaxaction=open", {
-            method: "POST",
-            headers: {
-                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "tribalwars-ajax": "1",
-                "x-requested-with": "XMLHttpRequest"
-            },
-            referrer: game_data.link_base_pure + "info_player&mode=daily_bonus",
-            body: `day=${day}&from_screen=profile&h=${game_data.csrf}`,
-            credentials: "include"
-        });
-
-        const result = await collectRes.json();
-
-        if (result?.error) {
-            showAutoHideBox(`Daily bonus: ${result.error}`, true);
-        } else {
-            showAutoHideBox(`Daily bonus day ${day} collected!`, false);
-            console.log('[DailyBonus] Success:', result);
-        }
-
-    } catch (err) {
-        console.error('[DailyBonus] Failed:', err);
-        showAutoHideBox('Error collecting daily bonus.', true);
-    }
-}
-
+/**
+ * Incomplete stub for sending a scavenge mission directly via the scavenge API.
+ * TODO: resolve troop counts from settings or DOM; detect the correct option_id.
+ */
 function sendScavengeAjax() {
-    // falta conseguir as tropas a enviar... se tiver os numeros das settings sao esses
-    // se nao tiver, tenho de os arranjar
-    // falta ter o nivel a enviar
+    // TODO: resolve troop counts from settings or DOM
     if (game_data) {
         const squadRequest = {
             village_id: 14520,
@@ -1240,7 +1388,7 @@ function sendScavengeAjax() {
                 },
                 carry_max: 12385
             },
-            option_id: 3, //AVAILABLE LEVEL??? store on first visit to the scavenger page, only update if revisited
+            option_id: 3, // TODO: detect and store the available scavenge level on first visit
             use_premium: false
         };
 
@@ -1249,7 +1397,7 @@ function sendScavengeAjax() {
             h: game_data.csrf
         };
 
-        // Converte o objeto para um formato adequado para envio
+        // Flatten the nested request object into URLSearchParams format
         const body = new URLSearchParams();
         Object.entries(requestData).forEach(([key, value]) => {
             if (Array.isArray(value)) {
