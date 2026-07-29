@@ -54,7 +54,7 @@ var default_settings_cookies = {
         show__building_queue: true,
         show__extra_options_map_hover: true,
         show__outgoingInfo_map: true,
-        show__overview_premmium_info: true,
+        show__overview_premium_info: true,
         show__time_storage_full_hover: true,
         show__big_map: false,
         show__resource_dashboard: false,
@@ -74,6 +74,7 @@ var default_settings_cookies = {
             enabled: false,
             maxLevel: 0,
         },
+        show__player_profile_stats: true,
     }
 };
 
@@ -695,19 +696,61 @@ function extractBuildTimeFromHTML(stringHTML) {
 }
 
 /**
+ * Converts an explicit TW calendar date (day/month[/year]) plus a wall-clock time in the
+ * server's timezone to a UTC epoch in ms. TW switches from "today"/"tomorrow" phrasing to an
+ * explicit "DD.MM.[YYYY]" (or "MM.DD.[YYYY]" on the US market) date once an entry is more than
+ * one day out — this is what queues render for the finish time when there's a long backlog.
+ * @param {number} day
+ * @param {number} month - 1-indexed
+ * @param {number|null} year - Full or 2-digit year, or null/undefined if omitted from the string
+ * @param {number} hora
+ * @param {number} minuto
+ * @param {number} segundo
+ * @returns {number} UTC epoch in milliseconds
+ */
+function twCalendarDateToEpochMs(day, month, year, hora, minuto, segundo) {
+    const serverNowMs = Timing.getCurrentServerTime();
+    const serverLocalMs = serverNowMs + serverTimezoneOffsetMs;
+    const serverLocalNow = new Date(serverLocalMs);
+    const currentYear = serverLocalNow.getUTCFullYear();
+
+    let targetYear = year;
+    if (targetYear && targetYear < 100) targetYear += 2000;
+    if (!targetYear) targetYear = currentYear;
+
+    let targetLocalMs = Date.UTC(targetYear, month - 1, day, hora, minuto, segundo);
+
+    // No year in the string and the resulting date is already in the past — it must be next year
+    if (!year) {
+        const todayLocalMidnightMs = Date.UTC(currentYear, serverLocalNow.getUTCMonth(), serverLocalNow.getUTCDate());
+        if (targetLocalMs < todayLocalMidnightMs) {
+            targetLocalMs = Date.UTC(targetYear + 1, month - 1, day, hora, minuto, segundo);
+        }
+    }
+
+    return targetLocalMs - serverTimezoneOffsetMs;
+}
+
+/**
  * Like extractBuildTimeFromHTML but returns a UTC epoch in milliseconds,
  * corrected for the server timezone via twWallClockToEpochMs.
+ * Handles "today"/"tomorrow" phrasing as well as the explicit "DD.MM. HH:MM[:SS]" date format
+ * TW uses once a queue entry finishes more than a day from now (e.g. long training/build queues).
  * @param {string} stringHTML
  * @returns {number|null}
  */
 function extractBuildTimestampFromHTML(stringHTML) {
     const lang = JSON.parse(localStorage.getItem('tw_lang'));
+    if (!lang) {
+        alert('Erro no extractBuildTimestampFromHTML');
+        return null;
+    }
+
     const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
     const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'];
 
     if (stringToday && stringTomorrow) {
         const modelosStrings = [stringToday, stringTomorrow];
-        let day, hora, minuto, segundo;
 
         for (const [index, modeloString] of modelosStrings.entries()) {
             const regexString = modeloString
@@ -718,21 +761,46 @@ function extractBuildTimestampFromHTML(stringHTML) {
             const match = stringHTML.match(regex);
 
             if (match) {
-                day = index; // 0 = today, 1 = tomorrow
-                hora = parseInt(match[1]);
-                minuto = parseInt(match[2]);
-                segundo = match[3] ? parseInt(match[3]) : 0; // default to 0 if seconds are absent
-                break;
+                const hora = parseInt(match[1]);
+                const minuto = parseInt(match[2]);
+                const segundo = match[3] ? parseInt(match[3]) : 0; // default to 0 if seconds are absent
+                return twWallClockToEpochMs(hora, minuto, segundo, index); // index: 0 = today, 1 = tomorrow
             }
         }
-
-        if (day !== undefined && hora !== undefined && minuto !== undefined) {
-            return twWallClockToEpochMs(hora, minuto, segundo, day);
-        }
-    } else {
-        alert('Erro no extractBuildTimestampFromHTML');
-        return null;
     }
+
+    // Not "today"/"tomorrow" — entries more than a day out use an explicit date instead.
+    // TW has two variants of this template (with/without year in the surrounding sentence).
+    const stringFutureWithYear = lang['0cb274c906d622fa8ce524bcfbb7552d'];
+    const stringFutureNoYear = lang['850731037a4693bf4338a0e8b06bd2e4'];
+    const isUsMarket = typeof game_data !== 'undefined' && game_data && game_data.market === 'us';
+    const dateGroupRegex = "(\\d{1,2})\\.(\\d{1,2})\\.(\\d{2,4})?\\.?";
+
+    for (const template of [stringFutureWithYear, stringFutureNoYear]) {
+        if (!template) continue;
+
+        const regexString = template
+            .replace(/\\/g, "\\\\")
+            .replace(/%1/, dateGroupRegex)
+            .replace(/%2/, "(\\d{1,2}):(\\d{2})(?::(\\d{2}))?");
+
+        const regex = new RegExp(regexString);
+        const match = stringHTML.match(regex);
+
+        if (match) {
+            const first = parseInt(match[1]);
+            const second = parseInt(match[2]);
+            const year = match[3] ? parseInt(match[3]) : null;
+            const day = isUsMarket ? second : first;
+            const month = isUsMarket ? first : second;
+            const hora = parseInt(match[4]);
+            const minuto = parseInt(match[5]);
+            const segundo = match[6] ? parseInt(match[6]) : 0;
+            return twCalendarDateToEpochMs(day, month, year, hora, minuto, segundo);
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -1121,6 +1189,188 @@ function storeUnitsInfo() {
         });
 }
 
+/**
+ * Wraps GM_xmlhttpRequest in a Promise for use with async/await.
+ * Needed for cross-origin fetches (e.g. twstats.com) that regular fetch() cannot
+ * perform due to CORS restrictions on the game page.
+ * @param {string} url
+ * @returns {Promise<string>} Response text
+ */
+function gmFetch(url) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: url,
+            onload: function (response) {
+                if (response.status >= 200 && response.status < 300) {
+                    resolve(response.responseText);
+                } else {
+                    reject(new Error('HTTP ' + response.status + ' — ' + url));
+                }
+            },
+            onerror: function () {
+                reject(new Error('Network error fetching ' + url));
+            }
+        });
+    });
+}
+
+/**
+ * Parses a TWStats building detail page and returns per-level cost + time data.
+ *
+ * The page contains two tables:
+ *   - table.widget  — summary row for this building with base time and time factor
+ *   - table.vis     — per-level costs (Nível, Madeira, Argila, Ferro, Pop para desenvolver)
+ *
+ * Build time per level is calculated as:
+ *   time(n) = base_time_seconds * factor ^ (n - 1)
+ * This is the raw speed-1 time with no main-building bonus applied.
+ *
+ * @param {Document} doc        - Parsed HTML of the TWStats building detail page.
+ * @param {string}   buildingId - Building identifier (e.g. 'barracks'), used to locate
+ *                                the correct row in the widget summary table.
+ * @returns {Object} { 1: { wood, stone, iron, pop, timeSec }, 2: {...}, ... }
+ */
+function parseTWStatsBuildingPage(doc, buildingId) {
+    const result = {};
+
+    // --- Step 1: extract base_time and time_factor from table.widget ---
+    let baseTimeSec = 0;
+    let timeFactor  = 1;
+
+    const widgetTable = doc.querySelector('table.widget');
+    if (widgetTable) {
+        const wRows = widgetTable.querySelectorAll('tr');
+        const wHeaders = Array.from(wRows[0]?.querySelectorAll('th, td') || [])
+            .map(th => th.textContent.trim().toLowerCase());
+
+        // PT: "Tempo de construção base" / "Fator tempo de construção"
+        const baseTimeIdx   = wHeaders.findIndex(h => /tempo.*constru|build.*time|bauzeit/i.test(h));
+        const timeFactorIdx = wHeaders.findIndex(h => /fator.*tempo|time.*factor|zeitfaktor/i.test(h));
+
+        for (let i = 1; i < wRows.length; i++) {
+            // Match this row by the detail= href in the first cell's link
+            if (!wRows[i].querySelector(`a[href*="detail=${buildingId}"]`)) continue;
+
+            const cells = wRows[i].querySelectorAll('td');
+            if (baseTimeIdx >= 0 && cells[baseTimeIdx]) {
+                // Format is "MM:SS" (e.g. "30:0" = 30 min, "9780:0" = 9780 min)
+                const [mins, secs] = cells[baseTimeIdx].textContent.trim().split(':').map(Number);
+                baseTimeSec = (mins || 0) * 60 + (secs || 0);
+            }
+            if (timeFactorIdx >= 0 && cells[timeFactorIdx]) {
+                timeFactor = parseFloat(cells[timeFactorIdx].textContent.trim()) || 1;
+            }
+            break;
+        }
+    }
+
+    // --- Step 2: parse per-level costs from table.vis ---
+    const visTable = doc.querySelector('table.vis');
+    if (!visTable) return result;
+
+    const rows = visTable.querySelectorAll('tr');
+    if (rows.length < 2) return result;
+
+    const headers = Array.from(rows[0].querySelectorAll('th, td'))
+        .map(th => th.textContent.trim().toLowerCase());
+
+    // PT headers: Nível | Madeira | Argila | Ferro | População para desenvolver | População total
+    const levelIdx = headers.findIndex(h => /^n[íi]vel$|^level$|^stufe$/i.test(h));
+    const woodIdx  = headers.findIndex(h => /madeira|wood|holz/i.test(h));
+    const stoneIdx = headers.findIndex(h => /argila|stone|clay|lehm/i.test(h));
+    const ironIdx  = headers.findIndex(h => /ferro|iron|eisen/i.test(h));
+    // "para desenvolver" = pop cost for this upgrade (not cumulative total)
+    const popIdx   = headers.findIndex(h => /para\s+des|for\s+dev|zum\s+aus/i.test(h));
+
+    if (levelIdx === -1 || woodIdx === -1) return result;
+
+    for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i].querySelectorAll('td');
+        if (cells.length <= levelIdx) continue;
+
+        const level = parseInt(cells[levelIdx]?.textContent.trim(), 10);
+        if (isNaN(level) || level <= 0) continue;
+
+        // time(n) = base * factor^(n-1), rounded to nearest second
+        const timeSec = baseTimeSec > 0
+            ? Math.round(baseTimeSec * Math.pow(timeFactor, level - 1))
+            : 0;
+
+        result[level] = {
+            wood:    woodIdx  >= 0 ? parseInt(cells[woodIdx]?.textContent.replace(/[^\d]/g, '') || '0', 10) : 0,
+            stone:   stoneIdx >= 0 ? parseInt(cells[stoneIdx]?.textContent.replace(/[^\d]/g, '') || '0', 10) : 0,
+            iron:    ironIdx  >= 0 ? parseInt(cells[ironIdx]?.textContent.replace(/[^\d]/g, '') || '0', 10) : 0,
+            pop:     popIdx   >= 0 ? parseInt(cells[popIdx]?.textContent.replace(/[^\d]/g, '') || '0', 10) : 0,
+            timeSec, // raw seconds on speed-1, no main-building bonus
+        };
+    }
+
+    return result;
+}
+
+/**
+ * Fetches per-level cost/time data for every building from TWStats and stores it
+ * in localStorage under 'buildings_data'. The fetch is skipped entirely if the key
+ * already exists — the data is static and only needs to be collected once.
+ *
+ * Storage format:
+ *   buildings_data = { barracks: { 1: { wood, stone, iron, pop, time }, 2: {...} }, ... }
+ *
+ * The URL is built from game_data.market and game_data.world so it automatically
+ * targets the correct server (e.g. br.twstats.com/br143 or pt.twstats.com/pt93).
+ * @returns {Promise<Object|null>}
+ */
+async function fetchAndCacheBuildingsData() {
+    const STORAGE_KEY = 'buildings_data';
+
+    if (localStorage.getItem(STORAGE_KEY)) return JSON.parse(localStorage.getItem(STORAGE_KEY));
+
+    const world  = game_data?.world;
+    const market = game_data?.market || (world ? world.replace(/\d+$/, '') : null);
+
+    if (!world || !market) {
+        console.warn('[TW BuildingsData] Cannot determine world/market from game_data — skipping fetch');
+        return null;
+    }
+
+    const buildings = [
+        'main', 'barracks', 'stable', 'garage', 'church', 'church_f',
+        'snob', 'smith', 'place', 'market', 'wood', 'stone', 'iron',
+        'farm', 'storage', 'hide', 'wall', 'watchtower', 'statue'
+    ];
+
+    const baseUrl = `https://${market}.twstats.com/${world}/index.php?page=buildings&detail=`;
+    const buildingsData = {};
+
+    console.log(`[TW BuildingsData] Fetching from ${baseUrl}...`);
+
+    for (const building of buildings) {
+        try {
+            const html = await gmFetch(baseUrl + building);
+            const doc  = new DOMParser().parseFromString(html, 'text/html');
+            const levelData = parseTWStatsBuildingPage(doc, building);
+            if (Object.keys(levelData).length > 0) {
+                buildingsData[building] = levelData;
+                console.log(`[TW BuildingsData] ${building}: ${Object.keys(levelData).length} levels cached`);
+            } else {
+                console.warn(`[TW BuildingsData] ${building}: no level data found (building may not exist in this world)`);
+            }
+        } catch (e) {
+            console.warn(`[TW BuildingsData] Skipping ${building}:`, e.message);
+        }
+    }
+
+    if (Object.keys(buildingsData).length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(buildingsData));
+        console.log('[TW BuildingsData] All buildings cached successfully.');
+    } else {
+        console.warn('[TW BuildingsData] No data was fetched — localStorage not updated.');
+    }
+
+    return buildingsData;
+}
+
 
 
 /**
@@ -1233,6 +1483,7 @@ async function launchAttack(units, targetId) {
             const successMsg = `Attack successfully sent to ${coordX}|${coordY}!`;
             showAutoHideBox(successMsg, false);
             console.log("%c " + successMsg, "color: green; font-weight: bold;");
+            return true;
         } else {
             throw new Error("The server rejected the final command.");
         }
@@ -1242,7 +1493,74 @@ async function launchAttack(units, targetId) {
             showAutoHideBox(error.message, true);
         }
         console.error("Attack Failed:", error.message);
+        return false;
     }
+}
+
+/**
+ * Fetches world settings from /page/settings and caches them in localStorage under
+ * 'world_settings_{world}'. Skips the request if settings are already cached.
+ * Stores: game_speed, unit_speed, resource_factor, archers, church, watchtower,
+ * scavenging, paladin, militia, morale, night_bonus, milliseconds, fake_limit.
+ * @returns {Promise<Object>}
+ */
+async function fetchAndCacheWorldSettings() {
+    const worldKey = 'world_settings_' + (game_data?.world || window.location.hostname);
+    const cached = localStorage.getItem(worldKey);
+    if (cached) return JSON.parse(cached);
+
+    const defaults = { game_speed: 1, unit_speed: 1, resource_factor: 1 };
+    try {
+        const resp = await fetch(window.location.origin + '/page/settings', { credentials: 'include' });
+        if (!resp.ok) return defaults;
+
+        const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+        const rows = [];
+        doc.querySelectorAll('.content-display .data-table tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 2) rows.push({ label: tds[0].textContent.trim(), value: tds[1].textContent.trim() });
+        });
+        if (!rows.length) return defaults;
+
+        const toNum = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+        const settings = {
+            game_speed:      toNum(rows[0]?.value) ?? 1,
+            unit_speed:      toNum(rows[1]?.value) ?? 1,
+            resource_factor: toNum(rows[2]?.value) ?? 1
+        };
+        rows.forEach(({ label, value }) => {
+            const active = /activo|ativo|active|aktiviert|enabled/i.test(value);
+            if (/moral/i.test(label))                          settings.morale        = value.trim();
+            if (/church|igreja/i.test(label))                  settings.church        = active;
+            if (/archer|arqueiro/i.test(label))                settings.archers       = active;
+            if (/watchtower|torre.*vigia/i.test(label))        settings.watchtower    = active;
+            if (/scaveng|busca.*minuci/i.test(label))          settings.scavenging    = active;
+            if (/paladin/i.test(label))                        settings.paladin       = active;
+            if (/militia|mil[ií]cia/i.test(label))             settings.militia       = active;
+            if (/night.*bonus|b[oó]nus.*noit/i.test(label))   settings.night_bonus   = value.trim();
+            if (/milliseconds|milissegundos/i.test(label))     settings.milliseconds  = active;
+            if (/fake.*limit|limite.*ataques/i.test(label))    settings.fake_limit    = value.trim();
+        });
+
+        localStorage.setItem(worldKey, JSON.stringify(settings));
+        console.log('[WorldSettings] Cached for', worldKey, ':', settings);
+        return settings;
+    } catch (e) {
+        console.warn('[WorldSettings] Fetch failed:', e);
+        return defaults;
+    }
+}
+
+/**
+ * Returns the cached world game speed, or 1 if not yet fetched.
+ * @returns {number}
+ */
+function getWorldSpeed() {
+    try {
+        const worldKey = 'world_settings_' + (game_data?.world || window.location.hostname);
+        const s = localStorage.getItem(worldKey);
+        return s ? (JSON.parse(s).game_speed ?? 1) : 1;
+    } catch { return 1; }
 }
 
 /**
@@ -1254,6 +1572,7 @@ function start() {
     // Check for expired session and auto-redirect to the last active world if so
     if (!urlPage.includes('?session_expired') && typeof game_data != 'undefined') {
         serverTimezoneOffsetMs = detectServerTimezoneOffsetMs();
+        fetchAndCacheWorldSettings(); // async, caches for future use; no-op if already cached
         prepareVillageList();
         villageList = localStorage.getItem('villages_info') ? JSON.parse(localStorage.getItem('villages_info')) : [];
         settings_cookies = localStorage.getItem('settings_cookies') ? JSON.parse(localStorage.getItem('settings_cookies')) : settings_cookies;
@@ -1277,15 +1596,31 @@ function start() {
                     functionName(widget.column);
                 }
             });
-        } else if (urlPage.split("&")[2] === "mode=scavenge") {
+        } else if (urlPage.includes("mode=scavenge")) {
             waitForScavengeWidget(injectAutoScavengingOption);
         } else if (urlPage.includes("screen=statue")) {
             $(document).ready(function () {
                 injectScriptAutoTrainerPaladin();
             });
-        } else if (urlPage.includes("&screen=place&target")) {
+        } else if (urlPage.includes('&screen=place&target')) {
             $(document).ready(function () {
                 injectAttackCalculations();
+            });
+        } else if (urlPage.includes('screen=place') && urlPage.includes('mode=sim')) {
+            $(document).ready(function () {
+                if (typeof injectSimulatorPrefill === 'function') injectSimulatorPrefill();
+            });
+        } else if (urlPage.includes('screen=report') && urlPage.includes('view=')) {
+            $(document).ready(function () {
+                if (typeof injectReportToSimulatorButton === 'function') injectReportToSimulatorButton();
+            });
+        } else if (urlPage.includes('screen=train')) {
+            $(document).ready(function () {
+                injectTrainSectionToggles();
+            });
+        } else if (urlPage.includes('screen=info_player') && settings_cookies.general['show__player_profile_stats']) {
+            $(document).ready(function () {
+                if (typeof injectPlayerProfileTWStats === 'function') injectPlayerProfileTWStats();
             });
         }
         insertNavigationArrows();
@@ -1324,6 +1659,7 @@ function start() {
 
         updateMapInfoVillages();
         storeUnitsInfo();
+        fetchAndCacheBuildingsData();
 
         if (settings_cookies.general['show__auto_daily_bonus']) {
             checkAndScheduleDailyBonus();
@@ -1346,6 +1682,70 @@ function start() {
     }
 }
 
+/**
+ * Adds a collapse/expand toggle button to each training section (.current_prod_wrapper)
+ * on the screen=train page. State persists in localStorage per building.
+ */
+function injectTrainSectionToggles() {
+    const toggleKey = 'train_section_collapsed';
+    const collapsed = JSON.parse(localStorage.getItem(toggleKey) || '{}');
+
+    document.querySelectorAll('.current_prod_wrapper').forEach(wrapper => {
+        // Identify this section by its inner replace_* div id (e.g. 'barracks', 'stable')
+        const replaceDiv = wrapper.querySelector('[id^="replace_"]');
+        if (!replaceDiv) return;
+        const sectionId = replaceDiv.id.replace('replace_', '');
+
+        // Find the heading row inside the first vis table (the "next unit" row)
+        const firstTable = replaceDiv.querySelector('table.vis');
+        if (!firstTable) return;
+        const headRow = firstTable.querySelector('tr');
+        if (!headRow) return;
+
+        // Don't inject twice
+        if (headRow.querySelector('.train-section-toggle')) return;
+
+        const isCollapsed = !!collapsed[sectionId];
+
+        // Content to toggle: everything except the first table (i.e. the queue div + footnote)
+        const toggleTargets = Array.from(replaceDiv.children).filter(el => el !== firstTable);
+        toggleTargets.forEach(el => { el.style.display = isCollapsed ? 'none' : ''; });
+
+        // Build toggle button cell
+        const th = document.createElement('th');
+        th.style.cssText = 'width:24px;text-align:center;padding:0;background:none';
+
+        const btn = document.createElement('img');
+        btn.className = 'train-section-toggle';
+        btn.src = `graphic/${isCollapsed ? 'plus' : 'minus'}.png`;
+        btn.style.cssText = 'cursor:pointer;display:block;margin:0 auto;';
+        btn.title = isCollapsed ? 'Expand' : 'Collapse';
+
+        btn.onclick = () => {
+            const nowCollapsed = btn.src.includes('minus');
+            toggleTargets.forEach(el => { el.style.display = nowCollapsed ? 'none' : ''; });
+            btn.src = `graphic/${nowCollapsed ? 'plus' : 'minus'}.png`;
+            btn.title = nowCollapsed ? 'Expand' : 'Collapse';
+            const state = JSON.parse(localStorage.getItem(toggleKey) || '{}');
+            if (nowCollapsed) state[sectionId] = 1; else delete state[sectionId];
+            localStorage.setItem(toggleKey, JSON.stringify(state));
+        };
+
+        th.appendChild(btn);
+
+        // Building name: prefer localized title from overview visual-label, fall back to capitalised id
+        const buildingName = document.querySelector('.visual-label-' + sectionId)?.getAttribute('data-title')
+            || (sectionId.charAt(0).toUpperCase() + sectionId.slice(1));
+
+        const nameTh = document.createElement('th');
+        nameTh.style.cssText = 'text-align:left;padding:0 4px;font-weight:bold;';
+        nameTh.textContent = buildingName;
+
+        headRow.prepend(nameTh);
+        headRow.prepend(th);
+    });
+}
+
 // Intercept Barracks/Stable link clicks and redirect to the unified training screen
 if (settings_cookies.general['redirect__train_buildings']) {
     document.addEventListener("click", (event) => {
@@ -1362,70 +1762,4 @@ if (settings_cookies.general['redirect__train_buildings']) {
             }
         }
     });
-}
-
-
-
-/**
- * Incomplete stub for sending a scavenge mission directly via the scavenge API.
- * TODO: resolve troop counts from settings or DOM; detect the correct option_id.
- */
-function sendScavengeAjax() {
-    // TODO: resolve troop counts from settings or DOM
-    if (game_data) {
-        const squadRequest = {
-            village_id: 14520,
-            candidate_squad: {
-                unit_counts: {
-                    spear: 303,
-                    sword: 150,
-                    axe: 0,
-                    archer: 0,
-                    light: 32,
-                    marcher: 0,
-                    heavy: 0,
-                    knight: 0
-                },
-                carry_max: 12385
-            },
-            option_id: 3, // TODO: detect and store the available scavenge level on first visit
-            use_premium: false
-        };
-
-        const requestData = {
-            squad_requests: [squadRequest],
-            h: game_data.csrf
-        };
-
-        // Flatten the nested request object into URLSearchParams format
-        const body = new URLSearchParams();
-        Object.entries(requestData).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-                value.forEach((item, index) => {
-                    Object.entries(item).forEach(([subKey, subValue]) => {
-                        if (typeof subValue === "object") {
-                            Object.entries(subValue).forEach(([unitKey, unitValue]) => {
-                                body.append(`squad_requests[${index}][${subKey}][unit_counts][${unitKey}]`, unitValue);
-                            });
-                        } else {
-                            body.append(`squad_requests[${index}][${subKey}]`, subValue);
-                        }
-                    });
-                });
-            } else {
-                body.append(key, value);
-            }
-        });
-
-        fetch(game_data.link_base_pure + "scavenge_api&ajaxaction=send_squads", {
-            headers: {
-                "tribalwars-ajax": "1",
-                "x-requested-with": "XMLHttpRequest"
-            },
-            referrer: game_data.link_base_pure + "place&mode=scavenge",
-            body: body.toString(),
-            method: "POST",
-            credentials: "include"
-        });
-    }
 }

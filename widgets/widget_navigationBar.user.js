@@ -290,7 +290,7 @@ function openNavEditorPopup() {
 
         // Save data to LocalStorage and refresh page
         localStorage.setItem('nav_shortcuts', JSON.stringify(newItems));
-        window.location.reload();
+        partialReload();
     };
 
     footer.append(addBtn, saveBtn);
@@ -329,6 +329,8 @@ function openNavEditorPopup() {
  */
 function injectNavigationBar() {
     if (!settings_cookies.general?.['show__navigation_bar']) return;
+
+    document.getElementById('quickbar_outer')?.remove();
 
     const villageId = game_data.village.id;
     const assetBase = _getNavAssetBase();

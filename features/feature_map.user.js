@@ -11,6 +11,17 @@ async function getOutgoingCommandsFromOverview() {
         return;
     }
 
+    // Time-gate: skip fetch if synced within the last 3 minutes.
+    // Uses a session variable (not localStorage) so every page load fetches fresh data.
+    const OUTGOING_TTL_MS = 3 * 60 * 1000;
+    if ((Date.now() - _outgoingCommandsLastFetch) < OUTGOING_TTL_MS) {
+        if (general['show__outgoingInfo_map'] && typeof mapReady === 'function') {
+            await mapReady();
+            addOutgoingIcons();
+        }
+        return;
+    }
+
     try {
         const response = await fetch(game_data.link_base_pure + 'overview');
         const htmlText = await response.text();
@@ -23,11 +34,14 @@ async function getOutgoingCommandsFromOverview() {
         // Handle case where no outgoing commands exist
         if (!outgoingTable) {
             localStorage.setItem('outgoing_units_saved', JSON.stringify([]));
+            _outgoingCommandsCache = [];
             return;
         }
 
         const commandRows = outgoingTable.querySelectorAll('.command-row');
-        const outgoing_units = Array.from(commandRows).map(row => {
+        const outgoingUnitsMap = new Map();
+
+        Array.from(commandRows).forEach(row => {
             const villageLabel = row.querySelector('.quickedit-label');
             const hoverDetails = row.querySelectorAll('.command_hover_details img');
 
@@ -39,15 +53,23 @@ async function getOutgoingCommandsFromOverview() {
                 })
                 .filter(Boolean); // Remove null values
 
-            return {
-                // Extract coordinates from village name (e.g., "Village (500|500)")
-                name: villageLabel?.innerText.match(/\((.*?)\)/)?.[1] || "",
-                imgs: unitList.join(',')
-            };
+            const villageCoords = villageLabel?.innerText.match(/\((.*?)\)/)?.[1] || "";
+            if (!villageCoords) return;
+
+            const existing = outgoingUnitsMap.get(villageCoords) || { name: villageCoords, imgs: [] };
+            existing.imgs.push(...unitList);
+            outgoingUnitsMap.set(villageCoords, existing);
         });
 
-        // Save processed data
+        const outgoing_units = Array.from(outgoingUnitsMap.values()).map(entry => ({
+            name: entry.name,
+            imgs: entry.imgs.join(',')
+        }));
+
+        // Save processed data and update in-memory cache
         localStorage.setItem('outgoing_units_saved', JSON.stringify(outgoing_units));
+        _outgoingCommandsLastFetch = Date.now();
+        _outgoingCommandsCache = outgoing_units;
 
         // Trigger map update if enabled
         if (general['show__outgoingInfo_map'] && typeof mapReady === 'function') {
@@ -83,15 +105,17 @@ const mapReady = () => new Promise((resolve) => {
  * Renders outgoing unit icons directly onto the map based on saved command data.
  */
 function addOutgoingIcons() {
-    const savedData = localStorage.getItem('outgoing_units_saved');
-    if (!savedData) return;
-
-    const outgoingCommands = JSON.parse(savedData);
+    if (_outgoingCommandsCache === null) {
+        const raw = localStorage.getItem('outgoing_units_saved');
+        if (!raw) return;
+        _outgoingCommandsCache = JSON.parse(raw);
+    }
+    const outgoingCommands = _outgoingCommandsCache;
     const mapContainer = document.getElementById('map_container');
     if (!mapContainer) return;
 
     // Remove existing icons to prevent duplicates during map re-renders
-    document.querySelectorAll('.icon_outgoing_unit').forEach(el => el.remove());
+    document.querySelectorAll('.outgoing_units_overlay').forEach(el => el.remove());
 
     outgoingCommands.forEach(command => {
         // Formats "500|500" to "500500" to match TWMap.villages keys
@@ -105,36 +129,149 @@ function addOutgoingIcons() {
 
         const { top, left } = villageElement.style;
         const icons = command.imgs.split(',').filter(Boolean);
+        const iconCounts = icons.reduce((acc, icon) => {
+            acc[icon] = (acc[icon] || 0) + 1;
+            return acc;
+        }, {});
+        const uniqueIcons = Object.keys(iconCounts);
 
         // Use a fragment to batch DOM injections for better performance
         const fragment = document.createDocumentFragment();
 
-        icons.forEach((icon, index) => {
+        uniqueIcons.forEach(icon => {
             const iconId = `icon-${villageCoords}-${icon}`;
 
             // Skip if icon already exists (extra safety)
             if (document.getElementById(iconId)) return;
 
-            const farmIcon = document.createElement("img");
-            farmIcon.id = iconId;
-            // Using a more stable asset path
-            farmIcon.src = `/graphic/command/${icon}.png`;
-            farmIcon.classList.add('icon_outgoing_unit');
+            const cell = document.createElement('div');
+            cell.className = 'icon_outgoing_unit outgoing_units_overlay';
+            cell.id = iconId;
 
-            // Style properties
-            Object.assign(farmIcon.style, {
-                position: 'absolute',
-                top: top,
-                left: `${parseInt(left) - (index * 18)}px`, // Slightly tighter spacing
-                zIndex: '10',
-                pointerEvents: 'none' // Ensures icons don't block map clicks
+            Object.assign(cell.style, {
+                position: 'relative',
+                width: '15px',
+                height: '15px',
+                display: 'block'
             });
 
-            fragment.appendChild(farmIcon);
+            const farmIcon = document.createElement('img');
+            farmIcon.src = `/graphic/command/${icon}.png`;
+            farmIcon.alt = '';
+            Object.assign(farmIcon.style, {
+                width: '15px',
+                height: '15px',
+                display: 'block'
+            });
+
+            cell.appendChild(farmIcon);
+
+            const count = iconCounts[icon];
+            if (count > 1) {
+                const badge = document.createElement('span');
+                badge.textContent = `${count}x`;
+                Object.assign(badge.style, {
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-7px',
+                    padding: '0 2px',
+                    minWidth: '12px',
+                    height: '11px',
+                    lineHeight: '11px',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    color: '#fff',
+                    background: 'rgba(0,0,0,0.75)',
+                    borderRadius: '6px',
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.35)'
+                });
+                cell.appendChild(badge);
+            }
+
+            fragment.appendChild(cell);
         });
 
+        const overlay = document.createElement('div');
+        overlay.id = `outgoing_overlay_${villageCoords}`;
+        overlay.className = 'outgoing_units_overlay';
+        Object.assign(overlay.style, {
+            position: 'absolute',
+            top: top,
+            left: left,
+            zIndex: '10',
+            pointerEvents: 'none',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 15px)',
+            gridAutoRows: '15px',
+            gap: '1px',
+            width: 'max-content',
+            alignItems: 'start'
+        });
+
+        overlay.appendChild(fragment);
+
         // Batch insert before the village element
-        villageElement.parentNode.insertBefore(fragment, villageElement);
+        villageElement.parentNode.insertBefore(overlay, villageElement);
+    });
+}
+
+/**
+ * Renders a dedicated barracks icon for attacks sent through the farm assistant.
+ * This keeps the normal outgoing-command icons untouched.
+ */
+function addFarmAttackIcons() {
+    const savedData = Array.from(_farmAttackCoordsSet);
+    if (!savedData.length) return;
+
+    const farmAttackCoords = savedData;
+    const mapContainer = document.getElementById('map_container');
+    if (!mapContainer) return;
+
+    // Remove standalone overlays and any previously appended barracks icons
+    document.querySelectorAll('.farm_attack_overlay').forEach(el => el.remove());
+    document.querySelectorAll('.farm_attack_img').forEach(el => el.remove());
+
+    farmAttackCoords.forEach(coords => {
+        const villageCoords = coords.replace('|', '');
+        const villageInfo = TWMap.villages[villageCoords];
+        if (!villageInfo) return;
+
+        const villageElement = document.getElementById(`map_village_${villageInfo.id}`);
+        if (!villageElement) return;
+
+        const farmIcon = document.createElement('img');
+        farmIcon.src = _getNavAssetBase() + 'buildings/barracks.png';
+        farmIcon.alt = '';
+        farmIcon.className = 'farm_attack_img';
+        Object.assign(farmIcon.style, { width: '15px', height: '15px', display: 'block' });
+
+        const existingOverlay = document.getElementById(`outgoing_overlay_${villageCoords}`);
+        if (existingOverlay) {
+            // Slot into the existing icon grid — no positional overlap
+            existingOverlay.appendChild(farmIcon);
+        } else {
+            // No outgoing overlay yet — create a standalone one with the same grid layout
+            const { top, left } = villageElement.style;
+            const overlay = document.createElement('div');
+            overlay.id = `outgoing_overlay_${villageCoords}`;
+            overlay.className = 'farm_attack_overlay';
+            Object.assign(overlay.style, {
+                position: 'absolute',
+                top,
+                left,
+                zIndex: '11',
+                pointerEvents: 'none',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 15px)',
+                gridAutoRows: '15px',
+                gap: '1px',
+                width: 'max-content',
+                alignItems: 'start'
+            });
+            overlay.appendChild(farmIcon);
+            villageElement.parentNode.insertBefore(overlay, villageElement);
+        }
     });
 }
 
@@ -145,10 +282,12 @@ function addOutgoingIcons() {
 function addReportHeatmap() {
     if (!settings_cookies.general['show__heatmap_reports']) return;
 
-    const savedData = localStorage.getItem('reports_list');
-    if (!savedData) return;
-
-    const reports = JSON.parse(savedData);
+    if (_reportsListCache === null) {
+        const raw = localStorage.getItem('reports_list');
+        if (!raw) return;
+        _reportsListCache = JSON.parse(raw);
+    }
+    const reports = _reportsListCache;
     const mapContainer = document.getElementById('map_container');
     if (!mapContainer) return;
 
@@ -209,9 +348,21 @@ function addReportHeatmap() {
 async function getReportsList() {
     if (!settings_cookies.general?.['show__extra_options_map_hover']) return;
 
+    // Time-gate: skip fetch if synced within the last 15 minutes
+    const FETCH_TTL_MS = 15 * 60 * 1000;
+    const lastFetch = parseInt(localStorage.getItem('reports_last_fetch') || '0', 10);
+    if ((Date.now() - lastFetch) < FETCH_TTL_MS) {
+        if (settings_cookies.general?.['show__heatmap_reports']) {
+            await mapReady();
+            addReportHeatmap();
+        }
+        return;
+    }
+
     const storedData = localStorage.getItem('reports_list');
     const storedReports = storedData ? JSON.parse(storedData) : [];
     const reportsMap = new Map(storedReports.map(report => [report.coords, report]));
+    const knownIds = new Set(storedReports.map(report => report.id));
 
     const groupIds = [0, 7600];
     const allNewReports = [];
@@ -220,7 +371,7 @@ async function getReportsList() {
         // We use a standard for...of loop here on purpose.
         // This ensures group 7600 only starts after group 0 is completely finished.
         for (const id of groupIds) {
-            const newReports = await fetchAllReports(id);
+            const newReports = await fetchAllReports(id, knownIds);
             allNewReports.push(...newReports);
 
             // Optional: Add a small 200ms rest between groups for extra safety
@@ -234,7 +385,17 @@ async function getReportsList() {
             }
         });
 
-        localStorage.setItem('reports_list', JSON.stringify([...reportsMap.values()]));
+        // Prune entries older than 30 days to prevent unbounded localStorage growth
+        const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+        const pruneThreshold = Date.now() - PRUNE_AGE_MS;
+        for (const [coords, report] of reportsMap) {
+            const ts = new Date(convertDateToISO(report.date) || 0).getTime();
+            if (ts > 0 && ts < pruneThreshold) reportsMap.delete(coords);
+        }
+
+        _reportsListCache = [...reportsMap.values()];
+        localStorage.setItem('reports_list', JSON.stringify(_reportsListCache));
+        localStorage.setItem('reports_last_fetch', String(Date.now()));
         // Refresh the heatmap overlay with the newly fetched report data.
         if (settings_cookies.general?.['show__heatmap_reports']) {
             await mapReady();
@@ -250,7 +411,7 @@ async function getReportsList() {
  * @param {number} groupId - The ID of the report group.
  * @returns {Promise<Array>} List of extracted reports.
  */
-async function fetchAllReports(groupId) {
+async function fetchAllReports(groupId, knownIds = new Set()) {
     const firstPageData = await fetchReportsPage(groupId, 0);
     if (!firstPageData) return [];
 
@@ -264,6 +425,11 @@ async function fetchAllReports(groupId) {
     // Start with reports from the first page
     let allReports = extractReports(doc);
 
+    // Early-stop: if a known report is already on the first page, no need to paginate further
+    if (knownIds.size > 0 && allReports.some(r => knownIds.has(r.id))) {
+        return allReports;
+    }
+
     // Fetch subsequent pages one by one (Sequential)
     // TribalWars uses increments of 12 for the 'from' parameter
     for (let i = 1; i < totalPages; i++) {
@@ -274,6 +440,11 @@ async function fetchAllReports(groupId) {
             const pageDoc = parser.parseFromString(pageData, 'text/html');
             const pageReports = extractReports(pageDoc);
             allReports.push(...pageReports);
+
+            // Early-stop: found a known report — everything after is already cached
+            if (knownIds.size > 0 && pageReports.some(r => knownIds.has(r.id))) {
+                break;
+            }
         }
 
         // Add a small safety delay (throttle) between requests
@@ -335,10 +506,12 @@ function extractReports(doc) {
             const dateElement = row.querySelectorAll('.nowrap')[1];
 
             if (dateElement) {
+                const dotImg = row.querySelector('.report-subject img[src*="dots/"]');
                 reports.push({
                     id: reportId,
                     coords: coordsMatch[1],
-                    date: dateElement.innerText.trim()
+                    date: dateElement.innerText.trim(),
+                    dot: dotImg ? { src: dotImg.src, title: dotImg.getAttribute('data-title') || '' } : null
                 });
             }
         }
@@ -382,12 +555,15 @@ function convertDateToISO(dateStr) {
     const targetDate = new Date();
     const lowerDate = dateStr.toLowerCase();
 
-    // 1. Handle relative dates: "today at 12:00" or "yesterday at 12:00"
-    if (lowerDate.includes(':') && (lowerDate.includes('today') || lowerDate.includes('yesterday'))) {
+    // 1. Handle relative dates: "today at 12:00", "yesterday at 12:00" (EN)
+    //    and "hoje às 12:00", "ontem às 12:00" (PT)
+    const isToday = lowerDate.includes('today') || lowerDate.includes('hoje');
+    const isYesterday = lowerDate.includes('yesterday') || lowerDate.includes('ontem');
+    if (lowerDate.includes(':') && (isToday || isYesterday)) {
         const timeMatch = dateStr.match(/(\d{1,2}):(\d{2})/);
         if (!timeMatch) return null;
 
-        const dayOffset = lowerDate.includes('yesterday') ? -1 : 0;
+        const dayOffset = isYesterday ? -1 : 0;
         targetDate.setTime(twWallClockToEpochMs(
             parseInt(timeMatch[1], 10),
             parseInt(timeMatch[2], 10),
@@ -401,8 +577,11 @@ function convertDateToISO(dateStr) {
         if (!parts) return null;
 
         const monthMap = {
+            // English
             jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+            // Portuguese (months that differ from English abbreviations)
+            fev: 1, abr: 3, mai: 4, ago: 7, set: 8, out: 9, dez: 11
         };
 
         const monthAbbr = parts[1].toLowerCase().replace('.', '');
@@ -442,10 +621,17 @@ function insertReportData(report, popUpBody) {
 
     // Use textContent for the labels to ensure clean rendering
     const header = document.createElement('th');
-    header.textContent = '↓ Last Attack:';
+    header.textContent = '↓ Last Attack';
 
     const data = document.createElement('td');
-    data.textContent = report.date;
+    if (report.dot) {
+        const dotImg = document.createElement('img');
+        dotImg.src = report.dot.src;
+        dotImg.title = report.dot.title;
+        dotImg.style.cssText = 'vertical-align:middle;margin-right:4px;';
+        data.appendChild(dotImg);
+    }
+    data.appendChild(document.createTextNode(report.date));
 
     lastAttackRow.append(header, data);
     popUpBody.appendChild(lastAttackRow);
@@ -454,15 +640,17 @@ function insertReportData(report, popUpBody) {
     const injectCachedRow = (htmlString) => {
         if (!htmlString) return;
 
-        // Use DOMParser to safely extract the table row from the saved string
+        // Use DOMParser to safely extract the tbody from the saved string
         const parser = new DOMParser();
         const doc = parser.parseFromString(`<table>${htmlString}</table>`, 'text/html');
-        const row = doc.querySelector('tr');
+        const tbody = doc.querySelector('tbody');
 
-        if (row) {
-            // Apply a class for potential custom CSS styling
-            row.classList.add('premium-report-row');
-            popUpBody.appendChild(row);
+        if (tbody) {
+            // Move every row from the cached tbody into the popup body
+            tbody.querySelectorAll('tr').forEach(row => {
+                row.classList.add('premium-report-row');
+                popUpBody.appendChild(row);
+            });
         }
     };
 
@@ -478,30 +666,89 @@ function insertReportData(report, popUpBody) {
 async function getReportInfoToMap(currentCoords, currentPopUpBody) {
     if (!settings_cookies.general['show__extra_options_map_hover']) return;
 
-    // --- Morale estimate (points-based TW formula: ~25–100%) ---
+    // --- Morale (server-authoritative via the game's calculate_morale API) ---
+    // The formula-based approach is unreliable: it ignores whether morale is enabled
+    // in this world, and misses the time-based component. The API is the ground truth.
     document.getElementById('info_morale')?.remove();
     const tgtCoords = currentCoords.replace('|', '');
     const tgtVillage = TWMap?.villages?.[tgtCoords];
     if (tgtVillage?.owner && tgtVillage.owner !== game_data?.player?.id) {
         const defPoints = TWMap.players?.[tgtVillage.owner]?.points;
-        const atkPoints = game_data?.player?.points;
-        if (defPoints > 0 && atkPoints > 0) {
-            const morale = Math.max(25, Math.min(100, Math.round(Math.cbrt(defPoints / atkPoints) * 75 + 25)));
-            const color = morale >= 90 ? '#4caf50' : morale >= 70 ? '#ff9800' : morale >= 50 ? '#ff5722' : '#f44336';
-            const moraleRow = document.createElement('tr');
-            moraleRow.id = 'info_morale';
-            const moraleTh = document.createElement('th');
-            moraleTh.textContent = '⚖ Morale:';
-            const moraleTd = document.createElement('td');
-            moraleTd.textContent = `~${morale}%`;
-            moraleTd.style.cssText = `color:${color};font-weight:bold`;
-            moraleRow.append(moraleTh, moraleTd);
-            currentPopUpBody.appendChild(moraleRow);
+        const defName   = TWMap.players?.[tgtVillage.owner]?.name || '';
+        const ownerId   = tgtVillage.owner;
+
+        if (defPoints > 0) {
+            // Helper: inject the morale row into the popup.
+            // Uses a live DOM query instead of the captured currentPopUpBody reference —
+            // the game rebuilds #map_popup innerHTML ~100ms after hover (popup server data),
+            // which detaches the original tbody before the morale POST resolves.
+            // TWMap.popup._currentVillage guards against injecting into a different village's popup.
+            const injectMoraleRow = (morale) => {
+                document.getElementById('info_morale')?.remove();
+                if (TWMap.popup._currentVillage !== tgtVillage.id) return;
+                const liveBody = document.getElementById('map_popup')?.querySelector('tbody');
+                if (!liveBody) return;
+                const color = morale >= 90 ? '#4caf50' : morale >= 70 ? '#ff9800' : morale >= 50 ? '#ff5722' : '#f44336';
+                const moraleRow = document.createElement('tr');
+                moraleRow.id = 'info_morale';
+                const moraleTh = document.createElement('th');
+                moraleTh.textContent = '⚖ Morale:';
+                const moraleTd = document.createElement('td');
+                moraleTd.textContent = `${morale}%`;
+                moraleTd.style.cssText = `color:${color};font-weight:bold`;
+                moraleRow.append(moraleTh, moraleTd);
+                liveBody.appendChild(moraleRow);
+            };
+
+            if (_moraleCache.has(ownerId)) {
+                injectMoraleRow(_moraleCache.get(ownerId));
+            } else {
+                // Async: fire the same POST the game's MoraleCalculator uses.
+                // Passes the defender name so the server can resolve days_played server-side.
+                (async () => {
+                    try {
+                        // When defender_name is known, pass empty defender_points so
+                        // the server does a full player lookup (resolves real points +
+                        // days_played for accurate time-based morale).
+                        // Fall back to local points only if name is unavailable.
+                        const body = new URLSearchParams({
+                            attacker_points: game_data.player.points,
+                            defender_name:   defName,
+                            defender_points: defName ? '' : defPoints,
+                            days_played:     0,
+                            perspective:     'attacker',
+                            h:               game_data.csrf
+                        });
+                        const resp = await fetch(
+                            `${game_data.link_base_pure}place&ajax=calculate_morale&type=morale`,
+                            { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: body.toString() }
+                        );
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        const json = await resp.json();
+                        const morale = json?.morale;
+                        if (morale != null) {
+                            _moraleCache.set(ownerId, morale);
+                            injectMoraleRow(morale);
+                        }
+                    } catch (e) {
+                        console.warn('[Morale] API call failed:', e);
+                    }
+                })();
+            }
         }
     }
 
-    const reports_list = localStorage.getItem('reports_list') ? JSON.parse(localStorage.getItem('reports_list')) : null;
-    const outgoing_units_saved = localStorage.getItem('outgoing_units_saved') ? JSON.parse(localStorage.getItem('outgoing_units_saved')) : null;
+    if (_reportsListCache === null) {
+        const raw = localStorage.getItem('reports_list');
+        if (raw) _reportsListCache = JSON.parse(raw);
+    }
+    const reports_list = _reportsListCache;
+
+    if (_outgoingCommandsCache === null) {
+        const raw = localStorage.getItem('outgoing_units_saved');
+        if (raw) _outgoingCommandsCache = JSON.parse(raw);
+    }
+    const outgoing_units_saved = _outgoingCommandsCache;
 
     if (reports_list) {
         for (let i = 0; i < reports_list.length; i++) {
@@ -512,7 +759,8 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
                 if (report.attackLootResults || report.attackLootDiscoverResults) {
                     insertReportData(report, currentPopUpBody);
                 } else {
-                    // No cached data — fetch the full report page and extract the rows
+                    // No cached data — fetch the full report page, extract and cache the rows,
+                    // then delegate display to insertReportData() (same path as cached reports)
                     try {
                         const response = await fetch('/game.php?screen=report&view=' + report.id);
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -521,32 +769,27 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
                         const parser = new DOMParser();
                         const tempDoc = parser.parseFromString(html, 'text/html');
 
-                        // Build the "Last Attack" date row
-                        const tr = document.createElement('tr');
-                        tr.id = "info_last_attack";
-                        const th = document.createElement('th');
-                        th.textContent = '↓Last Attack:  ';
-                        const td = document.createElement('td');
-                        td.textContent = report.date;
-                        tr.appendChild(th);
-                        tr.appendChild(td);
-                        currentPopUpBody.appendChild(tr);
-
-                        // Extract loot results row from the report
+                        // Extract and shape loot results row
                         const attackLootResults = tempDoc.querySelector('#attack_results tr');
                         if (attackLootResults) {
                             attackLootResults.querySelectorAll('th')[0].innerHTML += ' (' + attackLootResults.querySelectorAll('td')[1].textContent + ')';
                             attackLootResults.removeChild(attackLootResults.querySelectorAll('td')[1]);
-                            currentPopUpBody.appendChild(attackLootResults);
                             report.attackLootResults = attackLootResults.outerHTML;
                         }
 
-                        // Extract spy/discovery results row from the report
-                        const attackLootDiscoverResults = tempDoc.querySelector('#attack_spy_resources tr');
+                        // Extract spy/discovery results rows (exclude relic row)
+                        const attackLootDiscoverResults = tempDoc.querySelector('#attack_spy_resources tbody');
                         if (attackLootDiscoverResults) {
-                            currentPopUpBody.appendChild(attackLootDiscoverResults);
+                            attackLootDiscoverResults.querySelectorAll('tr').forEach(tr => {
+                                if (tr.querySelector('.relic-quality-shoddy, [class*="relic-quality"], [class*="inline-relic"]')) {
+                                    tr.remove();
+                                }
+                            });
                             report.attackLootDiscoverResults = attackLootDiscoverResults.outerHTML;
                         }
+
+                        // Use the same display function as the cached path
+                        insertReportData(report, currentPopUpBody);
 
                         localStorage.setItem('reports_list', JSON.stringify(reports_list));
                     } catch (error) {
@@ -561,7 +804,10 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
     // --- Travel time: all units, compact grid (icons row + H:MM times row) ---
     document.getElementById('info_travel_time')?.remove();
     if (typeof calculateDistanceToTarget === 'function' && game_data?.units) {
-        const unitSpeeds = JSON.parse(localStorage.getItem('units_speed') || '{}');
+        if (_unitSpeedsCache === null) {
+            _unitSpeedsCache = JSON.parse(localStorage.getItem('units_speed') || '{}');
+        }
+        const unitSpeeds = _unitSpeedsCache;
         const distance = calculateDistanceToTarget(currentCoords);
         const units = game_data.units.filter(u => unitSpeeds[u] > 0 && unitSpeeds[u] * distance >= 1);
 
@@ -729,8 +975,6 @@ function createBigMapOption() {
         };
 
         const tdLabel = Object.assign(document.createElement('td'), { colSpan: 2 });
-        // Ensure the label has no background so the orange from the TR shows through
-        tdLabel.style.background = 'none';
 
         const label = Object.assign(document.createElement('label'), {
             textContent: ' Show Large Map',
@@ -791,9 +1035,34 @@ function createBigMapOption() {
     }
 }
 
+// In-memory set of coords attacked via the farm assistant this session.
+// Intentionally not persisted — icons are temporary and reset on page refresh.
+const _farmAttackCoordsSet = new Set();
+
+// In-memory caches for localStorage data read on every map drag.
+// Avoids repeated JSON.parse(localStorage.getItem(...)) on each onMovePixel call.
+// Updated whenever the underlying data is written.
+let _outgoingCommandsCache = null;
+let _reportsListCache = null;
+
+// Session-only TTL for outgoing commands fetch — resets on every page load
+// so a refresh always gets fresh data from the server.
+let _outgoingCommandsLastFetch = 0;
+
+// Per-village session cache for troop templates.
+// Skips re-fetching the rally point dialog for already-visited villages.
+const _troopTemplateSessionCache = new Map();
+
+// Cache for unit speed data — set once at startup, safe to hold in memory.
+let _unitSpeedsCache = null;
+
+// Per-session morale cache keyed by enemy player ID.
+// Avoids a POST request on every re-hover of the same player's village.
+const _moraleCache = new Map();
+
 // Map-based LRU cache for village ID lookups (max 10 entries)
 const _villageCache = new Map();
-const _VILLAGE_CACHE_MAX = 10;
+const _VILLAGE_CACHE_MAX = 150;
 
 /**
  * Retrieves a village ID based on "X|Y" coordinates from the cached map data.
@@ -851,31 +1120,33 @@ let lastFocusId = -1;
 /**
  * Monitors the map's context menu focus.
  * When a village is selected, it updates the target data and troop templates.
+ * Uses event-driven overrides on TWMap.context.spawn/hide instead of setInterval polling.
  */
 function startMapContextWatcher() {
-    setInterval(() => {
-        // Access TWMap context
-        const currentFocus = TWMap?.context?._curFocus;
-
-        // Only proceed if the focus has changed and is a valid village
-        if (currentFocus !== undefined && currentFocus !== lastFocusId) {
-            lastFocusId = currentFocus;
-            if (currentFocus !== -1) {
-                // _curFocus encodes coords as XXXYYYY (e.g. 457370 → "457|370")
-                const focusStr = currentFocus.toString().padStart(6, '0');
-                const focusCoords = focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6);
-
-                const villageId = getVillageIDByCoord(focusCoords);
-
-                GM_setValue('target_village', villageId);
-
-                const distance = calculateDistanceToTarget(focusCoords);
-                GM_setValue("target_distance", distance);
-
-                initializeTroopTemplates(villageId);
-            }
+    const _origSpawn = TWMap.context.spawn.bind(TWMap.context);
+    TWMap.context.spawn = function(village, x, y) {
+        // Hide our buttons before the game repositions mp_att — prevents them from
+        // visibly jumping from the previous village's position to the new one.
+        document.querySelectorAll('.custom-map-ctx-button').forEach(el => {
+            el.style.display = 'none';
+            el.style.opacity = '0';
+        });
+        _origSpawn(village, x, y);
+        const newFocus = 1000 * x + y;
+        if (newFocus !== lastFocusId) {
+            lastFocusId = newFocus;
+            const focusCoords = `${x}|${y}`;
+            GM_setValue('target_village', village.id);
+            GM_setValue('target_distance', calculateDistanceToTarget(focusCoords));
+            initializeTroopTemplates(village.id, parseInt(village.owner, 10) === 0);
         }
-    }, 200); // Checks 5 times per second
+    };
+
+    const _origHide = TWMap.context.hide.bind(TWMap.context);
+    TWMap.context.hide = function() {
+        _origHide();
+        lastFocusId = -1;
+    };
 }
 
 let _troopTemplateAbortController = null;
@@ -885,18 +1156,30 @@ let _troopTemplateAbortController = null;
  * Simulates opening the rally point command window to get template data.
  * @param {string|number} targetID - The ID of the target village.
  */
-async function initializeTroopTemplates(targetID) {
+async function initializeTroopTemplates(targetID, isBarbarian = false) {
     if (!targetID) return;
 
     // Cancel any in-flight request for a previous village
     if (_troopTemplateAbortController) {
         _troopTemplateAbortController.abort();
+        _troopTemplateAbortController = null;
     }
-    _troopTemplateAbortController = new AbortController();
-    const signal = _troopTemplateAbortController.signal;
 
     // Remove existing "fake" buttons before re-rendering to avoid UI clutter
     document.querySelectorAll('.fake-farm-assistant-button').forEach(el => el.remove());
+
+    // Session cache hit: render directly without a network request
+    if (_troopTemplateSessionCache.has(targetID)) {
+        const cachedTemplates = _troopTemplateSessionCache.get(targetID);
+        TroopTemplates.current = cachedTemplates;
+        Object.values(cachedTemplates).filter(t => t.player_id).forEach((template, index) => {
+            if (typeof addFakeFarmAssistantButton === 'function') addFakeFarmAssistantButton(template, index, isBarbarian);
+        });
+        return;
+    }
+
+    _troopTemplateAbortController = new AbortController();
+    const signal = _troopTemplateAbortController.signal;
 
     const url = `${window.location.origin}${game_data.link_base_pure}place&ajax=command&target=${targetID}`;
 
@@ -920,6 +1203,9 @@ async function initializeTroopTemplates(targetID) {
         if (templateMatch?.[1]) {
             const templatesData = JSON.parse(templateMatch[1]);
 
+            // Store in session cache to avoid re-fetching for the same village
+            _troopTemplateSessionCache.set(targetID, templatesData);
+
             // Sync with game's global object
             TroopTemplates.current = templatesData;
 
@@ -935,7 +1221,7 @@ async function initializeTroopTemplates(targetID) {
             templatesArray.forEach((template, index) => {
                 // We pass the template object and index to the button creator
                 if (typeof addFakeFarmAssistantButton === 'function') {
-                    addFakeFarmAssistantButton(template, index);
+                    addFakeFarmAssistantButton(template, index, isBarbarian);
                 }
             });
 
@@ -950,6 +1236,13 @@ async function initializeTroopTemplates(targetID) {
 }
 
 if (typeof TWMap !== 'undefined') {
+    // Hide native Farm Assistant context buttons if the feature is not active for this account
+    if (!game_data.features?.FarmAssistent?.active) {
+        const style = document.createElement('style');
+        style.textContent = '#mp_farm_a, #mp_farm_b, .farmassistant-tooltip { display: none !important; }';
+        document.head.appendChild(style);
+    }
+
     //initiate target_village as 0
     GM_setValue("target_village", 0);
     getOutgoingCommandsFromOverview();
@@ -983,11 +1276,12 @@ if (typeof TWMap !== 'undefined') {
         if (TWMap.map) {
             //on map drag move
             var originalMapOnMove = TWMap.map.handler.onMovePixel;
-            TWMap.map.handler.onMovePixel = async function (e, a) {
+            TWMap.map.handler.onMovePixel = function (e, a) {
                 originalMapOnMove.call(this, e, a);
-                await mapReady();
+                // mapReady() is unnecessary here — drag can only occur when the map is already rendered
                 if (settings_cookies.general['show__outgoingInfo_map']) addOutgoingIcons();
                 if (settings_cookies.general['show__heatmap_reports']) addReportHeatmap();
+                addFarmAttackIcons();
             }
         }
     }
@@ -1003,9 +1297,12 @@ if (typeof TWMap !== 'undefined') {
  * @param {Object} template - A TroopTemplate object.
  * @param {number} index - Zero-based index; index 0 also clears buttons from the previous village.
  */
-function addFakeFarmAssistantButton(template, index) {
+function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
     const ctxButtons = document.getElementById("map-ctx-buttons");
-    const referenceElement = document.getElementById("mp_att"); // use mp_att as reference, since we just want this new ctx for villages that we can attack
+    // Always use mp_att as reference for show/hide tracking (it animates normally for all
+    // attackable villages, including barbarians). For barbarian villages the position is
+    // read from mp_farm_a/mp_farm_b inside updateBasedOnReference instead.
+    const referenceElement = document.getElementById("mp_att");
 
     //remove previous buttons
     if (index === 0) {
@@ -1045,7 +1342,13 @@ function addFakeFarmAssistantButton(template, index) {
     }
 
     newButton.onclick = async function fetchData() {
+        const originalBackgroundImage = newButton.style.backgroundImage;
+        // Capture focus synchronously at click time — lastFocusId can change
+        // during the async launchAttack() if the user moves focus elsewhere.
+        const focusAtClick = lastFocusId;
         try {
+            newButton.style.backgroundImage = 'url(https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif)';
+
             // 1. Define the list of game units to extract from the template
             const unitTypes = game_data.units;
 
@@ -1072,32 +1375,25 @@ function addFakeFarmAssistantButton(template, index) {
             console.log(`Launching attack from template '${template.name}' on target ${targetId}`);
 
             // 4. Call the previously defined launch function
-            await launchAttack(unitsToLaunch, targetId);
+            const attackSucceeded = await launchAttack(unitsToLaunch, targetId);
 
-            // 5. Optimistically update map outgoing icons for immediate visual feedback.
-            // lastFocusId encodes the target coords as XXXYYYY — derive them back.
-            if (lastFocusId > 0) {
-                const focusStr = lastFocusId.toString().padStart(6, '0');
+            // 5. Only update map icons if the attack was actually sent.
+            // Use focusAtClick (captured before the await) — not lastFocusId,
+            // which may have changed while the request was in flight.
+            if (attackSucceeded && focusAtClick > 0) {
+                const focusStr = focusAtClick.toString().padStart(6, '0');
                 const targetCoords = focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6);
-                const launchedUnits = Object.keys(unitsToLaunch).join(',');
 
-                const savedOutgoing = JSON.parse(localStorage.getItem('outgoing_units_saved') || '[]');
-                const existingIdx = savedOutgoing.findIndex(u => u.name === targetCoords);
-                if (existingIdx >= 0) {
-                    // Merge new unit types into the existing entry (no duplicates)
-                    const iconSet = new Set(savedOutgoing[existingIdx].imgs.split(',').filter(Boolean));
-                    Object.keys(unitsToLaunch).forEach(u => iconSet.add(u));
-                    savedOutgoing[existingIdx].imgs = [...iconSet].join(',');
-                } else {
-                    savedOutgoing.push({ name: targetCoords, imgs: launchedUnits });
-                }
-                localStorage.setItem('outgoing_units_saved', JSON.stringify(savedOutgoing));
-
-                if (typeof addOutgoingIcons === 'function') addOutgoingIcons();
+                // Add a temporary barracks icon to show the attack was sent.
+                // This is replaced by real outgoing-command icons on next page load.
+                _farmAttackCoordsSet.add(targetCoords);
+                if (typeof addFarmAttackIcons === 'function') addFarmAttackIcons();
             }
 
         } catch (error) {
             console.warn("Error sending attack:", error);
+        } finally {
+            newButton.style.backgroundImage = originalBackgroundImage;
         }
     };
 
@@ -1123,16 +1419,31 @@ function addFakeFarmAssistantButton(template, index) {
             btn.style.pointerEvents = 'none';
         } else {
             btn.style.pointerEvents = 'auto';
-
-            // Use the reference element's own style coordinates (same container as native TW buttons)
-            const refLeft = parseFloat(ref.style.left) || 0;
-            const refTop = parseFloat(ref.style.top) || 0;
-
-            btn.style.left = `${refLeft + 32}px`;
-            btn.style.top = index === 0
-                ? `${refTop - 15}px`
-                : `${refTop + 53 + (index - 1) * 36}px`;
             btn.style.opacity = refStyle.opacity;
+
+            if (isBarbarian) {
+                // For barbarian villages: read position directly from the native (hidden)
+                // farm assist elements — the game sets their left/top even when display:none.
+                const posEl = index === 0
+                    ? (document.getElementById('mp_farm_a') || document.getElementById('mp_farm_b'))
+                    : (document.getElementById('mp_farm_b') || document.getElementById('mp_farm_a'));
+
+                if (posEl?.style.left) {
+                    btn.style.left = posEl.style.left;
+                    btn.style.top = index <= 1
+                        ? posEl.style.top
+                        : `${parseFloat(posEl.style.top) + (index - 1) * 36}px`;
+                }
+            } else {
+                // Use the reference element's own style coordinates (same container as native TW buttons)
+                const refLeft = parseFloat(ref.style.left) || 0;
+                const refTop = parseFloat(ref.style.top) || 0;
+
+                btn.style.left = `${refLeft + 32}px`;
+                btn.style.top = index === 0
+                    ? `${refTop - 15}px`
+                    : `${refTop + 53 + (index - 1) * 36}px`;
+            }
         }
     }
 

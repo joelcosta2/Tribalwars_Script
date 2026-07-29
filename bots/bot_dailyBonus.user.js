@@ -42,8 +42,10 @@ async function autoDailyBonusCollect() {
     if (!game_data) return;
 
     try {
+        const dailyBonusPageUrl = game_data.link_base_pure + "info_player&mode=daily_bonus";
+
         // Step 1: Load the daily bonus page to find today's collectible chest
-        const pageRes = await fetch(game_data.link_base_pure + "info_player&mode=daily_bonus", {
+        const pageRes = await fetch(dailyBonusPageUrl, {
             credentials: "include"
         });
         const html = await pageRes.text();
@@ -94,7 +96,7 @@ async function autoDailyBonusCollect() {
                 "tribalwars-ajax": "1",
                 "x-requested-with": "XMLHttpRequest"
             },
-            referrer: game_data.link_base_pure + "info_player&mode=daily_bonus",
+            referrer: dailyBonusPageUrl,
             body: `day=${day}&from_screen=profile&h=${game_data.csrf}`,
             credentials: "include"
         });
@@ -105,6 +107,7 @@ async function autoDailyBonusCollect() {
             showAutoHideBox(`Daily bonus: ${result.error}`, true);
         } else {
             showAutoHideBox(`Daily bonus day ${day} collected!`, false);
+            DailyBonus?.reportViewed();
             console.log('[DailyBonus] Success:', result);
         }
 

@@ -244,5 +244,3 @@ As coisas mais relevantes que **ainda não estás a usar** e que seriam úteis:
 5. **`Timing.getCurrentServerTime()`** — substitui o cálculo manual de `serverTimezoneOffsetMs`
 6. **`TribalWars.getSetting/setSetting`** — guardar preferências no servidor (persistem entre dispositivos)
 7. **`UI.Notification.show()`** — toast nativo em vez do teu `showAutoHideBox` customizado
-
-Created 1 todo

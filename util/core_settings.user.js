@@ -1,6 +1,58 @@
 
 
-// Settings PopUp
+/**
+ * Serialises the current settings_cookies object to JSON and triggers a browser download.
+ */
+function exportSettings() {
+    const data = JSON.stringify(settings_cookies, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tw_script_settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Opens a file picker for a JSON file, validates its structure,
+ * writes it to localStorage as settings_cookies, and reloads the page.
+ */
+function importSettings() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const imported = JSON.parse(event.target.result);
+                if (typeof imported !== 'object' || !imported.general || !imported.widgets) {
+                    throw new Error('Invalid structure');
+                }
+                localStorage.setItem('settings_cookies', JSON.stringify(imported));
+                location.reload();
+            } catch (_e) {
+                alert('Invalid settings file.');
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+/**
+ * Reads all checkbox and number inputs from the settings popup and writes their
+ * values back into settings_cookies, then persists to localStorage and reloads.
+ * Handles three storage shapes:
+ *   - Three-part name (e.g. show__auto_paladin_train__maxLevel) → nested object key
+ *   - Two-part name with extraSettings                          → stored as { enabled: value }
+ *   - Simple name                                               → stored as boolean/number
+ */
 function saveScriptSettings() {
     var allSettings = document.querySelectorAll('input[type="checkbox"], input[type="number"]');
 
@@ -10,12 +62,12 @@ function saveScriptSettings() {
 
         var parts = settingName.split("__");
 
-        // Verifica se a configuração tem extraSettings
+        // Check if the setting has extra sub-settings
         var settingConfig = availableSettings.find(s => s.name === parts[0] + (parts[1] ? "__" + parts[1] : ""));
         var hasExtraSettings = settingConfig && settingConfig.extraSettings;
 
         if (parts.length === 3) {
-            // Exemplo: show__auto_paladin_train__level
+            // Three-part key: e.g. show__auto_paladin_train__maxLevel
             var parentKey = parts.slice(0, -1).join("__");
             var childKey = parts[2];
 
@@ -26,25 +78,25 @@ function saveScriptSettings() {
             settings_cookies.general[parentKey][childKey] = settingValue;
 
         } else if (hasExtraSettings) {
-            // Se tiver extraSettings, salva como "enabled"
+            // Two-part key with extra settings: save the top-level checkbox as "enabled"
             if (!settings_cookies.general[settingName] || typeof settings_cookies.general[settingName] !== "object") {
                 settings_cookies.general[settingName] = {};
             }
             settings_cookies.general[settingName]["enabled"] = settingValue;
         } else {
-            // Configurações simples (exemplo: "show__overview_premmium_info")
+            // Simple boolean/number setting: e.g. "show__overview_premium_info"
             settings_cookies.general[settingName] = settingValue;
         }
     }
 
-    // Remove chaves vazias (caso algo tenha sido criado errado)
+    // Remove any empty or undefined keys that may have been created in error
     Object.keys(settings_cookies.general).forEach(key => {
         if (key === "" || settings_cookies.general[key] === undefined) {
             delete settings_cookies.general[key];
         }
     });
 
-    // Salva no localStorage mantendo toda a estrutura original
+    // Persist the full settings object to localStorage, then reload
     localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
     location.reload();
 }
@@ -56,6 +108,8 @@ function saveScriptSettings() {
  */
 function injectScriptSettingsButtom(maincell) {
     const questLog = document.querySelector('.questlog');
+
+    document.getElementById('settings_popup_button')?.remove();
 
     // Create the button container
     const btn = document.createElement('div');
@@ -89,6 +143,10 @@ function injectScriptSettingsButtom(maincell) {
  * Injects the settings popup by assembling components from helper functions.
  */
 function injectScriptSettingsPopUp() {
+    document.getElementById('settings_popup_button')?.remove();
+    document.getElementById('settings_popup')?.remove();
+    document.querySelector('.script-settings-popup-wrapper')?.remove();
+
     // 1. Initialize the entry button
     const maincell = document.getElementsByClassName('maincell')[0];
     if (maincell) {
@@ -116,8 +174,23 @@ function injectScriptSettingsPopUp() {
     container.appendChild(saveButton);
 
     // 4. Final injection into the DOM
+    wrapper.classList.add('script-settings-popup-wrapper');
     wrapper.appendChild(container);
     document.body.appendChild(wrapper);
+
+    // Close on ESC key
+    $(document).off('keydown.script_settings_popup').on('keydown.script_settings_popup', function (e) {
+        if (e.key !== 'Escape') return;
+        const p = document.getElementById('settings_popup');
+        if (p && p.style.display !== 'none') p.style.display = 'none';
+    });
+
+    // Close on click outside the settings popup
+    $(document).off('mousedown.script_settings_popup').on('mousedown.script_settings_popup', function (e) {
+        const p = document.getElementById('settings_popup');
+        if (!p || p.style.display === 'none') return;
+        if (!p.contains(e.target) && !e.target.closest('#settings_popup_button')) p.style.display = 'none';
+    });
 }
 
 /**
@@ -159,6 +232,10 @@ function createPopupHeader(popup) {
     return header;
 }
 
+/**
+ * Creates the horizontal tab navigation bar container.
+ * Tabs are appended to this element by createTabs().
+ */
 function createTabNavigation() {
     var tabNav = document.createElement('div');
     tabNav.id = 'tabNav';
@@ -169,6 +246,12 @@ function createTabNavigation() {
     return tabNav;
 }
 
+/**
+ * Creates all tab buttons and their corresponding content areas from the settings groups,
+ * appends the buttons to tabNav, and returns both arrays for cross-reference.
+ * @param {HTMLElement} tabNav - The navigation container to append tab buttons to.
+ * @returns {{ tabButtons: HTMLElement[], tabContents: HTMLElement[] }}
+ */
 function createTabs(tabNav) {
     var tabButtons = [];
     var tabContents = [];
@@ -307,18 +390,30 @@ function createSaveButton() {
     const saveButton = Object.assign(document.createElement('input'), {
         type: 'submit',
         value: 'Save Changes',
-        className: 'btn btn-save-settings' // Combine native and custom classes
+        className: 'btn btn-save-settings'
     });
-
-    // Handle saving logic
     saveButton.onclick = (e) => {
-        e.preventDefault(); // Prevent accidental form submission/page reload
+        e.preventDefault();
         if (typeof saveScriptSettings === 'function') {
             saveScriptSettings();
         }
     };
 
-    saveButtonDiv.appendChild(saveButton);
+    const exportButton = Object.assign(document.createElement('input'), {
+        type: 'button',
+        value: 'Export',
+        className: 'btn'
+    });
+    exportButton.onclick = () => exportSettings();
+
+    const importButton = Object.assign(document.createElement('input'), {
+        type: 'button',
+        value: 'Import',
+        className: 'btn'
+    });
+    importButton.onclick = () => importSettings();
+
+    saveButtonDiv.append(saveButton, exportButton, importButton);
     return saveButtonDiv;
 }
 
@@ -330,32 +425,32 @@ var availableSettings = [
 
     // Overview Widgets
     { "name": "show__village_list", "label": "Village List Widget", "description": "Displays a quick-access list of your villages on the overview screen." },
-    { "name": "show__recruit_troops", "label": "Recruitment Widget", "description": "Enables a troop recruitment panel on the overview page (Experimental)." },
+    { "name": "show__recruit_troops", "label": "Recruitment Widget", "description": "Enables a troop recruitment panel on the overview page." },
     { "name": "show__notepad", "label": "Village Notepad", "description": "Adds a village-specific notepad for personalized notes and reminders." },
-    { "name": "show__building_queue", "label": "Construction Manager", "description": "Manage your building queue and upgrades directly from the overview screen." },
-    { "name": "show__building_queue_all", "label": "Enhanced Queue Info", "description": "Shows all potential upgrades, including those limited by resources. Supports local fake queues." },
+    { "name": "show__building_queue", "label": "Building Queue Widget", "description": "Manage your building queue and upgrades directly from the overview screen." },
+    { "name": "show__building_queue_all", "label": "Enhanced Building Queue Widget", "description": "Shows all potential upgrades, including those limited by resources. Supports local fake queues." },
+    { "name": "show__resource_dashboard", "label": "Resource Dashboard", "description": "Displays last known wood/stone/iron for all visited villages." },
 
     // Map Enhancements
     { "name": "show__extra_options_map_hover", "label": "Advanced Map Hover", "description": "Reveals detailed village information when hovering over the map." },
     { "name": "show__outgoingInfo_map", "label": "Map Command Overlay", "description": "Displays outgoing command icons directly on the map." },
-
+    { "name": "show__heatmap_reports", "label": "Attack Heat-Map", "description": "Overlays a colour-coded heat-map on the map based on attack reports. Intensity reflects frequency and recency." },
+    { "name": "show__ctx_attack_buttons", "label": "Map CTX Attack Buttons", "description": "Shows quick-send attack buttons in the map context menu based on your troop templates. Clicking a village opens template buttons for instant attacks." },
     // UI / Premium Features
-    { "name": "show__overview_premmium_info", "label": "Visual Building Overview", "description": "Provides a graphical overview of building levels, similar to Premium Account features." },
-    { "name": "show__navigation_bar", "label": "Custom Navigation Bar", "description": "Adds a specialized navigation bar at the top of the screen for easier access." },
-    { "name": "show__time_storage_full_hover", "label": "Storage Timer", "description": "Shows the exact time remaining until your storage is full when hovering over resources." },
+    { "name": "show__overview_premium_info", "label": "Visual Building Overview", "description": "Provides a graphical overview of building levels, similar to Premium Account features." },
+    { "name": "show__navigation_bar", "label": "Custom Navigation Bar", "description": "The customizable quick access bar appears at the top of the screen and allows you to speed up your gaming experience. Navigate anywhere or run a script with just one click!" },
+    { "name": "show__time_storage_full_hover", "label": "Storage Timer", "description": "Shows the time remaining until your storage is full when hovering over resources." },
+    { "name": "show__player_profile_stats", "label": "Player Profile TWStats Info", "description": "Adds extra player stats sourced from TWStats (average points/village, tribe changes, conquers, best rank/points/villages, OD ranking, other worlds) to the player profile page." },
 
     // Automation
-    {
-        "name": "show__auto_scavenging", "label": "Auto-Scavenger", "description": "Automatically manages and sends scavenging runs. (Requires active browser tab).", "extraSettings": {
-            "maxLevel": { "label": "TEMPORARY, TO DEFINE TROOPS?", "type": "number", "default": 0 },
-        }
-    },
     {
         "name": "show__auto_paladin_train", "label": "Auto-Paladin Trainer", "description": "Automatically manages paladin training tasks. (Requires active browser tab).",
         "extraSettings": {
             "maxLevel": { "label": "Train until level:", "type": "number", "default": 30 },
         }
     },
+    { "name": "show__auto_daily_bonus", "label": "Auto Daily Bonus", "description": "Automatically collects the daily login bonus whenever available. Schedules itself for the next day after collecting." },
+    { "name": "show__auto_build_instant_free", "label": "Auto Build Instant Free", "description": "Automatically completes the active building upgrade for free when the 3-minute free window opens." },
 
     // Cleanup
     { "name": "remove__premium_promo", "label": "Hide Premium Ads", "description": "Removes all premium promotional banners and intrusive advertisements from the interface." }
@@ -372,21 +467,26 @@ function getSettingsGroups() {
             "show__recruit_troops",
             "show__notepad",
             "show__building_queue",
-            "show__building_queue_all"
+            "show__building_queue_all",
+            "show__resource_dashboard"
         ],
         "Map": [
             "show__extra_options_map_hover",
-            "show__outgoingInfo_map"
+            "show__outgoingInfo_map",
+            "show__heatmap_reports",
+            "show__ctx_attack_buttons"
         ],
         "UI & UX": [
             "show__navigation_arrows",
             "show__time_storage_full_hover",
-            "show__overview_premmium_info",
-            "show__navigation_bar"
+            "show__overview_premium_info",
+            "show__navigation_bar",
+            "show__player_profile_stats"
         ],
         "Automation": [
-            "show__auto_scavenging",
-            "show__auto_paladin_train"
+            "show__auto_paladin_train",
+            "show__auto_daily_bonus",
+            "show__auto_build_instant_free"
         ],
         "General": [
             "keep_awake",

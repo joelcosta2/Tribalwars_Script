@@ -20,6 +20,15 @@ function getBuildQueueTimeoutId() {
 }
 
 /**
+ * Returns the maximum number of simultaneous active build queue slots.
+ * Premium accounts support up to 15; free accounts support 2.
+ * @returns {number}
+ */
+function getMaxBuildQueueSize() {
+    return game_data?.features?.Premium?.active ? 5 : 2;
+}
+
+/**
  * Renders the extra building queue widget: the active queue header and the full list
  * of available buildings with their upgrade buttons.
  * @param {string[]} availableBuildingsImgs - Image URLs of buildings that can currently be upgraded.
@@ -120,7 +129,7 @@ function injectBuildQueue(availableBuildingsImgs, buildingImgs, availableBuildin
         const dataTitle = canAddToQueue ?
             'Add to queue' :
             'Add to waiting queue';
-        const dataText = createResourceElementsString(buildId);
+        const dataText = createResourceElementsString(buildId, nextLevel);
         upgradeCell.setAttribute('data-title', dataTitle);
         upgradeCell.setAttribute('data-tooltip-tpl', dataText);
         upgradeCell.appendChild(upgradeLink);
@@ -151,51 +160,63 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
     var dateNextSlot, dateLastSlot;
 
     //Get times from the cancel buttons row and check if the queue is full
-    if (cancelButtons.length == 2) {
-        isBuildQueueFull = true;
+    const maxQueueSize = getMaxBuildQueueSize();
+    isBuildQueueFull = cancelButtons.length >= maxQueueSize;
 
-        dateNextSlot = extractBuildTimestampFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
-        dateLastSlot = extractBuildTimestampFromHTML(cancelButtons[1].parentElement.parentElement.children[3].textContent);
+    if (cancelButtons.length > 0) {
+        const allSlotTimestamps = Array.from(cancelButtons).map(btn =>
+            extractBuildTimestampFromHTML(btn.parentElement.parentElement.children[3].textContent)
+        );
+        localStorage.setItem(getBuildQueueKey('building_queue_slots'), JSON.stringify(allSlotTimestamps));
 
+        dateNextSlot = allSlotTimestamps[0];
         localStorage.setItem(getBuildQueueKey('building_queue_next_slot'), dateNextSlot);
-        localStorage.setItem(getBuildQueueKey('building_queue_last_slot'), dateLastSlot);
-        setCancelBuildIds(cancelButtons);
-    } else if (cancelButtons.length == 1) {
-        isBuildQueueFull = false;
 
-        dateNextSlot = extractBuildTimestampFromHTML(cancelButtons[0].parentElement.parentElement.children[3].textContent);
-        localStorage.setItem(getBuildQueueKey('building_queue_next_slot'), dateNextSlot);
-        localStorage.removeItem(getBuildQueueKey('building_queue_last_slot'));
+        if (cancelButtons.length >= 2) {
+            dateLastSlot = allSlotTimestamps[allSlotTimestamps.length - 1];
+            localStorage.setItem(getBuildQueueKey('building_queue_last_slot'), dateLastSlot);
+        } else {
+            localStorage.removeItem(getBuildQueueKey('building_queue_last_slot'));
+        }
         setCancelBuildIds(cancelButtons);
     } else {
         isBuildQueueFull = false;
         localStorage.removeItem(getBuildQueueKey('building_queue_next_slot'));
+        localStorage.removeItem(getBuildQueueKey('building_queue_slots'));
     }
 
+    var queueBuildLevelsActive = [];
     cancelButtons.forEach(function (element) {
-        queueBuildIdsActive.push(element.parentElement.parentElement.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ''));
+        const row = element.parentElement.parentElement;
+        queueBuildIdsActive.push(row.querySelector('.lit-item > img').src.split('/').pop().replace(/\.[^/.]+$/, ''));
+        // Extract actual building level from .lit-item text content — last number is language-agnostic
+        // e.g. "Ferreiro\nN\u00edvel 19" → 19
+        const litText = row.querySelector('.lit-item')?.textContent || '';
+        const lvlMatch = litText.trim().match(/(\d+)\s*$/);
+        queueBuildLevelsActive.push(lvlMatch ? parseInt(lvlMatch[1], 10) : 0);
     })
 
-
-    // TODO: move this block to a dedicated extraction function
-    const buildingsData = {};
+    // Store current building levels and actual next-level build time (HTML-sourced, includes
+    // world-speed + main-building bonus). Costs (wood/stone/iron/pop) come from buildings_data on demand.
+    const buildingLevelsInfo = {};
     tempElement.querySelectorAll("[id^='main_buildrow_']").forEach(row => {
         const buildId = row.id.replace("main_buildrow_", "");
         const tds = row.querySelectorAll("td");
-
         if (tds.length > 2) {
-            const wood = parseInt(row.querySelector(".cost_wood")?.getAttribute("data-cost") || "0", 10);
-            const stone = parseInt(row.querySelector(".cost_stone")?.getAttribute("data-cost") || "0", 10);
-            const iron = parseInt(row.querySelector(".cost_iron")?.getAttribute("data-cost") || "0", 10);
-            const time = tds[4]?.innerText.trim() || "";
-            const population = tds[5]?.innerText.trim() || "";
-
-            buildingsData[buildId] = { wood, stone, iron, time, population };
+            // Level from span text content (same as getAllBuildingsImages) — the image filename
+            // uses a visual tier number (0-4), NOT the actual building level
+            const span = tds[0]?.querySelector('span');
+            const lvlMatch = span?.textContent.match(/\d+/);
+            const currentLevel = lvlMatch ? parseInt(lvlMatch[0], 10) : 0;
+            // Server-rendered time for the next level (exact: includes world speed + main building bonus)
+            const nextLevelTimeStr = tds[4]?.innerText.trim() || '';
+            buildingLevelsInfo[buildId] = { currentLevel, nextLevelTimeStr };
         }
     });
 
-    localStorage.setItem(getBuildQueueKey('nextLevelBuildsQueueInfo'), JSON.stringify(buildingsData))
-    localStorage.setItem(getBuildQueueKey('building_queue_active'), JSON.stringify(queueBuildIdsActive))
+    localStorage.setItem(getBuildQueueKey('nextLevelBuildsQueueInfo'), JSON.stringify(buildingLevelsInfo));
+    localStorage.setItem(getBuildQueueKey('building_queue_active'), JSON.stringify(queueBuildIdsActive));
+    localStorage.setItem(getBuildQueueKey('building_queue_active_levels'), JSON.stringify(queueBuildLevelsActive));
 
     // inject active real queue
     injectAtiveQueueList(queueBuildIdsActive, buildQueueElment)
@@ -211,34 +232,60 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs) {
  * @param {string} buildId - Building identifier (e.g. 'barracks', 'wall').
  * @returns {string} HTML string, or empty string if data is unavailable.
  */
-function createResourceElementsString(buildId) {
-    const storedData = localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo'));
-    if (!storedData) return '';
-
-    const buildingsData = JSON.parse(storedData);
-    const buildInfo = buildingsData[buildId];
+function createResourceElementsString(buildId, nextLevel) {
+    const allBuildingsData = JSON.parse(localStorage.getItem('buildings_data') || '{}');
+    const buildInfo = allBuildingsData[buildId]?.[nextLevel];
     if (!buildInfo) return '';
 
-    function createSpan(className, value) {
+    const currentWood = parseInt(document.getElementById('wood')?.textContent.replace(/\D/g, '') || '0');
+    const currentStone = parseInt(document.getElementById('stone')?.textContent.replace(/\D/g, '') || '0');
+    const currentIron = parseInt(document.getElementById('iron')?.textContent.replace(/\D/g, '') || '0');
+
+    // Build time:
+    // - Immediate next level: use server-rendered time from HTML (exact — includes world speed + main building bonus)
+    // - Deeper queue levels: TWStats base time / worldSpeed * main building reduction factor
+    //   Factor table (% of base time) per main building level, index 0 = not built (100%):
+    const MAIN_BUILDING_FACTORS = [
+        1, 0.95, 0.91, 0.86, 0.82, 0.78, 0.75, 0.71, 0.68, 0.64, 0.61,
+        0.58, 0.56, 0.53, 0.51, 0.48, 0.46, 0.44, 0.42, 0.40, 0.38,
+        0.36, 0.34, 0.33, 0.31, 0.30, 0.28, 0.27, 0.26, 0.24, 0.23
+    ];
+    const levelsInfo = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
+    const levelEntry = levelsInfo[buildId];
+    let timeStr = '';
+    if (levelEntry?.nextLevelTimeStr && nextLevel === levelEntry.currentLevel + 1) {
+        // Exact time from the last server-rendered page
+        timeStr = levelEntry.nextLevelTimeStr;
+    } else if (buildInfo.timeSec) {
+        // Approximation for deeper levels: apply main building reduction
+        const mainLevel = Math.min(
+            levelsInfo['main']?.currentLevel ?? parseInt(game_data?.village?.buildings?.main || '0'),
+            30
+        );
+        const mainFactor = MAIN_BUILDING_FACTORS[mainLevel] ?? 1;
+        timeStr = formatMinutesToTime(Math.round(buildInfo.timeSec / getWorldSpeed() * mainFactor) / 60);
+    }
+
+    function createSpan(className, value, warn) {
         const span = document.createElement("span");
         span.className = `icon header ${className}`;
         span.style.margin = '0';
         const textNode = document.createTextNode(` ${value}`);
-        const wrapper = document.createElement("span"); // Wrapper to keep the correct DOM structure
+        const wrapper = document.createElement("span");
+        if (warn) wrapper.className = 'warn';
         wrapper.appendChild(span);
         wrapper.appendChild(textNode);
         wrapper.style.marginRight = '1px';
-
         return wrapper.outerHTML;
     }
 
     return (`<div>` +
-        createSpan("wood", buildInfo.wood) +
-        createSpan("stone", buildInfo.stone) +
-        createSpan("iron", buildInfo.iron) +
+        createSpan("wood", buildInfo.wood, currentWood < buildInfo.wood) +
+        createSpan("stone", buildInfo.stone, currentStone < buildInfo.stone) +
+        createSpan("iron", buildInfo.iron, currentIron < buildInfo.iron) +
         `<div>` +
-        createSpan("time", buildInfo.time) +
-        (buildInfo.population ? createSpan("population", buildInfo.population) : '') +
+        createSpan("time", timeStr) +
+        (buildInfo.pop ? createSpan("population", buildInfo.pop) : '') +
         `</div>` +
         `</div>`
     );
@@ -246,49 +293,55 @@ function createResourceElementsString(buildId) {
 
 /**
  * Injects icons for buildings currently in the real (server-side) build queue.
- * Each icon shows a live countdown tooltip and triggers cancellation on click.
+ * Each icon shows a rich live-countdown tooltip (building name, costs, finish time,
+ * cancel hint) and opens a confirmation dialog before cancelling.
  * @param {string[]} queueBuildIdsActive - Ordered list of building ids in the active queue.
  * @param {HTMLElement} buildQueueElment - Container TD to append the icons into.
  */
 function injectAtiveQueueList(queueBuildIdsActive, buildQueueElment) {
     if (queueBuildIdsActive.length) {
         queueBuildIdsActive.forEach(function (id, index) {
+            const buildingId = id.replace(/[0-9]/g, '');
+            const buildingName = document.querySelector('.visual-label-' + buildingId)?.getAttribute('data-title') || buildingId;
+
             var anchor = document.createElement('a');
             anchor.className = '';
             anchor.style.display = 'inline-flex';
-            anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span>`);
+            anchor.setAttribute('data-title', `<b>${buildingName}</b>`);
+
+            function fmtMs(ms) {
+                if (ms <= 0) return null;
+                const s = Math.floor((ms / 1000) % 60);
+                const m = Math.floor((ms / 1000 / 60) % 60);
+                const h = Math.floor((ms / 1000 / 60 / 60) % 24);
+                const d = Math.floor(ms / 1000 / 60 / 60 / 24);
+                return (d > 0 ? d + 'd ' : '') + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm ' : '') + s + 's';
+            }
+
+            function buildTooltipBody() {
+                const now = Date.now();
+                const allSlots = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_slots')) || '[]').map(Number);
+
+                let timeHtml = '';
+                if (index === 0) {
+                    const fmt = fmtMs((allSlots[0] || 0) - now);
+                    timeHtml = fmt
+                        ? `<div style="margin-top:3px;border-top:1px solid #c1a264;padding-top:3px;">Finishes in <b>${fmt}</b></div>`
+                        : `<div style="margin-top:3px;color:#aaa;">Finishing soon\u2026</div>`;
+                } else {
+                    const startFmt = fmtMs((allSlots[index - 1] || 0) - now);
+                    const endFmt = fmtMs((allSlots[index] || 0) - now);
+                    timeHtml = (startFmt ? `<div style="margin-top:3px;border-top:1px solid #c1a264;padding-top:3px;">Starts in <b>${startFmt}</b></div>` : '')
+                        + (endFmt ? `<div>Finishes in <b>${endFmt}</b></div>` : `<div style="color:#aaa;">Finishing soon\u2026</div>`);
+                }
+
+                const cancelHint = `<div style="margin-top:4px;border-top:1px solid #c1a264;padding-top:3px;color:#e06060;">\u2715 Click to cancel this build</div>`;
+                return timeHtml + cancelHint;
+            }
 
             function updateCountdown(event) {
-                const now = Date.now();
-                // index 0: time until first build finishes (next_slot)
-                // index 1: "Starts in" = time until first build finishes (also next_slot, not last_slot)
-                const remainingTime = parseInt(localStorage.getItem(getBuildQueueKey('building_queue_next_slot'))) - now;
-
-                if (remainingTime <= 0) {
-                    anchor.setAttribute('data-title', 'Build complete!');
-                    return; // Stop the countdown when it reaches zero
-                }
-
-                const seconds = Math.floor((remainingTime / 1000) % 60);
-                const minutes = Math.floor((remainingTime / 1000 / 60) % 60);
-                const hours = Math.floor((remainingTime / 1000 / 60 / 60) % 24);
-                const days = Math.floor(remainingTime / 1000 / 60 / 60 / 24);
-
-                const formattedCountdown =
-                    (days > 0 ? `${days}d ` : '') +
-                    (hours > 0 ? `${hours}h ` : '') +
-                    (minutes > 0 ? `${minutes}m ` : '') +
-                    `${seconds}s`;
-
-                if (index == 0) {
-                    anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span>`);
-                    anchor.setAttribute('data-tooltip-tpl', `${formattedCountdown}`);
-                } else {
-                    anchor.setAttribute('data-title', `<span class='warn_90'>Cancel build</span>`);
-                    anchor.setAttribute('data-tooltip-tpl', `Starts in ${formattedCountdown}`);
-                }
+                anchor.setAttribute('data-tooltip-tpl', buildTooltipBody());
                 toggleTooltip(event.target, true);
-
                 event.target.countdownTimeout = setTimeout(() => updateCountdown(event), 1000);
             }
 
@@ -297,12 +350,24 @@ function injectAtiveQueueList(queueBuildIdsActive, buildQueueElment) {
             anchor.onclick = function () {
                 if (typeof toggleTooltip === 'function') toggleTooltip(span, false);
                 clearTimeout(span.countdownTimeout);
-                removeFromActiveBuildQueue(index);
-            }
+                const tooltipEl = document.getElementById('tooltip');
+                if (tooltipEl) tooltipEl.style.display = 'none';
+                UI.ConfirmationBox(
+                    'Cancel <b>' + escapeHtml(buildingName) + '</b> upgrade?<br><span style="color:#888;font-size:11px;">This removes it from the server queue and cannot be undone.</span>',
+                    [{
+                        text: 'OK',
+                        callback: function () { removeFromActiveBuildQueue(index); },
+                        confirm: true
+                    }],
+                    'tw_cancel_active_build_' + index,
+                    false,
+                    true
+                );
+            };
 
             var span = document.createElement('span');
             span.className = 'icon header village active_queue';
-            span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/95eda994/graphic/buildings/mid/' + id + '.png)'
+            span.style.backgroundImage = 'url(https://dspt.innogamescdn.com/asset/95eda994/graphic/buildings/mid/' + id + '.png)';
             span.style.backgroundPosition = '0px 0px';
             span.style.backgroundSize = 'contain';
             span.style.backgroundRepeat = 'no-repeat';
@@ -313,14 +378,14 @@ function injectAtiveQueueList(queueBuildIdsActive, buildQueueElment) {
             span.style.cursor = 'pointer';
 
             span.addEventListener('mouseenter', function (event) {
+                anchor.setAttribute('data-tooltip-tpl', buildTooltipBody());
                 toggleTooltip(event.target, true);
-                updateCountdown(event)
+                updateCountdown(event);
             });
             span.addEventListener('mouseleave', function (event) {
                 toggleTooltip(event.target, false);
                 clearTimeout(event.target.countdownTimeout);
             });
-
 
             var progressBar = document.createElement('div');
             progressBar.style.position = 'absolute';
@@ -352,21 +417,28 @@ function injectFakeQueueList(queueBuildIdsActive, buildQueueElment, allBuildings
 
     // Scheduled time (ms epoch) when addToBuildQueue() will next fire for this village
     const scheduledEndTime = parseInt(localStorage.getItem('endTime_' + getBuildQueueTimeoutId())) || 0;
+    // Target levels stored at queue-add time (building_queue_levels mirrors building_queue)
+    const fakeQueueLevels = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
 
     queueBuildIds.forEach(function (id, fakeIndex) {
+        const buildingName = document.querySelector('.visual-label-' + id)?.getAttribute('data-title') || id;
+
         var anchor = document.createElement('a');
         anchor.className = '';
         anchor.style.display = 'inline-flex';
-        anchor.setAttribute('data-title', 'Remove from waiting queue');
+        anchor.setAttribute('data-title', `<b>${buildingName}</b>`);
         anchor.style.border = '1px solid #7d510f';
         anchor.onclick = function () {
             if (typeof toggleTooltip === 'function') toggleTooltip(span, false);
             clearTimeout(span.countdownTimeout);
+            const tooltipEl = document.getElementById('tooltip');
+            if (tooltipEl) tooltipEl.style.display = 'none';
             var index = Array.from(this.parentElement.children).indexOf(this);
             removeFromBuildQueue(index - queueBuildIdsActive.length);
         }
 
-        const costHtml = createResourceElementsString(id) || '';
+        const _fakeTargetLevel = fakeQueueLevels[fakeIndex] || 0;
+        const costHtml = createResourceElementsString(id, _fakeTargetLevel) || '';
 
         // Builds tooltip body: resource costs + time info line
         function buildTooltipBody() {
@@ -379,14 +451,15 @@ function injectFakeQueueList(queueBuildIdsActive, buildQueueElment, allBuildings
                     const h = Math.floor((remaining / 1000 / 60 / 60) % 24);
                     const d = Math.floor(remaining / 1000 / 60 / 60 / 24);
                     const fmt = (d > 0 ? d + 'd ' : '') + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm ' : '') + s + 's';
-                    timeHtml = `<div style="margin-top:3px;border-top:1px solid #c1a264;padding-top:3px;color:#888;">Next attempt in ${fmt}</div>`;
+                    timeHtml = `<div style="margin-top:3px;border-top:1px solid #c1a264;padding-top:3px;color:#888;">Next attempt in <b>${fmt}</b></div>`;
                 } else {
                     timeHtml = `<div style="margin-top:3px;color:#aaa;">Retrying soon\u2026</div>`;
                 }
             } else if (fakeIndex > 0) {
                 timeHtml = `<div style="margin-top:3px;border-top:1px solid #c1a264;padding-top:3px;color:#aaa;">Position ${fakeIndex + 1} in waiting queue</div>`;
             }
-            return costHtml + timeHtml;
+            const removeHint = `<div style="margin-top:4px;border-top:1px solid #c1a264;padding-top:3px;color:#e06060;">\u2715 Click to remove from waiting queue</div>`;
+            return costHtml + timeHtml + removeHint;
         }
 
         anchor.setAttribute('data-tooltip-tpl', buildTooltipBody());
@@ -468,8 +541,9 @@ function injectQueues(mainElement, update) {
             if (!isBuildQueueFull && !_wfq.buildId) {
                 // Slot free, not already waiting for resources — compare costs against DOM values now.
                 const waitingBuildId = _bq[0];
-                const buildData = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
-                const buildInfo = buildData[waitingBuildId];
+                const _allBuildingsData = JSON.parse(localStorage.getItem('buildings_data') || '{}');
+                const _fakeQueueLevels = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+                const buildInfo = _allBuildingsData[waitingBuildId]?.[_fakeQueueLevels[0] || 0];
                 const woodEl = document.getElementById('wood');
                 const stoneEl = document.getElementById('stone');
                 const ironEl = document.getElementById('iron');
@@ -507,7 +581,7 @@ function getAllBuildingsImages(tempElement) {
                     var buildButtons = tr.querySelector('.btn-build');
                     if (buildButtons) {
                         const span = tds[0].querySelector('span');
-                        const lvl = span ? span.textContent.match(/\d+/) : null;
+                        const lvl = span ? (span.textContent.match(/\d+/) || ['0']) : null;
                         const a = tds[0].querySelector('a');
 
                         //get lvls and images for available buildings only
@@ -552,8 +626,17 @@ function addToBuildQueue(build_id) {
             callUpgradeBuilding(build_id);
         } else {
             var building_queue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue')) || '[]');
-            building_queue.push(build_id)
+            // Compute and store the actual target level for this new queue entry
+            const _levInfo = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
+            const _actQueue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_active')) || '[]');
+            const _actCount = _actQueue.filter(x => x.replace(/\d+/g, '') === build_id).length;
+            const _qCount = building_queue.filter(x => x === build_id).length;
+            const _targetLevel = (_levInfo[build_id]?.currentLevel || 0) + _actCount + _qCount + 1;
+            building_queue.push(build_id);
             localStorage.setItem(getBuildQueueKey('building_queue'), JSON.stringify(building_queue));
+            var _bql = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+            _bql.push(_targetLevel);
+            localStorage.setItem(getBuildQueueKey('building_queue_levels'), JSON.stringify(_bql));
 
             updateBuildQueueTimers();
 
@@ -588,6 +671,9 @@ function removeFromBuildQueue(build_index) {
     var building_queue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue')));
     building_queue.splice(build_index, 1);
     localStorage.setItem(getBuildQueueKey('building_queue'), JSON.stringify(building_queue));
+    var _bqlRemove = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+    _bqlRemove.splice(build_index, 1);
+    localStorage.setItem(getBuildQueueKey('building_queue_levels'), JSON.stringify(_bqlRemove));
 
     if (build_index === 0) {
         const bqId = getBuildQueueTimeoutId();
@@ -620,7 +706,10 @@ async function removeFromActiveBuildQueue(build_index) {
         var building_active_queue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_active')));
         building_active_queue.splice(build_index, 1);
         localStorage.setItem(getBuildQueueKey('building_queue_active'), JSON.stringify(building_active_queue));
-        isBuildQueueFull = building_active_queue.length >= 2;
+        var _activeLevels = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_active_levels')) || '[]');
+        _activeLevels.splice(build_index, 1);
+        localStorage.setItem(getBuildQueueKey('building_queue_active_levels'), JSON.stringify(_activeLevels));
+        isBuildQueueFull = building_active_queue.length >= getMaxBuildQueueSize();
 
         const lastMainPage = localStorage.getItem(getBuildQueueKey('last_main_page'));
         if (lastMainPage && cancelResponse?.next_buildings) {
@@ -671,10 +760,19 @@ function callUpgradeBuilding(id) {
                 const wasFromQueue = building_queue[0] === id;
 
                 if (isError !== null || !main) {
+                    // Detect full queue from the response HTML in case isBuildQueueFull is stale
+                    const queueFullInResponse = tempElement.querySelectorAll('.btn-cancel').length >= getMaxBuildQueueSize();
                     // Error: item was NOT removed — if it came from a direct click (not queue), add to front
                     if (!wasFromQueue) {
                         building_queue.unshift(id);
                         localStorage.setItem(getBuildQueueKey('building_queue'), JSON.stringify(building_queue));
+                        const _levInfoErr = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
+                        const _actQueueErr = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_active')) || '[]');
+                        const _actCountErr = _actQueueErr.filter(x => x.replace(/\d+/g, '') === id).length;
+                        const _failedLevel = (_levInfoErr[id]?.currentLevel || 0) + _actCountErr + 1;
+                        var _bqlErr = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+                        _bqlErr.unshift(_failedLevel);
+                        localStorage.setItem(getBuildQueueKey('building_queue_levels'), JSON.stringify(_bqlErr));
                     }
                     var missingRessourceBuildRow = tempElement.querySelector('#main_buildrow_' + id + ' .inactive');
                     var timeAvailable = missingRessourceBuildRow ? extractBuildTimeFromHTML(missingRessourceBuildRow.textContent) : null;
@@ -682,6 +780,10 @@ function callUpgradeBuilding(id) {
                     if (timeAvailable) {
                         showAutoHideBox('Added to queue at ' + (timeAvailable[0] == '0' ? 'Today' : 'Tomorrow') + ' @ ' + timeAvailable[1] + ':' + timeAvailable[2]);
                         localStorage.setItem(getBuildQueueKey('waiting_for_queue'), JSON.stringify({ buildId: id, time: timeAvailable }));
+                        updateBuildQueueTimers();
+                    } else if (isBuildQueueFull || queueFullInResponse) {
+                        showAutoHideBox('Queue is full — waiting for a slot to free up.', false);
+                        localStorage.setItem(getBuildQueueKey('waiting_for_queue'), JSON.stringify({ buildId: id }));
                         updateBuildQueueTimers();
                     } else {
                         // Countdown timer in DOM — can't parse exact time. Retry in ~1 min.
@@ -696,6 +798,9 @@ function callUpgradeBuilding(id) {
                     if (wasFromQueue) {
                         building_queue.shift();
                         localStorage.setItem(getBuildQueueKey('building_queue'), JSON.stringify(building_queue));
+                        var _bqlShift = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+                        _bqlShift.shift();
+                        localStorage.setItem(getBuildQueueKey('building_queue_levels'), JSON.stringify(_bqlShift));
                     }
                     localStorage.setItem(getBuildQueueKey('waiting_for_queue'), JSON.stringify({}));
                     showAutoHideBox('Build sent to queue!', false);
@@ -712,6 +817,7 @@ function callUpgradeBuilding(id) {
         var building_queue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue')) || '[]');
         building_queue = building_queue.filter(item => item !== null);
         localStorage.setItem(getBuildQueueKey('building_queue'), JSON.stringify(building_queue));
+        localStorage.removeItem(getBuildQueueKey('building_queue_levels'));
         localStorage.removeItem(getBuildQueueKey('building_queue_next_slot'));
 
         showAutoHideBox('Invalid queue entry — queue reset.', true);
@@ -817,9 +923,14 @@ function updateBuildQueueTimers() {
 function checkEarlyBuildOpportunity() {
     const waitingFor = JSON.parse(localStorage.getItem(getBuildQueueKey('waiting_for_queue')) || '{}');
     if (!waitingFor.buildId) return;
+    if (isBuildQueueFull) return;
+    // Guard against stale in-memory flag on page load: check the persisted active queue
+    const _activeQueue = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_active')) || '[]');
+    if (_activeQueue.length >= 2) return;
 
-    const buildData = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
-    const buildInfo = buildData[waitingFor.buildId];
+    const _allBuildingsData = JSON.parse(localStorage.getItem('buildings_data') || '{}');
+    const _fakeQueueLevels = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+    const buildInfo = _allBuildingsData[waitingFor.buildId]?.[_fakeQueueLevels[0] || 0];
     if (!buildInfo) return;
 
     const woodEl = document.getElementById('wood');
@@ -857,10 +968,13 @@ function scheduleCompletionNotification() {
     buildCompletionTimeouts.forEach(t => clearTimeout(t));
     buildCompletionTimeouts = [];
 
-    const slots = [
-        parseInt(localStorage.getItem(getBuildQueueKey('building_queue_next_slot'))),
-        parseInt(localStorage.getItem(getBuildQueueKey('building_queue_last_slot')))
-    ];
+    const _storedSlots = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_slots')) || '[]');
+    const slots = _storedSlots.length > 0
+        ? _storedSlots.map(Number)
+        : [
+            parseInt(localStorage.getItem(getBuildQueueKey('building_queue_next_slot'))),
+            parseInt(localStorage.getItem(getBuildQueueKey('building_queue_last_slot')))
+          ];
 
     slots.forEach(function (slot) {
         if (isNaN(slot) || slot <= 0) return;
@@ -896,6 +1010,8 @@ function startBuildQueueResourcePolling() {
             return;
         }
 
+        if (isBuildQueueFull) return;
+
         // Read resource counts directly from the live DOM — no fetch needed
         const woodEl = document.getElementById('wood');
         const stoneEl = document.getElementById('stone');
@@ -906,8 +1022,9 @@ function startBuildQueueResourcePolling() {
         const stone = parseInt(stoneEl.textContent.replace(/\D/g, '') || '0');
         const iron = parseInt(ironEl.textContent.replace(/\D/g, '') || '0');
 
-        const buildData = JSON.parse(localStorage.getItem(getBuildQueueKey('nextLevelBuildsQueueInfo')) || '{}');
-        const buildInfo = buildData[waiting.buildId];
+        const _allBuildingsData = JSON.parse(localStorage.getItem('buildings_data') || '{}');
+        const _fakeQueueLevels = JSON.parse(localStorage.getItem(getBuildQueueKey('building_queue_levels')) || '[]');
+        const buildInfo = _allBuildingsData[waiting.buildId]?.[_fakeQueueLevels[0] || 0];
         if (!buildInfo) return;
 
         if (wood >= buildInfo.wood && stone >= buildInfo.stone && iron >= buildInfo.iron) {

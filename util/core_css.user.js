@@ -285,16 +285,21 @@ var customCSS = `
 }
 
 
+/* Scavenge bot config panel */
+#scavenge_bot_config div.vis {
+    margin: 0;
+}
+
+
 /* Custom Map Styles */
 
 .custom-map-ctx-button {
     cursor: pointer;
 }
 .icon_outgoing_unit {
-    width: 18;
-    height: 18;
+    width: 15px;
+    height: 15px;
     position: absolute;
-    margin-left: 30px;
     z-index: 4;
 }
 

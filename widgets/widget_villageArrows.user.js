@@ -99,6 +99,9 @@ function insertNavigationArrows() {
     const menuRow = document.getElementById('menu_row2');
     if (!menuRow) return;
 
+    document.getElementById('village_switch_previous')?.closest('td')?.remove();
+    document.getElementById('village_switch_next')?.closest('td')?.remove();
+
     const htmlToInject = `
         <td class="box-item icon-box separate arrowCell">
             <a id="village_switch_previous" class="village_switch_link" accesskey="a">
@@ -130,6 +133,8 @@ function insertListVillagesPopup() {
 
     const menuRow2 = document.getElementById("menu_row2");
     if (!menuRow2) return;
+
+    document.querySelector('.box-item.box-item-village-list')?.remove();
 
     // Create container cell
     const td = document.createElement("td");

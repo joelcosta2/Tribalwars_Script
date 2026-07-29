@@ -18,13 +18,16 @@ infoOverview.farm = infoOverview.farm || "";
 /**
  * Fetches storage fill times from the storage screen and injects a countdown onto the
  * storage tile. Also caches the times in localStorage and triggers resource hovers.
+ * @param {Function} [callback] - Called after cache is updated with storage times.
  * @returns {number} Unix timestamp (seconds) of whichever resource fills first, or 0.
  */
-function getStorageTime() {
+function getStorageTime(callback) {
     let minTime = 0;
 
     const storageCapacity = document.querySelector('#storage');
-    localStorage.setItem('storage_capacity', storageCapacity.textContent)
+    if (storageCapacity) {
+        localStorage.setItem('storage_capacity', storageCapacity.textContent);
+    }
 
     if (settings_cookies.general['show__time_storage_full_hover'] && game_data) {
         $.ajax({
@@ -37,7 +40,8 @@ function getStorageTime() {
                     stone: $(spans[1]).attr("data-endtime"),
                     iron: $(spans[2]).attr("data-endtime")
                 };
-                localStorage.setItem('full_storage_times', JSON.stringify(fullStorageTimes));
+                const villageId = game_data.village?.id || 'unknown';
+                localStorage.setItem(`full_storage_times_${villageId}`, JSON.stringify(fullStorageTimes));
 
                 //hovers resources
                 addRessourcesHover(fullStorageTimes);
@@ -55,8 +59,14 @@ function getStorageTime() {
                         addToVisualLabelExtra('storage', `${hours}:${minutes}:${seconds}`, true, minTime);
                     }
                 }
+
+                // Call callback after cache is updated
+                if (typeof callback === 'function') callback();
             }
         });
+    } else {
+        // If setting is disabled, call callback immediately
+        if (typeof callback === 'function') callback();
     }
     return minTime; // Returns the timestamp of whichever resource fills first
 }
@@ -85,7 +95,8 @@ function addRessourcesHover(fullStorageTimes) {
                         parentInfoBox.dataset.interval = setInterval(function () {
                             const resourceHover = localStorage.getItem('resourceHover');
                             if (resourceHover) {
-                                const latestTimes = JSON.parse(localStorage.getItem('full_storage_times')) || {};
+                                const villageId = game_data.village?.id || 'unknown';
+                                const latestTimes = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`)) || {};
                                 startResourceTimerFull(parseInt(latestTimes[resourceHover]), bodyElement);
                             }
                         }, 500);
@@ -95,12 +106,14 @@ function addRessourcesHover(fullStorageTimes) {
                         parentInfoBox.dataset.hoverBound = '1';
 
                         parentInfoBox.addEventListener("mouseenter", function () {
-                            const latestTimes = JSON.parse(localStorage.getItem('full_storage_times')) || {};
+                            const villageId = game_data.village?.id || 'unknown';
+                            const latestTimes = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`)) || {};
                             startResourceTimerFull(parseInt(latestTimes[resourceId]), bodyElement);
                             localStorage.setItem('resourceHover', resourceId);
                         });
                         iconBox.addEventListener("mouseenter", function () {
-                            const latestTimes = JSON.parse(localStorage.getItem('full_storage_times')) || {};
+                            const villageId = game_data.village?.id || 'unknown';
+                            const latestTimes = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`)) || {};
                             startResourceTimerFull(parseInt(latestTimes[resourceId]), bodyElement);
                             localStorage.setItem('resourceHover', resourceId);
                         });
@@ -123,7 +136,8 @@ function addRessourcesHover(fullStorageTimes) {
  * @returns {Object} { perHour, fullEndTime } or {} if data is unavailable.
  */
 function getWoodInfo() {
-    const storageFullTime = JSON.parse(localStorage.getItem('full_storage_times'));
+    const villageId = game_data.village?.id || 'unknown';
+    const storageFullTime = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`));
     if (storageFullTime) {
         const fullTime = storageFullTime['wood'];
         if (fullTime) {
@@ -148,7 +162,8 @@ function getWoodInfo() {
  * @returns {Object}
  */
 function getStoneInfo() {
-    const storageFullTime = JSON.parse(localStorage.getItem('full_storage_times'));
+    const villageId = game_data.village?.id || 'unknown';
+    const storageFullTime = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`));
     if (storageFullTime) {
         const fullTime = storageFullTime['stone'];
         if (fullTime) {
@@ -174,7 +189,8 @@ function getStoneInfo() {
  * @returns {Object}
  */
 function getIronInfo() {
-    const storageFullTime = JSON.parse(localStorage.getItem('full_storage_times'));
+    const villageId = game_data.village?.id || 'unknown';
+    const storageFullTime = JSON.parse(localStorage.getItem(`full_storage_times_${villageId}`));
     if (storageFullTime) {
         const fullTime = storageFullTime['iron'];
         if (fullTime) {
@@ -435,7 +451,7 @@ function storeAvailableUnitsCosts(data) {
         }
     });
 
-    // Also store localized name, image src, and in-village count from each unit row
+    // Also store localized name and image src from each unit row (global data)
     $(data).find('tr.row_a, tr.row_b').each(function(_, row) {
         const link = $(row).find('a.unit_link');
         if (!link.length) return;
@@ -454,69 +470,88 @@ function storeAvailableUnitsCosts(data) {
                 break;
             }
         }
+    });
+
+    // Merge into existing global unit costs so data from all villages accumulates.
+    // Units not present in this village's training form are preserved from previous fetches.
+    const existingCosts = JSON.parse(localStorage.getItem('unit_managers_costs')) || {};
+    const mergedCosts = Object.assign({}, existingCosts);
+    for (const unit in unitCosts) {
+        mergedCosts[unit] = Object.assign({}, existingCosts[unit] || {}, unitCosts[unit]);
+    }
+    localStorage.setItem('unit_managers_costs', JSON.stringify(mergedCosts));
+
+    // Also store per-village unit counts (per-village specific data)
+    storeVillageUnitCounts(data);
+}
+
+/**
+ * Extracts in-village unit counts (X/Y format) from the training page
+ * and stores them per-village in localStorage.
+ * @param {string} data - Raw HTML of the training screen.
+ */
+function storeVillageUnitCounts(data) {
+    const villageId = game_data.village?.id || 'unknown';
+    const unitCounts = {};
+    
+    $(data).find('tr.row_a, tr.row_b').each(function(_, row) {
+        const link = $(row).find('a.unit_link');
+        if (!link.length) return;
+        const unitType = link.data('unit');
+        if (!unitType) return;
 
         // In-village count from 3rd column (format "X/Y")
         const tds = $(row).find('td');
         if (tds.length >= 3) {
             const countText = $(tds[2]).text().trim();
             if (countText && countText.includes('/')) {
-                unitCosts[unitType].count = countText;
+                unitCounts[unitType] = countText;
             }
         }
     });
-
-    localStorage.setItem('unit_managers_costs', JSON.stringify(unitCosts));
+    
+    localStorage.setItem(`village_unit_counts_${villageId}`, JSON.stringify(unitCounts));
 }
 
 /**
- * Parses the current training queue for barracks, stable, and garage from the training
- * page HTML and stores a structured list in localStorage as 'train_queue_data'.
+ * Parses the current training queue for barracks, stable, and garage.
+ * Aggregates and stores total unit counts per unit type in localStorage.
+ * Format: { spear: 152, sword: 100, axe: 69, ... }
  * @param {string} data - Raw HTML of the training screen.
  */
 function storeTrainQueueData(data) {
-    const lang = JSON.parse(localStorage.getItem('tw_lang')) || {};
-    const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'] || '';
-    const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'] || '';
-    const todayPat = stringToday.replace('%s', '(\\d{1,2}:\\d{2})');
-    const tomorrowPat = stringTomorrow.replace('%s', '(\\d{1,2}:\\d{2})');
-    const timeRegex = todayPat || tomorrowPat
-        ? new RegExp((todayPat || '') + (todayPat && tomorrowPat ? '|' : '') + (tomorrowPat || ''), 'i')
-        : null;
-
-    const queueData = [];
+    const queueCounts = {};
 
     ['barracks', 'stable', 'garage'].forEach(function (building) {
         $(data).find('#trainqueue_wrap_' + building + ' tr').each(function (_, row) {
-            const img = $(row).find('img').first();
-            if (!img.length) return;
+            // Find the unit sprite div which has class like "unit_sprite unit_sprite_smaller spear"
+            const spriteDiv = $(row).find('div.unit_sprite_smaller');
+            if (!spriteDiv.length) return;
 
-            const src = img.attr('src') || '';
-            const unitMatch = src.match(/(?:unit_|recruit\/)([a-z_]+)(?:\.png|\.webp)/);
-            if (!unitMatch) return;
-
-            const unit = unitMatch[1];
-            const imgSrc = src;
-            const name = img.attr('title') || img.attr('alt') || unit;
-
-            let count = 1;
-            let finishTimestamp = 0;
-
-            $(row).find('td').each(function (_, td) {
-                const text = $(td).text().trim();
-                if (/^\d+$/.test(text)) {
-                    count = parseInt(text, 10);
+            // Extract unit type from classes (e.g., "spear", "sword", "axe", etc)
+            let unitType = null;
+            const classes = spriteDiv.attr('class').split(/\s+/);
+            for (let cls of classes) {
+                // Skip common class names, unit type will be a single word like spear, sword, etc
+                if (cls !== 'unit_sprite' && cls !== 'unit_sprite_smaller' && cls !== '') {
+                    unitType = cls;
+                    break;
                 }
-                if (timeRegex && timeRegex.test(text)) {
-                    const ts = extractBuildTimestampFromHTML(text);
-                    if (ts) finishTimestamp = ts;
-                }
-            });
+            }
+            if (!unitType) return;
 
-            queueData.push({ unit: unit, imgSrc: imgSrc, name: name, count: count, finishTimestamp: finishTimestamp, building: building });
+            // Extract count from text like "69 Bárbaros" or "1 Lanceiro"
+            const cellText = $(row).find('td').first().text().trim();
+            const countMatch = cellText.match(/^(\d+)\s+/);
+            if (!countMatch) return;
+
+            const count = parseInt(countMatch[1], 10);
+            queueCounts[unitType] = (queueCounts[unitType] || 0) + count;
         });
     });
 
-    localStorage.setItem('train_queue_data', JSON.stringify(queueData));
+    const villageId = game_data.village?.id || 'unknown';
+    localStorage.setItem(`train_queue_data_${villageId}`, JSON.stringify(queueCounts));
 }
 
 /**
@@ -530,20 +565,17 @@ function fetchTrainInfo(callback) {
             url: game_data.link_base_pure + 'train',
             method: "GET",
             success: function (data) {
-                const lang = JSON.parse(localStorage.getItem('tw_lang'));
-                const stringToday = lang['aea2b0aa9ae1534226518faaefffdaad'];
-                const stringTomorrow = lang['57d28d1b211fddbb7a499ead5bf23079'];
-                const todayString = stringToday?.replace('%s', '\\d{1,2}:\\d{2}');
-                const tomorrowString = stringTomorrow?.replace('%s', '\\d{1,2}:\\d{2}');
-                const regex = new RegExp(`${todayString}|${tomorrowString}`, 'i');
                 let barrracksTimes = [],
                     stableTimes = [],
                     garageTimes = [];
-                // Collect barracks training finish times
+                // Collect barracks training finish times. extractBuildTimestampFromHTML handles
+                // "today"/"tomorrow" phrasing as well as the explicit date TW shows for entries
+                // finishing more than a day out (long queues), returning null for unrelated cells.
                 $(data).find("#trainqueue_wrap_barracks td").each(function () {
                     const text = $(this).text().trim();
-                    if (regex.test(text)) {
-                        barrracksTimes.push(extractBuildTimestampFromHTML(text))
+                    const timestamp = extractBuildTimestampFromHTML(text);
+                    if (timestamp) {
+                        barrracksTimes.push(timestamp)
                     }
                 });
                 getBarracksTime(barrracksTimes);
@@ -551,8 +583,9 @@ function fetchTrainInfo(callback) {
                 // Collect stable training finish times
                 $(data).find("#trainqueue_wrap_stable td").each(function () {
                     const text = $(this).text().trim();
-                    if (regex.test(text)) {
-                        stableTimes.push(extractBuildTimestampFromHTML(text))
+                    const timestamp = extractBuildTimestampFromHTML(text);
+                    if (timestamp) {
+                        stableTimes.push(timestamp)
                     }
                 });
                 getStableTime(stableTimes)
@@ -560,8 +593,9 @@ function fetchTrainInfo(callback) {
                 // Collect garage training finish times
                 $(data).find("#trainqueue_wrap_garage td").each(function () {
                     const text = $(this).text().trim();
-                    if (regex.test(text)) {
-                        garageTimes.push(extractBuildTimestampFromHTML(text))
+                    const timestamp = extractBuildTimestampFromHTML(text);
+                    if (timestamp) {
+                        garageTimes.push(timestamp)
                     }
                 });
                 getGarageTime(garageTimes);
@@ -580,13 +614,18 @@ function fetchTrainInfo(callback) {
  * Calls each building's info function and persists the results to localStorage.
  */
 function updatePremiumInfoOverview() {
-    const show__overview_premmium_info = settings_cookies.general['show__overview_premmium_info'];
+    const show__overview_premium_info = settings_cookies.general['show__overview_premium_info'];
 
-    if (show__overview_premmium_info) {
+    if (show__overview_premium_info) {
+        // Fetch storage times first, then update resource info in callback
+        getStorageTime(function() {
+            infoOverview.wood = getWoodInfo();
+            infoOverview.stone = getStoneInfo();
+            infoOverview.iron = getIronInfo();
+            localStorage.setItem("infoOverview", JSON.stringify(infoOverview));
+        });
+
         infoOverview.storage = getStorageTime();
-        infoOverview.wood = getWoodInfo();
-        infoOverview.stone = getStoneInfo();
-        infoOverview.iron = getIronInfo();
         infoOverview.garage = getGarageTime();
         infoOverview.smith = getSmithTime();
         infoOverview.main = getMainQueueTime();
@@ -595,12 +634,8 @@ function updatePremiumInfoOverview() {
         infoOverview.place = getPlaceInfo();
         infoOverview.statue = getStatueInfo();
         infoOverview.farm = getFarmInfo();
-        //setOngoingBuildingLevels();
 
         fetchTrainInfo();
-
-        //infoOverview.stable = getStableTime();
-        //infoOverview.barracks = getBarracksTime();
 
         localStorage.setItem("infoOverview", JSON.stringify(infoOverview));
     }

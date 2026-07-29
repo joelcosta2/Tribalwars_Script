@@ -10,64 +10,75 @@ To optimize your workflow, the script injects a persistent sidebar on the left s
 
 ### 🗺️ Map Enhancements
 - **Extra Large Map:** Enjoy a larger map without premium. Toggle it on the map page and set the size freely—no limits!
-  ![Extra Large Map](img/largeMap.png)
+  ![Extra Large Map](.github/images/largeMap.png)
 
 - **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
-  ![Extra Village Information on Map Hover](img/mapVillageHoverExtraInfo.png)
+  ![Extra Village Information on Map Hover](.github/images/mapVillageHoverExtraInfo.png)
 
 - **Direct Template Attacks from Map:** Quick-action buttons added to the map context menu to launch attacks using saved troop templates with a single click.
-  ![Direct Template Attacks from Map](img/mapCtxButtons.png)
+  ![Direct Template Attacks from Map](.github/images/mapCtxButtons.png)
 
 - **Outgoing Units Info on Map:** Icons added on the map to show outgoing units per village.
-  ![Outgoing Units Info on Map](img/largeMap2.png)
+  ![Outgoing Units Info on Map](.github/images/largeMap2.png)
 
 - **Attack Heat-Map:** Colour-coded overlay on the map showing attack frequency and recency per village. Intensity reflects how often and how recently a village has been attacked over the last 14 days.
+  ![Attack Heat-Map](.github/images/heatmap.png)
 
 ### 🏰 Village & Overview Management
 - **Premium info Overview Screen:** Access additional details directly on the overview page, such as the time remaining for the storage to fill or the status of each individual resource. (In progress – replicating features typically available only to Premium users).
-  ![Overview Info](img/overviewExtraInfo.png)
-  ![Overview Info 2](img/overviewExtraInfo2.png)
+  ![Overview Info](.github/images/overviewExtraInfo.png)
+  ![Overview Info 2](.github/images/overviewExtraInfo2.png)
 
 - **Arrows for Changing Villages:** Seamlessly navigate between villages using intuitive arrow controls.
-  ![Arrows for Changing Villages](img/navigationArrows.png)
+  ![Arrows for Changing Villages](.github/images/navigationArrows.png)
 
 - **Village List for Easy Selection:** Quickly access a comprehensive list of villages for efficient selection.
-  ![Village List for Easy Selection](img/villageList.png)
+  ![Village List for Easy Selection](.github/images/villageList.png)
 
 - **Notes for Each Village:** Stay organized by adding important notes to individual villages for easy reference.
-  ![Notes for Each Village](img/notepad.png)
+  ![Notes for Each Village](.github/images/notepad.png)
 
-- **Storage Fill Time on Resource Hover:** Monitor your resource storage effectively. Hover over the resource bar to see the estimated time remaining until wood, stone, and iron reach maximum capacity. 
-  ![Storage Fill Time on Resource Hover](img/ressourceFullHover.png)
+- **Storage Fill Time on Resource Hover:** Monitor your resource storage effectively. Hover over the resource bar to see the estimated time remaining until wood, stone, and iron reach maximum capacity.
+  ![Storage Fill Time on Resource Hover](.github/images/ressourceFullHover.png)
+
+### ⚔️ Reports & Simulator
+
+- **Report to Simulator:** A "View in Simulator" button is injected into attack report pages. Clicking it reads attacker and defender troop counts, wall level, luck, morale, and unit buffs from the report, and redirects to the simulator with all fields pre-filled — no manual entry needed.
+  ![Report to Simulator](.github/images/simulatorButton.png)
 
 ### ⚙️ UI Customization & Settings
 - **Navigation Bar:** Custom navigation bar where you can add shortcuts to various pages. Shortcuts can be edited.
-  ![Navigation Bar](img/navigationBar.png)
-  ![Navigation Bar Edit](img/navigationBar_items.png)
+  ![Navigation Bar](.github/images/navigationBar.png)
+  ![Navigation Bar Edit](.github/images/navigationBar_items.png)
 
 - **Remove Premium Promos:** Clean up your UI by removing advertising for premium promotions.
-  ![Remove Premium Promos](img/premium_promo.png)
-  ![Remove Premium Promos](img/premium_promo2.png)
+  ![Remove Premium Promos](.github/images/premium_promo.png)
+  ![Remove Premium Promos](.github/images/premium_promo2.png)
 
 - **Script Settings:** Customize your experience with in-game settings to control various aspects of the script. Adjust options to suit your gameplay style.
-  ![Script Settings](img/scriptSettings.png)
+  ![Script Settings](.github/images/scriptSettings.png)
 
 ### 🛠️ Building, Construction & Troops
 
 - **Recruit Troops Widget:** Train troops directly from the sidebar without navigating to the barracks. Shows per-unit costs, live population availability, and updates the maximum affordable quantity in real time as you adjust values.
+  ![Recruit Troops Widget](.github/images/recruitTroops.png)
 - **Building Queue Manager:** Conveniently manage your building queue from the overview page by easily adding or removing buildings without navigating through multiple menus.
-  ![Building queue](img/extraBuildQueue0.png)
+  ![Building queue](.github/images/extraBuildQueue0.png)
 
 - **Extra Building Queue (Infinite Queue):** Expands the standard queue, allowing you to schedule more than two buildings at a time—similar to the premium option. 
   - **Green**: Building is currently being upgraded.  
-  - **Orange**: Waiting for the next slot (resources available).  
-  - **Red**: In the "fake" queue (waiting for resources).  
+  - **Orange**: In the "fake" queue (waiting for resources).  
   *Note: The browser must remain open for this feature to function.*
-  ![Extra Building queue](img/extraBuildQueue2.png)
+  ![Extra Building queue](.github/images/extraBuildQueue2.png)
+
+- **Auto Build Instant Free:** Monitors the active building upgrade and automatically clicks the free instant-complete button when less than 3 minutes remain — the window TribalWars offers for free. Re-arms itself after each build finishes so no free window is ever missed.
 
 ### 📊 Resources & Automation
 
-- **Auto Scavenging / Paladin Train:** Automation for training the Paladin (always choosing the cheapest option) and automating Scavenging (using all available troops at the highest available level).
+- **Auto Scavenging:** Fully configurable per-village automation. A config panel injected on the scavenge page lets you enable or disable the bot per village, choose between sending all available units or a custom subset, select the target scavenge tier, and pick an optimisation mode: **Balanced** (equalises return times across active tiers) or **Fastest** (minimises total trip time). Troops are distributed optimally across unlocked slots and re-sent automatically once they return.
+  ![Auto Scavenge Config](.github/images/scavengeConfig.png)
+
+- **Auto Paladin Trainer:** Trains the Paladin automatically using the cheapest available regimen. Schedules the next session when training finishes and supports a configurable max-level cap.
 
 - **Auto Daily Bonus:** Automatically collects the daily login bonus as soon as it becomes available. If already collected for the day, it schedules the next collection for the following server midnight (with a small random delay to mimic human behaviour).
 
@@ -88,20 +99,25 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 2. **Change you project file path:**
    - Edit the **main_local.user** file, and past follow settings on the file, replacing YOUR_PATH:
         ```javascript
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_utils.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_css.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\core_settings.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_navigationArrows.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\feature_map.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\feature_overview.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_trainerPaladin.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\bot_scavenging.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_villageList.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_notepad.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_extraBuildQueue.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars_Script\widget_recruitTroops.user.js
-      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars_Script\main_local.user.js
-      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars_Script\main_local.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_utils.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_css.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_settings.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_villageArrows.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_navigationBar.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_map.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_overview.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_simulator.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_trainerPaladin.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_scavenging.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_dailyBonus.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_buildInstantFree.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_villageList.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_notepad.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_extraBuildQueue.user.js
+      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_recruitTroops.user.js
+      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\main_local.user.js
+      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\main_local.user.js
+        ```
 
    
 3. **Import the main file on Tampermonkey:**
@@ -114,7 +130,7 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
    - Go to Extensions on your browser and find the TM 'card'.
    - Click details and "Allow access to file URLs".
    
-  ![Allow access to file URLs](img/dkHgL.png)
+  ![Allow access to file URLs](.github/images/dkHgL.png)
 
 6. **Notice the file:// URI scheme:**
       - for windows:
@@ -129,8 +145,7 @@ These scripts are intended for use with Tampermonkey, a popular userscript manag
 
 - These features currently work only in the browser and have been tested with a single account/world. Support for multiple accounts or worlds may be added in the future.
 - All data is stored in the browser's local storage.
-- I have no idea how it works in languages other than PT-PT. Feel free to test it and let me know! :)
-- I doubt it works with different time formats...
+- I have no idea how it works in other worlds other then PT and BR. Feel free to test it and let me know! :)
 - Some information is retrieved via AJAX calls to the relevant pages. For example, village hover info (such as recent attack details) is scraped from the corresponding report page and displayed on the map.
 - I know this is basically spaghetti code, but I'm having a lot of fun getting it to work. I just wish my villages weren’t constantly being conquered—it makes it hard to test this with multiple villages. Maybe I should focus more on the game and less on the script!
 
