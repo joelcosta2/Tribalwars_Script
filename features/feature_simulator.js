@@ -11,7 +11,7 @@
 
 var SIMULATOR_STORAGE_KEY = 'tw_report_to_simulator';
 var SIMULATOR_FROM_REPORT_PARAM = 'from_report';
-var SIMULATOR_BUTTON_LABEL = 'View in Simulator';
+var SIMULATOR_BUTTON_LABEL = t('simulator.viewInSimulator');
 
 /**
  * Parses unit quantities from a report unit table.
@@ -32,6 +32,48 @@ function parseReportUnits(tableSelector, rowIndex) {
         }
     });
     return units;
+}
+
+/**
+ * Parses defender troops that were away from the village at the time of the attack
+ * (shown in the "Unidades fora da aldeia" / #attack_spy_away table, only visible
+ * when a scout report reveals them). These are not part of the battle but should
+ * still count toward the defender's total troops in the simulator.
+ * @returns {Object} map of unit name → count
+ */
+function parseAwayUnits() {
+    return parseReportUnits('#attack_spy_away table.vis', 1);
+}
+
+/**
+ * Adds the counts from `source` into `target`, mutating and returning `target`.
+ */
+function mergeUnitCounts(target, source) {
+    Object.keys(source).forEach(function (unit) {
+        target[unit] = (target[unit] || 0) + source[unit];
+    });
+    return target;
+}
+
+/**
+ * Parses the defender's wall level from the spy building tables
+ * (#attack_spy_buildings_left / #attack_spy_buildings_right), which only
+ * appear when a scout report reveals building levels.
+ * @returns {number|null}
+ */
+function parseSpyWallLevel() {
+    var tables = document.querySelectorAll('#attack_spy_buildings_left, #attack_spy_buildings_right');
+    for (var t = 0; t < tables.length; t++) {
+        var rows = tables[t].querySelectorAll('tr');
+        for (var r = 0; r < rows.length; r++) {
+            if (!rows[r].querySelector('img[src*="wall.webp"]')) continue;
+            var cells = rows[r].querySelectorAll('td');
+            if (cells.length < 2) continue;
+            var level = parseInt(cells[1].textContent.trim(), 10);
+            if (!isNaN(level)) return level;
+        }
+    }
+    return null;
 }
 
 /**
@@ -233,6 +275,9 @@ function injectReportToSimulatorButton() {
     var attUnits = parseReportUnits('#attack_info_att_units', 1);
     var defUnits = parseReportUnits('#attack_info_def_units', 1);
 
+    // --- Add defender troops that were away from the village (not part of the battle) ---
+    mergeUnitCounts(defUnits, parseAwayUnits());
+
     // --- Parse luck from #attack_luck ---
     var luck = '0';
     var luckBold = document.querySelector('#attack_luck b');
@@ -261,6 +306,9 @@ function injectReportToSimulatorButton() {
     var attBuffs = parseReportBuffs('#attack_info_att');
     var defBuffs = parseReportBuffs('#attack_info_def');
 
+    // --- Parse defender wall level from the spy report ---
+    var wallLevel = parseSpyWallLevel();
+
     // --- Build the redirect URL ---
     var villageId = (typeof game_data !== 'undefined' && game_data.village) ? game_data.village.id : '';
     var simUrl = '/game.php?village=' + villageId + '&screen=place&mode=sim&' + SIMULATOR_FROM_REPORT_PARAM + '=1';
@@ -273,7 +321,8 @@ function injectReportToSimulatorButton() {
         attReligious: attReligious,
         defReligious: defReligious,
         attBuffs: attBuffs,
-        defBuffs: defBuffs
+        defBuffs: defBuffs,
+        wallLevel: wallLevel
     };
 
     // --- Create the button ---
@@ -364,6 +413,12 @@ function injectSimulatorPrefill() {
         if (data.morale !== undefined) {
             var moraleInput = document.getElementById('moral') || form.querySelector('input[name="moral"]');
             if (moraleInput) moraleInput.value = data.morale;
+        }
+
+        // Fill defender wall level
+        if (data.wallLevel !== null && data.wallLevel !== undefined) {
+            var wallInput = form.querySelector('input[name="def_wall"], select[name="def_wall"]');
+            if (wallInput) wallInput.value = data.wallLevel;
         }
 
         // Fill religion checkboxes

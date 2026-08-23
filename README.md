@@ -1,161 +1,294 @@
 # Tribalwars: Premium Features
 
-## Description
+A desktop userscript that adds practical tools for managing TribalWars villages, maps, reports and routine tasks.
 
-**Tribalwars: Premium Features** is a comprehensive enhancement suite designed to elevate the Tribalwars gaming experience by unlocking utility tools typically reserved for Premium Account holders. The script streamlines empire management by introducing a fully customizable **Extra-Large Map**, an **Infinite Building Queue** and advanced automation for routine tasks like **Scavenging** and **Paladin Training**.
+Some features reproduce conveniences normally associated with a Premium Account. Others are independent utilities. Automation is optional and may not be allowed on every world.
 
-To optimize your workflow, the script injects a persistent sidebar on the left side of the screen. All introduced widgets are draggable and feature **state-memory**, meaning they will remember their exact position on your screen every time you log in. Whether you are a casual player or a competitive strategist, this script provides the data transparency and one-click convenience needed to manage your villages with maximum efficiency, even without a premium account.
+## Requirements
 
-## Key Features
+- Tampermonkey or another userscript manager that supports `@require`.
+- A desktop browser. Mobile pages are ignored.
+- A TribalWars address matching `https://*.tribalwars.*/*`.
 
-### 🗺️ Map Enhancements
-- **Extra Large Map:** Enjoy a larger map without premium. Toggle it on the map page and set the size freely—no limits!
-  ![Extra Large Map](.github/images/largeMap.png)
+## Installation
 
-- **Extra Village Information on Map Hover:** Gain valuable insights with additional village information displayed on map hover. Details include the last raid performed, resources detected in the last attack, date of the last attack, and ongoing attack or return.
-  ![Extra Village Information on Map Hover](.github/images/mapVillageHoverExtraInfo.png)
+Install the published script from [main.user.js](main.user.js), or use the raw GitHub URL:
 
-- **Direct Template Attacks from Map:** Quick-action buttons added to the map context menu to launch attacks using saved troop templates with a single click.
-  ![Direct Template Attacks from Map](.github/images/mapCtxButtons.png)
+`https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js`
 
-- **Outgoing Units Info on Map:** Icons added on the map to show outgoing units per village.
-  ![Outgoing Units Info on Map](.github/images/largeMap2.png)
+After installation, open the script settings in TribalWars and enable the features you need. Most features are disabled or configurable individually.
 
-- **Attack Heat-Map:** Colour-coded overlay on the map showing attack frequency and recency per village. Intensity reflects how often and how recently a village has been attacked over the last 14 days.
-  ![Attack Heat-Map](.github/images/heatmap.png)
+## Features
 
-### 🏰 Village & Overview Management
-- **Premium info Overview Screen:** Access additional details directly on the overview page, such as the time remaining for the storage to fill or the status of each individual resource. (In progress – replicating features typically available only to Premium users).
-  ![Overview Info](.github/images/overviewExtraInfo.png)
-  ![Overview Info 2](.github/images/overviewExtraInfo2.png)
+### Navigation and Widgets
 
-- **Arrows for Changing Villages:** Seamlessly navigate between villages using intuitive arrow controls.
-  ![Arrows for Changing Villages](.github/images/navigationArrows.png)
+<details>
+<summary>Village List</summary>
 
-- **Village List for Easy Selection:** Quickly access a comprehensive list of villages for efficient selection.
-  ![Village List for Easy Selection](.github/images/villageList.png)
+> Shows all villages in a quick-access widget. The list is refreshed when the cached data is incomplete.
 
-- **Notes for Each Village:** Stay organized by adding important notes to individual villages for easy reference.
-  ![Notes for Each Village](.github/images/notepad.png)
+![Village List](.github/images/villageList.png)
+</details>
 
-- **Storage Fill Time on Resource Hover:** Monitor your resource storage effectively. Hover over the resource bar to see the estimated time remaining until wood, stone, and iron reach maximum capacity.
-  ![Storage Fill Time on Resource Hover](.github/images/ressourceFullHover.png)
+<details>
+<summary>Village Navigation</summary>
 
-### ⚔️ Reports & Simulator
+> Adds previous and next village controls. The `A` and `D` keys can also be used to switch villages.
 
-- **Report to Simulator:** A "View in Simulator" button is injected into attack report pages. Clicking it reads attacker and defender troop counts, wall level, luck, morale, and unit buffs from the report, and redirects to the simulator with all fields pre-filled — no manual entry needed.
-  ![Report to Simulator](.github/images/simulatorButton.png)
+![Village Navigation Arrows](.github/images/navigationArrows.png)
+</details>
 
-### ⚙️ UI Customization & Settings
-- **Navigation Bar:** Custom navigation bar where you can add shortcuts to various pages. Shortcuts can be edited.
-  ![Navigation Bar](.github/images/navigationBar.png)
-  ![Navigation Bar Edit](.github/images/navigationBar_items.png)
+<details>
+<summary>Custom Navigation Bar</summary>
 
-- **Remove Premium Promos:** Clean up your UI by removing advertising for premium promotions.
-  ![Remove Premium Promos](.github/images/premium_promo.png)
-  ![Remove Premium Promos](.github/images/premium_promo2.png)
+> Create shortcuts to frequently used TribalWars pages and arrange them in your preferred order.
 
-- **Script Settings:** Customize your experience with in-game settings to control various aspects of the script. Adjust options to suit your gameplay style.
-  ![Script Settings](.github/images/scriptSettings.png)
+![Custom Navigation Bar](.github/images/navigationBar.png)
+![Navigation Bar Editor](.github/images/navigationBar_items.png)
+</details>
 
-### 🛠️ Building, Construction & Troops
+<details>
+<summary>Village Notepad</summary>
 
-- **Recruit Troops Widget:** Train troops directly from the sidebar without navigating to the barracks. Shows per-unit costs, live population availability, and updates the maximum affordable quantity in real time as you adjust values.
-  ![Recruit Troops Widget](.github/images/recruitTroops.png)
-- **Building Queue Manager:** Conveniently manage your building queue from the overview page by easily adding or removing buildings without navigating through multiple menus.
-  ![Building queue](.github/images/extraBuildQueue0.png)
+> Keep a separate note for each village. The editor supports common BBCode tags and resolves players, tribes and coordinates from game data.
 
-- **Extra Building Queue (Infinite Queue):** Expands the standard queue, allowing you to schedule more than two buildings at a time—similar to the premium option. 
-  - **Green**: Building is currently being upgraded.  
-  - **Orange**: In the "fake" queue (waiting for resources).  
-  *Note: The browser must remain open for this feature to function.*
-  ![Extra Building queue](.github/images/extraBuildQueue2.png)
+![Village Notepad](.github/images/notepad.png)
+![Village Notepad2](.github/images/notepad2.png)
+</details>
 
-- **Auto Build Instant Free:** Monitors the active building upgrade and automatically clicks the free instant-complete button when less than 3 minutes remain — the window TribalWars offers for free. Re-arms itself after each build finishes so no free window is ever missed.
+<details>
+<summary>Extra Memo</summary>
 
-### 📊 Resources & Automation
+> View and edit notes for every village directly from the native memo screen. Notes can be exported and imported as JSON.
 
-- **Auto Scavenging:** Fully configurable per-village automation. A config panel injected on the scavenge page lets you enable or disable the bot per village, choose between sending all available units or a custom subset, select the target scavenge tier, and pick an optimisation mode: **Balanced** (equalises return times across active tiers) or **Fastest** (minimises total trip time). Troops are distributed optimally across unlocked slots and re-sent automatically once they return.
-  ![Auto Scavenge Config](.github/images/scavengeConfig.png)
+![Extra Memo](.github/images/extraMemo.png)
+</details>
 
-- **Auto Paladin Trainer:** Trains the Paladin automatically using the cheapest available regimen. Schedules the next session when training finishes and supports a configurable max-level cap.
+<details>
+<summary>Recruitment Widget</summary>
 
-- **Auto Daily Bonus:** Automatically collects the daily login bonus as soon as it becomes available. If already collected for the day, it schedules the next collection for the following server midnight (with a small random delay to mimic human behaviour).
+> Recruit troops from the sidebar. Costs, population, resources, training queues and the maximum affordable amount update as you edit the form.
 
-## How to Use
+![Recruitment Widget](.github/images/recruitTroops.png)
+</details>
 
-These scripts are intended for use with Tampermonkey, a popular userscript manager for web browsers.
+<details>
+<summary>Building Queue Widget</summary>
 
-1. **Install Tampermonkey:** If you haven't already, install the [Tampermonkey extension](https://www.tampermonkey.net/) for your web browser.
-2. **Install the Script:**
-   - Open Tampermonkey and navigate to the "Utilities" tab.
-   - In the "Import from URL" field, paste the following link: `https://github.com/joelcosta2/Tribalwars_Script/archive/refs/heads/master.zip`.
-   - Click "Install" to add the script to Tampermonkey.
-3. **Import the Script:** After installation, click "Import" to import the script into Tampermonkey.
+> Manage upgrades from the overview. The script can keep a local waiting queue and submit upgrades when resources and server slots are available.
 
-## For Those Who Want to Develop with This
-1. **Download project:**
-   - Download or clone the project to your local machine.
-2. **Change you project file path:**
-   - Edit the **main_local.user** file, and past follow settings on the file, replacing YOUR_PATH:
-        ```javascript
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_utils.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_css.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\util\core_settings.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_villageArrows.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_navigationBar.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_map.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_overview.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\features\feature_simulator.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_trainerPaladin.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_scavenging.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_dailyBonus.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\bots\bot_buildInstantFree.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_villageList.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_notepad.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_extraBuildQueue.user.js
-      // @require      file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\widgets\widget_recruitTroops.user.js
-      // @updateURL    file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\main_local.user.js
-      // @downloadURL  file://C:\{YOUR_PATH}\Tribalwars-Premium-Features\main_local.user.js
-        ```
+![Building Queue](.github/images/extraBuildQueue2.png)
+</details>
 
-   
-3. **Import the main file on Tampermonkey:**
-   - Open Tampermonkey and navigate to the "Utilities" tab.
-   - In the "Import from file" field, select the **main_local.user**.
-   - Click "Install" to add the script to Tampermonkey.
-4. **Make your changes:**
-   - Edit the scripts and test them directly in your browser. You only need to reinstall the script if you make changes to the **main_local.user** file
-5. **Make sure you have Allow access to file URLs for Tampermonkey(TP):**
-   - Go to Extensions on your browser and find the TM 'card'.
-   - Click details and "Allow access to file URLs".
-   
-  ![Allow access to file URLs](.github/images/dkHgL.png)
+### Overview
 
-6. **Notice the file:// URI scheme:**
-      - for windows:
+<details>
+<summary>Visual Building Overview</summary>
 
-            // @require   file://C:\path\to\userscript.user.js
+> Adds building levels, resource information and queue timers to the overview page.
 
-      - for macOS and *nix:
+![Visual Building Overview](.github/images/overviewExtraInfo.png)
+![Visual Building Overview Details](.github/images/overviewExtraInfo2.png)
+</details>
 
-            // @require   file:///path/to/userscript.user.js
+<details>
+<summary>Overview Villages</summary>
 
-## Notes
+> Enhances the all-villages overview with building queues, one troop column per unit type, storage fill times, village notes and quick links.
 
-- These features currently work only in the browser and have been tested with a single account/world. Support for multiple accounts or worlds may be added in the future.
-- All data is stored in the browser's local storage.
-- I have no idea how it works in other worlds other then PT and BR. Feel free to test it and let me know! :)
-- Some information is retrieved via AJAX calls to the relevant pages. For example, village hover info (such as recent attack details) is scraped from the corresponding report page and displayed on the map.
-- I know this is basically spaghetti code, but I'm having a lot of fun getting it to work. I just wish my villages weren’t constantly being conquered—it makes it hard to test this with multiple villages. Maybe I should focus more on the game and less on the script!
+> This view requires at least two villages. Troop values may need a manual refresh and can be temporarily stale.
 
-Enjoy the enhanced features while playing Tribalwars!
+![Overview Villages](.github/images/overviewVillages.png)
+</details>
 
+<details>
+<summary>Storage Timer</summary>
 
-## ⚠️ Disclaimer & Warning
+> Hover over the resource bars or storage values to see the estimated time until storage is full.
 
-**Important:** Some features included in this script, specifically those involving automation (such as Auto-Scavenging, Auto-Train Paladin, Auto Daily Bonus, and Extra Building Queue), may violate the Terms of Service (ToS) of certain TribalWars servers. 
+![Storage Fill Time](.github/images/ressourceFullHover.png)
+</details>
 
-- **Use at your own risk:** I'm are not responsible for any bans or account restrictions.
-- **Fair Play:** I recommend using automation features sparingly and in a way that mimics human behavior to minimize the risk of detection.
-- **Check your server rules:** Always verify the local rules of your game world regarding scripts that perform automated actions or multiple actions with a single click.
+### Map and Commands
+
+<details>
+<summary>Large Map</summary>
+
+> Use a larger map and choose its size from the map controls.
+
+![Large Map](.github/images/largeMap.png)
+![Large Map Commands](.github/images/largeMap2.png)
+</details>
+
+<details>
+<summary>Map Hover Information</summary>
+
+> Shows recent attack information, loot, discovered resources, morale and other village details when hovering over the map.
+
+![Map Hover Information](.github/images/mapVillageHoverExtraInfo.png)
+</details>
+
+<details>
+<summary>Outgoing Commands and Travel Times</summary>
+
+> Displays outgoing command icons and calculates travel times for available unit types.
+
+![Outgoing Commands](.github/images/outgoingCommands.png)
+</details>
+
+<details>
+<summary>Attack Heatmap</summary>
+
+> Highlights villages according to the frequency and recency of attacks found in stored reports. - NOT WORKING
+
+![Attack Heatmap](.github/images/heatmap.png)
+</details>
+
+<details>
+<summary>Custom Map Groups</summary>
+
+> Create coloured groups matching village coordinates, players or tribes. Groups are stored per world and player, and the first matching group takes priority.
+
+![Custom Map Groups](.github/images/mapGroups.png)
+</details>
+
+<details>
+<summary>Troop Templates</summary>
+
+> Create, edit, delete and apply custom troop templates in command forms and map attack menus.
+
+![Troop Templates](.github/images/troopTemplates.png)
+</details>
+
+<details>
+<summary>Map Attack Buttons</summary>
+
+> Adds quick-send attack buttons to the map context menu using your saved troop templates.
+
+![Map Attack Buttons](.github/images/mapCtxButtons.png)
+</details>
+
+### Reports and Simulator
+
+<details>
+<summary>Report to Simulator</summary>
+
+> Opens the simulator with attacker troops, defender troops, away defenders, wall level, luck, morale, religion and applicable buffs filled from an attack report.
+
+![Report to Simulator](.github/images/simulatorButton.png)
+</details>
+
+<details>
+<summary>TWStats Player History</summary>
+
+> Adds extra player history and ranking information to player profiles using a request to TWStats.
+
+> This feature depends on the external `twstats.com` service and may stop working if its pages or availability change.
+
+![TWStats Player History](.github/images/playerProfileStats.png)
+</details>
+
+### Automation
+
+<details>
+<summary>Auto Scavenging</summary>
+
+> Configure automation per village: choose the scavenge level, select all or specific units, and distribute troops using the balanced or fastest mode.
+
+> The bot retries failed requests, adds timing variation and disables itself after a send failure.
+
+![Auto Scavenging](.github/images/scavengeConfig.png)
+</details>
+
+<details>
+<summary>Auto Paladin Trainer</summary>
+
+> Automatically schedules the cheapest available paladin training regimen up to a chosen level.
+
+> Current limitation: this feature is intended for accounts with one village.
+
+![Auto Paladin Trainer](.github/images/autoPaladinTrainer.png)
+</details>
+
+<details>
+<summary>Auto Daily Bonus</summary>
+
+> Collects the daily bonus when it is available and schedules the next check using server time.
+</details>
+
+<details>
+<summary>Auto Build Instant Free</summary>
+
+> Completes an eligible active building upgrade during TribalWars' final three-minute free window.
+</details>
+
+### Interface and Settings
+
+<details>
+<summary>Settings</summary>
+
+> Enable or disable features, arrange widgets, configure automation and export or import all script settings as JSON.
+
+![Script Settings](.github/images/scriptSettings.png)
+</details>
+
+<details>
+<summary>Languages</summary>
+
+> The interface is available in English and Portuguese.
+</details>
+
+<details>
+<summary>Small Interface Improvements</summary>
+
+> Optional utilities include hiding Premium promotions, redirecting training buildings to recruitment pages and keeping the page active while it is open.
+
+![Premium Promotion Removal](.github/images/premium_promo.png)
+</details>
+
+<details>
+<summary>Bot Protection Handling</summary>
+
+> When TribalWars displays a bot-protection screen, the script can stop its features automatically. This behavior is controlled in the settings.
+</details>
+
+## Data and Limitations
+
+- IndexedDB stores structured data for build queues, recruitment data, reports, notes and map data.
+- `localStorage` stores settings and selected world- or player-specific data.
+- The extra building queue is a local waiting queue. It does not increase the server's real queue limit: normally two slots for free accounts and five for Premium accounts.
+- The browser tab must remain open for the local build queue and scheduled automation to run. (It's not recommended to leave the tab open on *overview_villages* page.)
+- Mobile pages are not supported.
+- Some overview and troop data is cached and may require a refresh.
+- Map and report information depends on the data available from TribalWars pages.
+- The script includes server-timezone handling and is expected to work across different countries and worlds. Some features scrape HTML text, so language or markup changes may cause problems. Please report them so they can be investigated.
+- The custom quick-link source and some anti-bot cache/offline settings are not implemented.
+- The dark-mode module exists in the codebase but is not currently exposed as an active setting.
+
+## Local Development
+
+[main.user.js](main.user.js) is the distributable entry point and loads the published files from GitHub.
+
+[main_local.user.js](main_local.user.js) is the local-development entry point. Its `@require` paths must point to local files using the `file:///...` format. In Tampermonkey, enable **Allow access to file URLs** for the browser extension.
+
+Edit the feature files directly, then reload the TribalWars page to test them. Reinstall the local userscript only when changing its metadata or local `@require` paths.
+
+## License and Disclaimer
+
+This project is licensed under the [Personal Use License](LICENSE).
+
+The code may be used, copied and modified for personal, non-commercial purposes only. Selling the project, selling modified versions, sublicensing it or including it in a commercial product or service is not permitted without prior written permission from the author.
+
+This project is not affiliated with, endorsed by or sponsored by InnoGames or TribalWars. TribalWars and InnoGames are trademarks of their respective owners.
+
+This project is provided for personal use and experimentation. Automation may violate the Terms of Service or local rules of a TribalWars world.
+
+The software is provided "as is", without guarantees of availability, accuracy or compatibility. It may not work on every world, country, language or game version. Some features interact with external services or parse TribalWars HTML, which may change without notice.
+
+Using the automatic Knight (Paladin) Trainer and/or Auto Scavenging carries a very high ban risk. Enable these bots only if you are willing to accept that risk.
+
+The building queue is a separate feature from these bots and has reportedly worked with at least 10 villages without a ban.
+
+> **A note from an entirely unnamed experimental subject:** “The queue works. Tested with 10 villages. Still not banned.”
+
+Enable automation only if you accept the risks. The author is not responsible for bans, restrictions or data loss.
