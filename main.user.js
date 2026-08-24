@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         Tribalwars: Premium Features
-// @version      5.0.2
+// @version      5.0.3
 // @description  Feature-rich enhancement suite for TribalWars. Widgets: Village List, Notepad, Extra Build Queue, Recruit Troops. Map: hover details, outgoing command overlay, attack heat-map, custom CTX attack template buttons, large map view. Automation: Auto-Scavenging (per-level & per-village config), Auto-Paladin Trainer, Auto Daily Bonus collection. UI: Custom Navigation Bar, Navigation Arrows, Visual Building Overview. Settings: full import/export support.
 // @author       killwilll
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/i18n/i18n_utils.js
 // @resource     i18n_en      https://github.com/joelcosta2/Tribalwars_Script/raw/master/i18n/en.json
 // @resource     i18n_pt      https://github.com/joelcosta2/Tribalwars_Script/raw/master/i18n/pt.json
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_utils.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_indexeddb.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_bot_protection.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_css.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_darkmode.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/util/core_settings.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_utils.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_indexeddb.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_bot_protection.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_css.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_darkmode.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_settings.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/mapSdk.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_villageArrows.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_navigationBar.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_map.js

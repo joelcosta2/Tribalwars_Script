@@ -1,5 +1,22 @@
 main_local.user.js
 **/main_local.user.js
 **/tg_var.js
+
+# macOS metadata
 .DS_Store
+._*
+.AppleDouble
+.AppleDB
+.AppleDesktop
+.LSOverride
+Icon?
+.Spotlight-V100
+.Trashes
+.DocumentRevisions-V100
+.TemporaryItems
+.VolumeIcon.icns
+.fseventsd
+.com.apple.timemachine.donotpresent
+__MACOSX/
+
 _game_source/

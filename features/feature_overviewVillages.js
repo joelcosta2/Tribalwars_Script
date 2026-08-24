@@ -1066,11 +1066,11 @@ function openVillageBuildQueueOverlay(villageId) {
 
     const backdrop = document.createElement('div');
     backdrop.className = 'village-buildqueue-overlay-backdrop';
-    backdrop.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:20001; display:block;';
+    backdrop.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; display:block;';
 
     const box = document.createElement('div');
     box.className = 'popup_style';
-    box.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); max-width:95vw; max-height:85vh; overflow-y:auto; z-index:20002; display:block;';
+    box.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); max-width:95vw; max-height:85vh; overflow-y:auto; z-index:9001; display:block;';
 
     const header = document.createElement('div');
     header.className = 'popup_menu';

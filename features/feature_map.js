@@ -79,7 +79,7 @@ async function getOutgoingCommandsFromOverview() {
 
         if (general['show__heatmap_reports'] && typeof mapReady === 'function') {
             await mapReady();
-            addReportHeatmap();
+            rebuildReportHeatmapMapSdkElements();
         }
 
     } catch (error) {
@@ -276,26 +276,22 @@ function addFarmAttackIcons() {
 }
 
 /**
- * Overlays a heat-map on the map based on attack report frequency and recency.
+ * Rebuilds the attack-report heatmap as MapSdk squares (one per attacked coordinate),
+ * replacing the previous DOM-dot overlay. Called only when the reports cache changes —
+ * MapSdk auto-redraws newly panned-into sectors on its own, so this never needs to run
+ * on every map drag.
  * Intensity = 70% frequency weight + 30% recency weight over a 14-day window.
  */
-async function addReportHeatmap() {
-    if (!settings_cookies.general['show__heatmap_reports']) return;
+function rebuildReportHeatmapMapSdkElements() {
+    if (typeof MapSdk === 'undefined' || typeof TWMap === 'undefined') return;
+    if (!settings_cookies.general['show__heatmap_reports'] || !_reportsListCache) return;
 
-    if (_reportsListCache === null) {
-        _reportsListCache = await reportGetAll();
-    }
-    const reports = _reportsListCache;
-    const mapContainer = document.getElementById('map_container');
-    if (!mapContainer) return;
-
-    // Remove existing dots to avoid duplicates on re-render
-    document.querySelectorAll('.report-heatmap-dot').forEach(el => el.remove());
+    MapSdk.polygons = MapSdk.polygons.filter(element => !element._twpfHeatmap);
 
     // Aggregate attack counts and latest timestamp per coordinate
     const attackCounts = {};
     const latestAttack = {};
-    reports.forEach(report => {
+    _reportsListCache.forEach(report => {
         if (!report.coords) return;
         attackCounts[report.coords] = (attackCounts[report.coords] || 0) + 1;
         const ts = new Date(convertDateToISO(report.date) || 0).getTime();
@@ -309,33 +305,26 @@ async function addReportHeatmap() {
     const maxAge = 14 * 24 * 60 * 60 * 1000;
 
     Object.keys(attackCounts).forEach(coords => {
-        const villageCoords = coords.replace('|', '');
-        const villageInfo = TWMap.villages[villageCoords];
-        if (!villageInfo) return;
-
-        const villageElement = document.getElementById('map_village_' + villageInfo.id);
-        if (!villageElement) return;
+        const match = coords.match(/^(\d{1,3})\|(\d{1,3})$/);
+        if (!match) return;
+        const x = Number(match[1]);
+        const y = Number(match[2]);
 
         const count = attackCounts[coords];
         const ageRatio = Math.max(0, 1 - (now - (latestAttack[coords] || 0)) / maxAge);
         const intensity = Math.min(1, (count / maxCount) * 0.7 + ageRatio * 0.3);
         const alpha = (0.15 + intensity * 0.3).toFixed(2);
 
-        const dot = document.createElement('div');
-        dot.className = 'report-heatmap-dot';
-        Object.assign(dot.style, {
-            position: 'absolute',
-            top: villageElement.style.top,
-            left: villageElement.style.left,
-            width: '53px',
-            height: '38px',
-            backgroundColor: 'rgba(220,50,50,' + alpha + ')',
-            zIndex: '5',
-            pointerEvents: 'none'
+        MapSdk.polygons.push({
+            _twpfHeatmap: true,
+            coords: [{ x, y }, { x: x + 1, y }, { x: x + 1, y: y + 1 }, { x, y: y + 1 }],
+            anchor: 'topLeft',
+            styling: { main: { fillStyle: `rgba(220,50,50,${alpha})` } },
+            drawOnMap: true, drawOnMini: false
         });
-        // Insert after the village img so it overlays it (z-index 5 > img z-index 2).
-        villageElement.parentNode.insertBefore(dot, villageElement.nextSibling);
     });
+
+    MapSdk.redraw();
 }
 
 /**
@@ -359,7 +348,7 @@ async function getReportsList() {
     if (storedReports.length > 0 && (Date.now() - lastFetch) < FETCH_TTL_MS) {
         if (settings_cookies.general?.['show__heatmap_reports']) {
             await mapReady();
-            addReportHeatmap();
+            rebuildReportHeatmapMapSdkElements();
         }
         return;
     }
@@ -414,7 +403,7 @@ async function getReportsList() {
         // Refresh the heatmap overlay with the newly fetched report data.
         if (settings_cookies.general?.['show__heatmap_reports']) {
             await mapReady();
-            addReportHeatmap();
+            rebuildReportHeatmapMapSdkElements();
         }
     } catch (err) {
         console.error("[Report Manager] Error syncing reports:", err);
@@ -647,7 +636,7 @@ function createResourceAmountsRow(labelText, amounts) {
 /**
  * Injects report data (last attack date, loot, and spy results) into the Map Popup.
  * @param {Object} report - The report record (see reportGet/reportSet shape in
- * util/core_indexeddb.user.js), with `loot`/`spyDiscover` populated once fetchedFull is true.
+ * utils/core_indexeddb.js), with `loot`/`spyDiscover` populated once fetchedFull is true.
  */
 function insertReportData(report, popUpBody) {
     if (!popUpBody) return;
@@ -1001,9 +990,23 @@ function setMapSize() {
     elements.container?.remove();
     elements.boundary?.remove();
 
+    // TWMap.init() creates a fresh FreeMap + mover + click-to-jump handler for #map/#minimap
+    // but never removes the previous ones — jQuery's .click() stacks handlers, so the stale
+    // one (whose own mover never saw this drag, so its moveDirty guard wrongly passes) still
+    // fires TWMap.focus() with stale coords on minimap-drag-release, causing a coord "snap".
+    // Strip the leftovers so init() re-creates exactly one of each.
+    document.getElementById('map_mover')?.remove();
+    document.getElementById('minimap_mover')?.remove();
+    $('#map, #minimap').off('click');
+
     // Set internal game map size (grid blocks) and restart engine
     TWMap.size = [15, 15]; // Expanded grid for larger custom maps
     TWMap.init();
+    // TWMap.init() doesn't recompute minimap_offset for the new #map size on its own —
+    // without this, minimap drag miscalculates its target and snaps to the wrong coord.
+    if (typeof TWMap.scaleMinimap === 'function') {
+        TWMap.scaleMinimap();
+    }
 
     // 6. Focus Update
     // Using a short timeout to ensure the DOM has settled after TWMap.init()
@@ -1125,6 +1128,19 @@ let _reportsListCache = null;
 // Session-only TTL for outgoing commands fetch — resets on every page load
 // so a refresh always gets fresh data from the server.
 let _outgoingCommandsLastFetch = 0;
+
+// Batches icon refreshes so several sectors spawning during one drag gesture trigger a
+// single rebuild instead of one per sector.
+let _mapIconsRefreshScheduled = false;
+function scheduleMapIconsRefresh() {
+    if (_mapIconsRefreshScheduled) return;
+    _mapIconsRefreshScheduled = true;
+    setTimeout(() => {
+        _mapIconsRefreshScheduled = false;
+        if (settings_cookies.general['show__outgoingInfo_map']) addOutgoingIcons();
+        addFarmAttackIcons();
+    }, 0);
+}
 
 // Per-village session cache for troop templates.
 // Skips re-fetching the rally point dialog for already-visited villages.
@@ -1430,15 +1446,13 @@ if (typeof TWMap !== 'undefined') {
         setMapSize();
     }
     if (settings_cookies.general['show__outgoingInfo_map'] || settings_cookies.general['show__heatmap_reports']) {
-        if (TWMap.map) {
-            //on map drag move
-            var originalMapOnMove = TWMap.map.handler.onMovePixel;
-            TWMap.map.handler.onMovePixel = function (e, a) {
-                originalMapOnMove.call(this, e, a);
-                // mapReady() is unnecessary here — drag can only occur when the map is already rendered
-                if (settings_cookies.general['show__outgoingInfo_map']) addOutgoingIcons();
-                if (settings_cookies.general['show__heatmap_reports']) addReportHeatmap();
-                addFarmAttackIcons();
+        if (TWMap.mapHandler) {
+            // Fires only when a sector actually spawns (far rarer than onMovePixel's per-pixel
+            // drag events) — chains after any other spawnSector wrapper (e.g. MapSdk's own).
+            var _previousSpawnSector = TWMap.mapHandler.spawnSector;
+            TWMap.mapHandler.spawnSector = function (data, sector) {
+                _previousSpawnSector.call(this, data, sector);
+                scheduleMapIconsRefresh();
             }
         }
     }

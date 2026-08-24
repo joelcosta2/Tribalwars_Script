@@ -30,7 +30,7 @@ function loadNote() {
 /**
  * Resolves a single .tw-bbcode-pending placeholder (left by convertBBCodeToHTML) into a real
  * game link using the locally cached village/player/ally.txt data (see updateAllMapData() in
- * util/core_utils.user.js), leaving the plain text untouched if nothing is found in the cache.
+ * utils/core_utils.js), leaving the plain text untouched if nothing is found in the cache.
  */
 function resolveNotepadBBCodePlaceholder(el) {
     var type = el.dataset.bbType;

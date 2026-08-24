@@ -255,19 +255,30 @@ function listenTextAreas() {
 }
 
 /**
+ * Returns whether a keyboard event originated in an editable form control.
+ * Event-time detection also covers controls created after page initialisation.
+ * @param {EventTarget|null} target
+ * @returns {boolean}
+ */
+function isEditableKeyboardTarget(target) {
+    if (!target || typeof target.matches !== 'function') return false;
+    return target.matches('input, textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]') ||
+        Boolean(target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]'));
+}
+
+/**
  * Registers A/D keyboard shortcuts for cycling between villages.
- * Only active when the navigation arrows setting is enabled and no input has focus.
+ * Only active when the navigation arrows setting is enabled and no editable field has focus.
  */
 function defineKeyboardShortcuts() {
     if (settings_cookies.general['show__navigation_arrows']) {
         $(document).keydown(function (evt) {
-            if (evt.keyCode == 65 && !textSelected) {
+            if (textSelected || isEditableKeyboardTarget(evt.target)) return;
+
+            if (evt.keyCode == 65) {
                 evt.preventDefault();
                 previousVillage();
-            }
-        });
-        $(document).keydown(function (evt) {
-            if (evt.keyCode == 68 && !textSelected) {
+            } else if (evt.keyCode == 68) {
                 evt.preventDefault();
                 nextVillage();
             }
@@ -1415,15 +1426,18 @@ async function updateMapInfoAllies(force = false) {
 }
 
 /**
- * Refreshes village/player/ally map data together, each independently hourly-gated.
+ * Refreshes village/player/ally map data sequentially with a delay between requests;
+ * each file remains independently hourly-gated.
  * @param {boolean} [force=false]
  */
+const MAP_DATA_REQUEST_INTERVAL_SECONDS = 1;
+
 async function updateAllMapData(force = false) {
-    await Promise.all([
-        updateMapInfoVillages(force),
-        updateMapInfoPlayers(force),
-        updateMapInfoAllies(force)
-    ]);
+    await updateMapInfoVillages(force);
+    await wait(MAP_DATA_REQUEST_INTERVAL_SECONDS);
+    await updateMapInfoPlayers(force);
+    await wait(MAP_DATA_REQUEST_INTERVAL_SECONDS);
+    await updateMapInfoAllies(force);
 }
 
 /**

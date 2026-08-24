@@ -2,7 +2,7 @@
 // Injects the player's TWStats history table (points/villages/OD evolution over time) into the
 // native "screen=info_player" page, placed at the top of the right-hand column (next to the
 // achievements/awards section).
-// Data is fetched cross-origin via gmFetch (GM_xmlhttpRequest, see util/core_utils.user.js) and cached
+// Data is fetched cross-origin via gmFetch (GM_xmlhttpRequest, see utils/core_utils.js) and cached
 // in localStorage for TWSTATS_CACHE_TTL_MS to avoid hammering twstats.com on every page load.
 //
 // Note: we intentionally avoid parsing TWStats by matching localized (PT) label text — that's

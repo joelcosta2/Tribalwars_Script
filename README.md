@@ -168,6 +168,14 @@ After installation, open the script settings in TribalWars and enable the featur
 ![Map Attack Buttons](.github/images/mapCtxButtons.png)
 </details>
 
+<details>
+<summary>Map SDK Tester</summary>
+
+> Opens a simple temporary tester on map pages for circles, lines, triangles, squares, icons and text on the main map, minimap or both. Enter a coordinate in `x|y` format, then choose the size, colors, opacity and line width; line and shape points are generated automatically. Squares and triangles use the village's top-left corner as their origin. Sizes from `0.1` to `50` are supported. Drawings are kept in memory and disappear after a page reload.
+
+> The local SDK adaptation is based on the Map SDK by Thomas "Sass" Ameye: https://shinko-to-kuma.com/scripts/mapSdk.js. Thank you to the author for providing the original foundation. The original MIT license and source reference are retained in `utils/mapSdk.js`; the unchanged source copy remains in `_game_source/_mapsdk.js`.
+</details>
+
 ### Reports and Simulator
 
 <details>

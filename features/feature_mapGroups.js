@@ -20,10 +20,60 @@ let _customMapGroupsCache = null;
 // Lowercased/trimmed value Set per group id, rebuilt whenever groups change — keeps matching O(1).
 let _customMapGroupsLookup = new Map();
 
+// Fixed shape sizes (tile units unless noted) — tweak here to adjust every group at once.
+const MAP_GROUP_SHAPE_SIZES = {
+    circle: 0.75,
+    square: 1,
+    indicator: 0.1,
+    iconMap: 20,
+    iconMini: 10,
+    // Square drawn on the minimap for circle/square/indicator shapes when showOnMinimap is on.
+    minimapSquare: 1
+};
+
+// Fixed border/fill styling — tweak here to adjust every group's shape look at once.
+const MAP_GROUP_SHAPE_STYLE = {
+    strokeWidth: 1,
+    strokeWidthMini: 0,
+    fillOpacity: 0.35,
+    indicatorStrokeColor: '#000000',
+    indicatorStrokeWidth: 1,
+    indicatorFillOpacity: 0.9
+};
+
+/**
+ * Default MapSdk drawing config for a group: no shape selected, minimap mirroring off.
+ */
+function defaultMapSdkConfig() {
+    return { shape: 'none', value: '', url: '', showOnMinimap: false };
+}
+
+/**
+ * Fills in any missing mapSdk fields, migrating groups saved with the older per-shape
+ * checkbox format (independent enable+size per shape) down to a single selected shape.
+ */
+function normalizeGroup(group) {
+    const existing = group.mapSdk || {};
+    const isLegacyFormat = existing.circle || existing.square || existing.indicator || existing.text || existing.icon;
+
+    if (isLegacyFormat) {
+        const shape = ['circle', 'square', 'indicator', 'text', 'icon'].find(key => existing[key]?.enabled) || 'none';
+        group.mapSdk = {
+            shape,
+            value: existing.text?.value || '',
+            url: existing.icon?.url || '',
+            showOnMinimap: !!existing[shape]?.showOnMinimap
+        };
+    } else {
+        group.mapSdk = Object.assign(defaultMapSdkConfig(), existing);
+    }
+    return group;
+}
+
 /**
  * Loads (and caches) the ordered list of custom map groups. Array order is priority:
  * the first active group that matches a village wins.
- * @returns {Array<{id:string, name:string, color:string, active:boolean, matchType:'villages'|'players'|'tribes', values:string[]}>}
+ * @returns {Array<{id:string, name:string, color:string, active:boolean, matchType:'villages'|'players'|'tribes', values:string[], mapSdk:object}>}
  */
 function loadCustomMapGroups() {
     if (_customMapGroupsCache) return _customMapGroupsCache;
@@ -36,6 +86,8 @@ function loadCustomMapGroups() {
     } catch {
         groups = [];
     }
+
+    groups = groups.map(normalizeGroup);
 
     _customMapGroupsCache = groups;
     rebuildCustomMapGroupsLookup(groups);
@@ -53,6 +105,7 @@ function saveCustomMapGroups(groups) {
     rebuildCustomMapGroupsLookup(groups);
     renderCustomMapGroupsLegend();
     applyCustomMapGroupColors();
+    rebuildCustomMapGroupsMapSdkElements();
 }
 
 /**
@@ -93,66 +146,213 @@ function rgbToRgbaString(rgb, alpha = 0.35) {
 }
 
 /**
- * Resolves the CSS color for a village based on the first matching active custom group
- * (array order = priority), or null if no active group matches.
+ * Checks whether a village matches a single group's coordinate/player/tribe values.
  * @param {Object} village - A TWMap.villages entry (has owner, ally_id, xy, ...).
- * @returns {string|null}
+ * @param {Object} group
+ * @returns {boolean}
  */
-function resolveVillageGroupColor(village) {
-    const groups = loadCustomMapGroups();
+function villageMatchesGroup(village, group) {
+    const values = _customMapGroupsLookup.get(group.id);
+    if (!values || !values.size) return false;
 
-    for (const group of groups) {
-        if (!group.active) continue;
-        const values = _customMapGroupsLookup.get(group.id);
-        if (!values || !values.size) continue;
-
-        let matched = false;
-        if (group.matchType === 'villages') {
-            const x = Math.floor(village.xy / 1000);
-            const y = village.xy % 1000;
-            matched = values.has(`${x}|${y}`);
-        } else if (group.matchType === 'players') {
-            const ownerName = TWMap.players?.[village.owner]?.name;
-            matched = !!ownerName && values.has(ownerName.trim().toLowerCase());
-        } else if (group.matchType === 'tribes') {
-            const tag = TWMap.allies?.[village.ally_id]?.tag;
-            matched = !!tag && values.has(tag.trim().toLowerCase());
-        }
-
-        if (matched) return hexToRgbString(group.color);
+    if (group.matchType === 'villages') {
+        const x = Math.floor(village.xy / 1000);
+        const y = village.xy % 1000;
+        return values.has(`${x}|${y}`);
     }
+    if (group.matchType === 'players') {
+        const ownerName = TWMap.players?.[village.owner]?.name;
+        return !!ownerName && values.has(ownerName.trim().toLowerCase());
+    }
+    if (group.matchType === 'tribes') {
+        const tag = TWMap.allies?.[village.ally_id]?.tag;
+        return !!tag && values.has(tag.trim().toLowerCase());
+    }
+    return false;
+}
 
+/**
+ * Resolves the first active group (priority = array order) that matches a village, or null.
+ * @param {Object} village
+ * @returns {Object|null}
+ */
+function resolveFirstMatchingGroup(village) {
+    for (const group of loadCustomMapGroups()) {
+        if (group.active && villageMatchesGroup(village, group)) return group;
+    }
     return null;
 }
 
-const CUSTOM_MAP_GROUP_OVERLAY_CLASS = 'custom-map-group-overlay';
-
-function removeCustomMapGroupOverlays() {
-    document.querySelectorAll('.' + CUSTOM_MAP_GROUP_OVERLAY_CLASS).forEach(el => el.remove());
+function hasEnabledMapSdkShape(group) {
+    return group.mapSdk.shape && group.mapSdk.shape !== 'none';
 }
 
-function addCustomMapGroupOverlay(village, color) {
-    const villageElement = document.getElementById('map_village_' + village.id);
-    if (!villageElement || !villageElement.parentNode) return;
+// Cache of loaded Image objects per icon URL, shared across all groups/villages.
+const _mapGroupIconCache = new Map();
 
-    const existingOverlay = document.getElementById('custom_map_group_overlay_' + village.id);
-    if (existingOverlay) existingOverlay.remove();
+function getCachedMapGroupIcon(url) {
+    if (_mapGroupIconCache.has(url)) return _mapGroupIconCache.get(url);
+    const image = new Image();
+    image.onload = () => MapSdk.redraw();
+    image.src = url;
+    _mapGroupIconCache.set(url, image);
+    return image;
+}
 
-    const overlay = document.createElement('div');
-    overlay.id = 'custom_map_group_overlay_' + village.id;
-    overlay.className = CUSTOM_MAP_GROUP_OVERLAY_CLASS;
-    Object.assign(overlay.style, {
-        position: 'absolute',
-        top: villageElement.style.top,
-        left: villageElement.style.left,
-        width: '53px',
-        height: '38px',
-        backgroundColor: rgbToRgbaString(color, 0.35),
-        zIndex: '4',
-        pointerEvents: 'none'
+/**
+ * Pushes MapSdk elements for one coordinate's selected shape into the global MapSdk arrays,
+ * tagged with the owning group id for later cleanup/dedupe. Only one shape per group.
+ */
+function pushMapSdkElementsForGroup(x, y, group) {
+    const sdk = group.mapSdk;
+    if (!hasEnabledMapSdkShape(group)) return;
+
+    const stroke = hexToRgbString(group.color);
+    const translucentFill = rgbToRgbaString(stroke, MAP_GROUP_SHAPE_STYLE.fillOpacity);
+    const opaqueFill = rgbToRgbaString(stroke, MAP_GROUP_SHAPE_STYLE.indicatorFillOpacity);
+    const tag = { _twpfGroupId: group.id };
+    const translucentStyling = {
+        main: { fillStyle: translucentFill, strokeStyle: stroke, lineWidth: MAP_GROUP_SHAPE_STYLE.strokeWidth },
+        mini: { fillStyle: translucentFill, strokeStyle: stroke, lineWidth: MAP_GROUP_SHAPE_STYLE.strokeWidthMini }
+    };
+    // Borderless, fully opaque — used for the fixed-size square mirrored onto the minimap.
+    const minimapSquareStyling = { mini: { fillStyle: stroke } };
+
+    if (sdk.shape === 'circle') {
+        MapSdk.circles.push({
+            ...tag, x, y, radius: MAP_GROUP_SHAPE_SIZES.circle,
+            styling: translucentStyling, drawOnMap: true, drawOnMini: false
+        });
+    } else if (sdk.shape === 'square') {
+        pushMapGroupSquarePolygon(tag, x, y, MAP_GROUP_SHAPE_SIZES.square, translucentStyling, true, false);
+    } else if (sdk.shape === 'indicator') {
+        // Mimics the native color chip: an opaque circle nested exactly into the tile's corner.
+        MapSdk.circles.push({
+            ...tag, x, y, radius: MAP_GROUP_SHAPE_SIZES.indicator, anchor: 'cornerFit',
+            styling: {
+                main: { fillStyle: opaqueFill, strokeStyle: MAP_GROUP_SHAPE_STYLE.indicatorStrokeColor, lineWidth: MAP_GROUP_SHAPE_STYLE.indicatorStrokeWidth },
+                mini: { fillStyle: opaqueFill, strokeStyle: MAP_GROUP_SHAPE_STYLE.indicatorStrokeColor, lineWidth: MAP_GROUP_SHAPE_STYLE.indicatorStrokeWidth }
+            },
+            drawOnMap: true, drawOnMini: false
+        });
+    } else if (sdk.shape === 'text') {
+        MapSdk.texts.push({
+            ...tag, x, y, text: sdk.value || group.name,
+            color: '#ffffff', font: '11px Arial', miniFont: '9px Arial',
+            drawOnMap: true, drawOnMini: sdk.showOnMinimap
+        });
+    } else if (sdk.shape === 'icon' && sdk.url) {
+        MapSdk.icons.push({
+            ...tag, x, y, img: getCachedMapGroupIcon(sdk.url),
+            mapSize: MAP_GROUP_SHAPE_SIZES.iconMap, miniSize: MAP_GROUP_SHAPE_SIZES.iconMini,
+            drawOnMap: true, drawOnMini: sdk.showOnMinimap
+        });
+    }
+
+    // circle/square/indicator mirror onto the minimap as a fixed-size square instead of their own shape.
+    if (sdk.showOnMinimap && ['circle', 'square', 'indicator'].includes(sdk.shape)) {
+        pushMapGroupSquarePolygon(tag, x, y, MAP_GROUP_SHAPE_SIZES.minimapSquare, minimapSquareStyling, false, true);
+    }
+}
+
+function pushMapGroupSquarePolygon(tag, x, y, size, styling, drawOnMap, drawOnMini) {
+    const right = x + size;
+    const bottom = y + size;
+    MapSdk.polygons.push({
+        ...tag, coords: [{ x, y }, { x: right, y }, { x: right, y: bottom }, { x, y: bottom }], anchor: 'topLeft',
+        styling, drawOnMap, drawOnMini
+    });
+}
+
+/**
+ * Builds MapSdk elements directly from a 'villages' matchType group's stored coordinates —
+ * no dependency on TWMap.villages, since the coordinate list is already fully known.
+ */
+function buildMapSdkElementsForGroup(group) {
+    (group.values || []).forEach(value => {
+        const match = String(value).trim().match(/^(\d{1,3})\|(\d{1,3})$/);
+        if (!match) return;
+        pushMapSdkElementsForGroup(Number(match[1]), Number(match[2]), group);
+    });
+}
+
+function stripCustomMapGroupSdkElements() {
+    ['circles', 'polygons', 'texts', 'icons'].forEach(collection => {
+        MapSdk[collection] = MapSdk[collection].filter(element => !element._twpfGroupId);
+    });
+}
+
+// Coordinate+group keys already drawn — avoids duplicate elements across rebuilds/reactive adds.
+let _mapGroupDrawnSdkKeys = new Set();
+
+/**
+ * Fully rebuilds every MapSdk element owned by custom map groups, then triggers one redraw.
+ * 'villages' matchType groups are built eagerly; 'players'/'tribes' groups are resolved from
+ * whatever villages are currently known in TWMap.villages (more arrive reactively while panning).
+ */
+function rebuildCustomMapGroupsMapSdkElements() {
+    if (typeof MapSdk === 'undefined' || typeof TWMap === 'undefined') return;
+
+    stripCustomMapGroupSdkElements();
+    _mapGroupDrawnSdkKeys = new Set();
+
+    loadCustomMapGroups()
+        .filter(group => group.active && group.matchType === 'villages' && hasEnabledMapSdkShape(group))
+        .forEach(buildMapSdkElementsForGroup);
+
+    Object.values(TWMap.villages || {}).forEach(village => {
+        const group = resolveFirstMatchingGroup(village);
+        if (!group || group.matchType === 'villages' || !hasEnabledMapSdkShape(group)) return;
+
+        const x = Math.floor(village.xy / 1000);
+        const y = village.xy % 1000;
+        const key = `${group.id}_${x}_${y}`;
+        if (_mapGroupDrawnSdkKeys.has(key)) return;
+
+        _mapGroupDrawnSdkKeys.add(key);
+        pushMapSdkElementsForGroup(x, y, group);
     });
 
-    villageElement.parentNode.insertBefore(overlay, villageElement.nextSibling);
+    MapSdk.redraw();
+}
+
+// Batches reactive redraws so panning through several newly-discovered villages triggers
+// a single MapSdk.redraw() instead of one per village.
+let _pendingMapSdkRedraw = false;
+let _mapSdkRedrawScheduled = false;
+
+function scheduleMapSdkRedraw() {
+    _pendingMapSdkRedraw = true;
+    if (_mapSdkRedrawScheduled) return;
+
+    _mapSdkRedrawScheduled = true;
+    setTimeout(() => {
+        _mapSdkRedrawScheduled = false;
+        if (_pendingMapSdkRedraw) {
+            _pendingMapSdkRedraw = false;
+            MapSdk.redraw();
+        }
+    }, 0);
+}
+
+/**
+ * Reactively adds MapSdk elements for a single village as it's discovered (e.g. while panning),
+ * for 'players'/'tribes' matchType groups only — 'villages' groups are already fully built.
+ */
+function applyMapSdkElementForVillage(village) {
+    if (typeof MapSdk === 'undefined') return;
+
+    const group = resolveFirstMatchingGroup(village);
+    if (!group || group.matchType === 'villages' || !hasEnabledMapSdkShape(group)) return;
+
+    const x = Math.floor(village.xy / 1000);
+    const y = village.xy % 1000;
+    const key = `${group.id}_${x}_${y}`;
+    if (_mapGroupDrawnSdkKeys.has(key)) return;
+
+    _mapGroupDrawnSdkKeys.add(key);
+    pushMapSdkElementsForGroup(x, y, group);
+    scheduleMapSdkRedraw();
 }
 
 // Set once installMapHighlighterHook() runs; lets us repaint with native colors on demand.
@@ -160,9 +360,7 @@ let _origColorVillage = null;
 
 /**
  * Wraps MapHighlighter.colorVillage so every native recolor (initial load, drag redraw,
- * hover-driven refresh) is immediately followed by our own custom-group paint-over.
- * This bypasses TWMap.getColorByPlayer's own-village exclusion for villageColors, since we
- * apply the CSS ourselves after the native call runs, regardless of village ownership.
+ * hover-driven refresh) also runs our MapSdk shape resolution for that village.
  */
 function installMapHighlighterHook() {
     if (typeof MapHighlighter === 'undefined' || _origColorVillage) return;
@@ -170,31 +368,25 @@ function installMapHighlighterHook() {
     _origColorVillage = MapHighlighter.colorVillage.bind(MapHighlighter);
     MapHighlighter.colorVillage = function (village) {
         _origColorVillage(village);
-
-        const color = resolveVillageGroupColor(village);
-        if (!color) return;
-
-        addCustomMapGroupOverlay(village, color);
+        applyMapSdkElementForVillage(village);
     };
 }
 
 /**
- * Repaints every currently loaded village according to the active custom groups.
- * Relies on the MapHighlighter.colorVillage wrapper above to do the actual painting.
+ * Re-runs the MapSdk shape resolution for every currently loaded village.
+ * Relies on the MapHighlighter.colorVillage wrapper above to do the actual work.
  */
 function applyCustomMapGroupColors() {
     if (typeof TWMap === 'undefined' || typeof MapHighlighter === 'undefined' || !TWMap.villages) return;
-    removeCustomMapGroupOverlays();
     Object.values(TWMap.villages).forEach(village => MapHighlighter.colorVillage(village));
 }
 
 /**
  * Repaints every loaded village using ONLY the native color logic, bypassing our override.
- * Used when the master toggle is switched off, so colors revert instantly without a reload.
+ * Used when the master toggle is switched off.
  */
 function restoreNativeMapColors() {
     if (!_origColorVillage || !TWMap?.villages) return;
-    removeCustomMapGroupOverlays();
     Object.values(TWMap.villages).forEach(village => _origColorVillage(village));
 }
 
@@ -452,6 +644,8 @@ function renderMapGroupsList() {
 function openMapGroupsForm(groupId) {
     _mapGroupsEditingId = groupId;
     const group = groupId ? loadCustomMapGroups().find(g => g.id === groupId) : null;
+    // Working copy so mapSdk field edits only take effect once "Save" is clicked.
+    const formMapSdk = normalizeGroup(group ? { mapSdk: JSON.parse(JSON.stringify(group.mapSdk)) } : {}).mapSdk;
 
     const formContainer = document.getElementById('map_groups_form_container');
     formContainer.innerHTML = '';
@@ -516,6 +710,66 @@ function openMapGroupsForm(groupId) {
     valuesRow.append(valuesLabelTd, valuesInputTd);
     table.appendChild(valuesRow);
 
+    const shapeSelect = document.createElement('select');
+    [
+        { value: 'none', label: t('map.shapeNone') },
+        { value: 'circle', label: t('map.groupCircleEnabled') },
+        { value: 'square', label: t('map.groupSquareEnabled') },
+        { value: 'indicator', label: t('map.groupIndicatorEnabled') },
+        { value: 'text', label: t('map.groupTextEnabled') },
+        { value: 'icon', label: t('map.groupIconEnabled') }
+    ].forEach(opt => {
+        const option = Object.assign(document.createElement('option'), { value: opt.value, textContent: opt.label });
+        shapeSelect.appendChild(option);
+    });
+    shapeSelect.value = formMapSdk.shape;
+    addFormRow('map.groupShape', shapeSelect);
+
+    const textInput = (value, placeholder, onChange, width = '200px') => {
+        const el = document.createElement('input');
+        Object.assign(el, { type: 'text', value, placeholder: placeholder || '' });
+        el.style.width = width;
+        el.oninput = () => onChange(el.value);
+        return el;
+    };
+
+    // Shown only for the 'text'/'icon' shapes — circle/square/indicator need no extra value.
+    const shapeValueRow = document.createElement('tr');
+    const shapeValueLabelTd = document.createElement('td');
+    shapeValueLabelTd.className = 'settings-label-cell';
+    const shapeValueInputTd = document.createElement('td');
+    shapeValueInputTd.className = 'settings-input-cell';
+    shapeValueRow.append(shapeValueLabelTd, shapeValueInputTd);
+
+    const renderShapeValueInput = () => {
+        shapeValueLabelTd.textContent = '';
+        shapeValueInputTd.innerHTML = '';
+        shapeValueRow.style.display = 'none';
+
+        if (shapeSelect.value === 'text') {
+            shapeValueRow.style.display = '';
+            shapeValueLabelTd.textContent = t('map.groupTextEnabled');
+            shapeValueInputTd.appendChild(textInput(formMapSdk.value, t('map.groupName'), v => formMapSdk.value = v));
+        } else if (shapeSelect.value === 'icon') {
+            shapeValueRow.style.display = '';
+            shapeValueLabelTd.textContent = t('map.groupIconUrl');
+            shapeValueInputTd.appendChild(textInput(formMapSdk.url, t('map.groupIconUrl'), v => formMapSdk.url = v));
+        }
+    };
+    shapeSelect.onchange = () => { formMapSdk.shape = shapeSelect.value; renderShapeValueInput(); };
+    renderShapeValueInput();
+    table.appendChild(shapeValueRow);
+
+    const minimapRow = document.createElement('tr');
+    const minimapLabelTd = Object.assign(document.createElement('td'), { className: 'settings-label-cell', textContent: t('map.groupShowOnMinimap') });
+    const minimapInputTd = document.createElement('td');
+    minimapInputTd.className = 'settings-input-cell';
+    const minimapCheckbox = Object.assign(document.createElement('input'), { type: 'checkbox', checked: formMapSdk.showOnMinimap });
+    minimapCheckbox.onchange = () => { formMapSdk.showOnMinimap = minimapCheckbox.checked; };
+    minimapInputTd.appendChild(minimapCheckbox);
+    minimapRow.append(minimapLabelTd, minimapInputTd);
+    table.appendChild(minimapRow);
+
     const saveBtn = document.createElement('a');
     saveBtn.className = 'btn';
     saveBtn.style.marginRight = '6px';
@@ -530,9 +784,9 @@ function openMapGroupsForm(groupId) {
 
         if (_mapGroupsEditingId) {
             const existing = groups.find(g => g.id === _mapGroupsEditingId);
-            Object.assign(existing, { name, color: colorInput.value, matchType: typeSelect.value, values });
+            Object.assign(existing, { name, color: colorInput.value, matchType: typeSelect.value, values, mapSdk: formMapSdk });
         } else {
-            groups.push({ id: 'group_' + Date.now(), name, color: colorInput.value, active: true, matchType: typeSelect.value, values });
+            groups.push({ id: 'group_' + Date.now(), name, color: colorInput.value, active: true, matchType: typeSelect.value, values, mapSdk: formMapSdk });
         }
 
         saveCustomMapGroups(groups);
@@ -554,6 +808,7 @@ if (typeof TWMap !== 'undefined') {
     mapReady().then(() => {
         renderCustomMapGroupsLegend();
         applyCustomMapGroupColors();
+        rebuildCustomMapGroupsMapSdkElements();
     });
 
     if (TWMap.map) {
