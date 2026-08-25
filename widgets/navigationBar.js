@@ -59,7 +59,7 @@ function _openNavIconPicker(targetInput, anchorEl, onSelect) {
         { src: 'buildings/farm.webp',       title: t('navIcon.farm') },
         { src: 'buildings/storage.webp',    title: t('navIcon.warehouse') },
         { src: 'buildings/hide.webp',       title: t('navIcon.hidingPlace') },
-        { src: 'buildings/wall.webp',       title: t('navIcon.wall') },
+        { src: 'buildings/wall.png',        title: t('navIcon.wall') },
     ];
 
     const picker = document.createElement('div');

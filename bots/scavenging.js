@@ -212,7 +212,7 @@ function computeScavengeOptimizedDistribution(unitCounts, unlockedOptsData, mode
     const base = typeof image_base !== 'undefined' ? image_base : 'graphic/';
     const unitCols = SCAVENGE_UNIT_ORDER.filter(u => (unitCounts[u] || 0) > 0);
     let html = '<table class="vis" style="width:100%;font-size:11px;margin-top:8px;"><tr><th>' + t('scavenge.levelHeader') + '</th>';
-    unitCols.forEach(u => { html += `<th><img src="${base}unit/unit_${u}.png" style="width:20px" title="${typeof getUnitDisplayName === 'function' ? getUnitDisplayName(u) : u}"/></th>`; });
+    unitCols.forEach(u => { html += `<th><img src="${base}unit/unit_${u}.webp" style="width:20px" title="${typeof getUnitDisplayName === 'function' ? getUnitDisplayName(u) : u}"/></th>`; });
     html += '<th>' + t('scavenge.capacityHeader') + '</th><th>' + t('scavenge.resourcesHeader') + '</th><th>' + t('scavenge.durationHeader') + '</th></tr>';
     unlockedOptsData.forEach((opt, i) => {
         let cap = 0;
@@ -469,6 +469,8 @@ async function sendScavengeSquadApi(unitCounts, optionId, carryMax) {
  * Falls back to a page redirect when the required fields are not yet populated.
  */
 async function triggerScavengingAuto() {
+    if (!window.PremiumFeaturesPrivateAutomations) return;
+
     // Skip if a timer is already scheduled and still in the future — avoids redundant API calls.
     const existingEndTime = parseInt(localStorage.getItem('endTime_scavenging-auto'), 10);
     if (existingEndTime && existingEndTime > Date.now()) {
@@ -751,6 +753,11 @@ function injectScavengeConfigPanel() {
     enableCheckbox.id = 'scavenge_config_enabled';
     enableCheckbox.checked = config.enabled === true;
     enableCheckbox.style.marginRight = '5px';
+    if (!window.PremiumFeaturesPrivateAutomations) {
+        enableRow.style.display = 'none';
+        enableCheckbox.checked = false;
+        enableCheckbox.disabled = true;
+    }
     enableLabel.appendChild(enableCheckbox);
     enableLabel.appendChild(document.createTextNode(t('scavenge.enableLabel')));
     ec1.appendChild(enableLabel);
@@ -945,7 +952,7 @@ function injectScavengeConfigPanel() {
         const th = document.createElement('th');
         th.style.cssText = 'text-align: center; padding: 2px 1px;';
         const img = document.createElement('img');
-        img.src = assetBase + 'unit/unit_' + unit + '.png';
+        img.src = assetBase + 'unit/unit_' + unit + '.webp';
         img.style.cssText = 'display: block; margin: 0 auto;';
         img.title = typeof getUnitDisplayName === 'function' ? getUnitDisplayName(unit) : unit;
         th.appendChild(img);
@@ -1238,7 +1245,7 @@ function injectScavengeConfigPanel() {
  */
 function injectAutoScavengingOption() {
     injectScavengeConfigPanel();
-    if(getScavengeConfig().enabled) {
+    if (window.PremiumFeaturesPrivateAutomations && getScavengeConfig().enabled) {
         runAutoScavengingAll();
     }
 }
@@ -1249,6 +1256,8 @@ function injectAutoScavengingOption() {
  * If a mission is already in progress, schedules the next check and exits immediately.
  */
 async function runAutoScavengingAll() {
+    if (!window.PremiumFeaturesPrivateAutomations) return;
+
     // Skip if a timer is already scheduled and still in the future — avoids redundant API calls on every page visit.
     const existingEndTime = parseInt(localStorage.getItem('endTime_scavenging-auto'), 10);
     if (existingEndTime && existingEndTime > Date.now()) {

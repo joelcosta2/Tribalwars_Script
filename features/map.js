@@ -241,7 +241,7 @@ function addFarmAttackIcons() {
         if (!villageElement) return;
 
         const farmIcon = document.createElement('img');
-        farmIcon.src = _getNavAssetBase() + 'buildings/barracks.png';
+        farmIcon.src = _getNavAssetBase() + 'buildings/barracks.webp';
         farmIcon.alt = '';
         farmIcon.className = 'farm_attack_img';
         Object.assign(farmIcon.style, { width: '15px', height: '15px', display: 'block' });
@@ -884,7 +884,7 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
             // Row 1: unit icons
             units.forEach(unit => {
                 const img = document.createElement('img');
-                img.src = `${assetBase}unit/unit_${unit}.png`;
+                img.src = `${assetBase}unit/unit_${unit}.webp`;
                 img.title = getUnitDisplayName(unit);
                 img.style.cssText = 'width:16px;height:16px;display:block;margin:0 auto';
                 grid.appendChild(img);
@@ -1146,7 +1146,7 @@ function scheduleMapIconsRefresh() {
 // Skips re-fetching the rally point dialog for already-visited villages.
 const _troopTemplateSessionCache = new Map();
 
-// Shared storage namespace with feature_TroopTemplates.user.js
+// Shared storage namespace with troopTemplates.js
 const _CUSTOM_TEMPLATES_STORAGE_PREFIX = 'twpf_custom_troop_templates_v1';
 
 // Cache for unit speed data — set once at startup, safe to hold in memory.
@@ -1161,7 +1161,7 @@ const _villageCache = new Map();
 const _VILLAGE_CACHE_MAX = 150;
 
 // Maps TribalWars unit codes to their translated display names, reusing the
-// navIcon.* keys already defined for widget_navigationBar.user.js's icon picker.
+// navIcon.* keys already defined for navigationBar.js's icon picker.
 const UNIT_NAME_KEYS = {
     spear: 'navIcon.spear', sword: 'navIcon.sword', axe: 'navIcon.axe', archer: 'navIcon.archer',
     spy: 'navIcon.scout', light: 'navIcon.lightCavalry', marcher: 'navIcon.mountedArcher',
@@ -1689,7 +1689,7 @@ function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
             const isUseAll = template.use_all && template.use_all.includes(unit);
 
             if (value > 0 || isUseAll) {
-                const iconUrl = `${_getNavAssetBase()}unit/unit_${unit}.png`;
+                const iconUrl = `${_getNavAssetBase()}unit/unit_${unit}.webp`;
                 const displayValue = isUseAll ? t('common.all') : value;
 
                 tooltipHtml += `<img src="${iconUrl}" alt="${getUnitDisplayName(unit)}" /> ${displayValue}<br />`;

@@ -113,7 +113,7 @@ function openEditModeNote() {
  * Builds a BBCode formatting toolbar (bold/italic/underline/strikethrough/player/tribe/coord/
  * quote/url/spoiler) that dispatches through the game's own native BBCodes.insert() — caller must
  * set BBCodes.target to the desired textarea before/when a button is clicked. `idPrefix` namespaces
- * every button id so multiple toolbar instances (this widget vs. feature_ExtraMemo.js's per-village
+ * every button id so multiple toolbar instances (this widget vs. extraNotepad.js's per-village
  * editors) can coexist on the same page without id clashes with each other or the native memo page.
  * @param {string} [idPrefix='']
  * @returns {HTMLDivElement}

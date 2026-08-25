@@ -22,7 +22,7 @@ let _customMapGroupsLookup = new Map();
 
 // Fixed shape sizes (tile units unless noted) — tweak here to adjust every group at once.
 const MAP_GROUP_SHAPE_SIZES = {
-    circle: 0.75,
+    circle: 0.5,
     square: 1,
     indicator: 0.1,
     iconMap: 20,
@@ -638,16 +638,18 @@ function renderMapGroupsList() {
 }
 
 /**
- * Shows the add/edit form pre-filled for the given group id, or empty for a new group.
- * @param {string|null} groupId
+ * Builds the full add/edit group form (name, color, match type, values, shape, shape value,
+ * minimap toggle) into `formContainer`, wiring Save/Cancel to the given callbacks. Shared by the
+ * manage-groups popup (openMapGroupsForm) and mapGroupQuickLinks.js's "New" flow, so both
+ * places offer the exact same set of fields.
+ * @param {Element} formContainer
+ * @param {{group?: Object|null, defaultMatchType?: string, defaultValues?: string[], onSaved: (groups:Array) => void, onCancel: () => void}} options
  */
-function openMapGroupsForm(groupId) {
-    _mapGroupsEditingId = groupId;
-    const group = groupId ? loadCustomMapGroups().find(g => g.id === groupId) : null;
+function renderGroupForm(formContainer, options) {
+    const { group = null, defaultMatchType = 'villages', defaultValues = [], onSaved, onCancel } = options;
     // Working copy so mapSdk field edits only take effect once "Save" is clicked.
     const formMapSdk = normalizeGroup(group ? { mapSdk: JSON.parse(JSON.stringify(group.mapSdk)) } : {}).mapSdk;
 
-    const formContainer = document.getElementById('map_groups_form_container');
     formContainer.innerHTML = '';
     formContainer.style.display = 'block';
 
@@ -672,12 +674,12 @@ function openMapGroupsForm(groupId) {
         const option = Object.assign(document.createElement('option'), { value: opt.value, textContent: opt.label });
         typeSelect.appendChild(option);
     });
-    typeSelect.value = group?.matchType || 'villages';
+    typeSelect.value = group?.matchType || defaultMatchType;
 
     const valuesTextarea = document.createElement('textarea');
     valuesTextarea.style.width = '95%';
     valuesTextarea.rows = 5;
-    valuesTextarea.value = (group?.values || []).join('\n');
+    valuesTextarea.value = (group?.values || defaultValues).join('\n');
 
     const valuesHelp = document.createElement('small');
     valuesHelp.style.display = 'block';
@@ -782,24 +784,40 @@ function openMapGroupsForm(groupId) {
         const values = valuesTextarea.value.split('\n').map(v => v.trim()).filter(Boolean);
         const groups = loadCustomMapGroups();
 
-        if (_mapGroupsEditingId) {
-            const existing = groups.find(g => g.id === _mapGroupsEditingId);
+        if (group) {
+            const existing = groups.find(g => g.id === group.id);
             Object.assign(existing, { name, color: colorInput.value, matchType: typeSelect.value, values, mapSdk: formMapSdk });
         } else {
             groups.push({ id: 'group_' + Date.now(), name, color: colorInput.value, active: true, matchType: typeSelect.value, values, mapSdk: formMapSdk });
         }
 
         saveCustomMapGroups(groups);
-        renderMapGroupsList();
-        formContainer.style.display = 'none';
+        onSaved(groups);
     };
 
     const cancelBtn = document.createElement('a');
     cancelBtn.className = 'btn';
     cancelBtn.textContent = t('button.cancel');
-    cancelBtn.onclick = (e) => { e.preventDefault(); formContainer.style.display = 'none'; };
+    cancelBtn.onclick = (e) => { e.preventDefault(); onCancel(); };
 
     formContainer.append(table, saveBtn, cancelBtn);
+}
+
+/**
+ * Shows the manage-popup's add/edit form pre-filled for the given group id, or empty for a new
+ * group.
+ * @param {string|null} groupId
+ */
+function openMapGroupsForm(groupId) {
+    _mapGroupsEditingId = groupId;
+    const group = groupId ? loadCustomMapGroups().find(g => g.id === groupId) : null;
+    const formContainer = document.getElementById('map_groups_form_container');
+
+    renderGroupForm(formContainer, {
+        group,
+        onSaved: () => { renderMapGroupsList(); formContainer.style.display = 'none'; },
+        onCancel: () => { formContainer.style.display = 'none'; }
+    });
 }
 
 if (typeof TWMap !== 'undefined') {
@@ -812,7 +830,7 @@ if (typeof TWMap !== 'undefined') {
     });
 
     if (TWMap.map) {
-        // Chain after whatever handler is already assigned (e.g. feature_map.user.js's own
+        // Chain after whatever handler is already assigned (e.g. map.js's own
         // wrapper) instead of replacing it, so both files' drag-repaint logic keeps running.
         const _previousOnMovePixel = TWMap.map.handler.onMovePixel;
         TWMap.map.handler.onMovePixel = function (e, a) {

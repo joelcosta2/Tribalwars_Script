@@ -1256,8 +1256,8 @@ function injectAttackCalculations() {
  * Converts common BBCode tags in a string to equivalent HTML markup.
  * Supports [b], [i], [u], [s], [url]/[url=], [quote]/[quote=Author], [spoiler]/[spoiler=Title],
  * [size=N], [color=#hex|name], [table]/[**]..[/**]/[*] (native memo doesn't render this itself —
- * see notes in widget_notepad.user.js) and [player]/[ally]/[coord] (rendered as placeholders,
- * resolved asynchronously to real game links by resolveNotepadBBCodeLinks() in widget_notepad.user.js).
+ * see notes in notepad.js) and [player]/[ally]/[coord] (rendered as placeholders,
+ * resolved asynchronously to real game links by resolveNotepadBBCodeLinks() in notepad.js).
  * @param {string} text
  * @returns {string}
  */
@@ -1534,7 +1534,7 @@ function computeContinent(x, y) {
 /**
  * Looks up a village's full cached record (id, name, owner, continent) by "X|Y" coordinates,
  * reading the raw 'map_villages' text directly (unlike getVillageIDByCoord's LRU-cached
- * id-only lookup in feature_map.user.js, this is for the infrequent bbcode-resolution path).
+ * id-only lookup in map.js, this is for the infrequent bbcode-resolution path).
  * @param {string|number} x
  * @param {string|number} y
  * @returns {{id:string,name:string,ownerId:string,x:string,y:string,continent:string}|null}
@@ -2196,9 +2196,18 @@ function start() {
             $(document).ready(function () {
                 if (typeof injectExtraMemoFeature === 'function') injectExtraMemoFeature();
             });
-        } else if (urlPage.includes('screen=info_player') && settings_cookies.general['show__player_profile_stats']) {
+        } else if (urlPage.includes('screen=info_player')) {
             $(document).ready(function () {
-                if (typeof injectPlayerProfileTWStats === 'function') injectPlayerProfileTWStats();
+                if (settings_cookies.general['show__player_profile_stats'] && typeof injectPlayerProfileTWStats === 'function') injectPlayerProfileTWStats();
+                if (typeof injectMapGroupQuickAddLink === 'function') injectMapGroupQuickAddLink('players');
+            });
+        } else if (urlPage.includes('screen=info_ally')) {
+            $(document).ready(function () {
+                if (typeof injectMapGroupQuickAddLink === 'function') injectMapGroupQuickAddLink('tribes');
+            });
+        } else if (urlPage.includes('screen=info_village')) {
+            $(document).ready(function () {
+                if (typeof injectMapGroupQuickAddLink === 'function') injectMapGroupQuickAddLink('villages');
             });
         }
         insertNavigationArrows();
@@ -2242,7 +2251,7 @@ function start() {
             checkAndScheduleDailyBonus();
         }
 
-        if (settings_cookies.general['show__auto_paladin_train']?.enabled) {
+        if (window.PremiumFeaturesPrivateAutomations && settings_cookies.general['show__auto_paladin_train']?.enabled) {
             checkAndSchedulePaladinTrainer();
         }
 

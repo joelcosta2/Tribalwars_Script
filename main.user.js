@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tribalwars: Premium Features
-// @version      5.0.3
-// @description  Feature-rich enhancement suite for TribalWars. Widgets: Village List, Notepad, Extra Build Queue, Recruit Troops. Map: hover details, outgoing command overlay, attack heat-map, custom CTX attack template buttons, large map view. Automation: Auto-Scavenging (per-level & per-village config), Auto-Paladin Trainer, Auto Daily Bonus collection. UI: Custom Navigation Bar, Navigation Arrows, Visual Building Overview. Settings: full import/export support.
+// @version      5.0.4
+// @description  Feature-rich enhancement suite for TribalWars. Widgets: Village List, Notepad, Extra Build Queue, Recruit Troops. Map: hover details, outgoing command overlay, attack heat-map, custom CTX attack template buttons, large map view. Automation: Auto Daily Bonus collection. UI: Custom Navigation Bar, Navigation Arrows, Visual Building Overview. Settings: full import/export support.
 // @author       killwilll
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/i18n/i18n_utils.js
 // @resource     i18n_en      https://github.com/joelcosta2/Tribalwars_Script/raw/master/i18n/en.json
@@ -13,24 +13,26 @@
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_darkmode.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/core_settings.js
 // @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/utils/mapSdk.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_villageArrows.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_navigationBar.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_map.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_mapGroups.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_overview.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_overviewVillages.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_TroopTemplates.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_simulator.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_playerProfile.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/feature_ExtraMemo.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/bot_trainerPaladin.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/bot_scavenging.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/bot_dailyBonus.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/bot_buildInstantFree.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_villageList.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_notepad.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_extraBuildQueue.js
-// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/widget_recruitTroops.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/villageArrows.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/navigationBar.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/map.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/allyReservations.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/mapGroups.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/mapGroupQuickLinks.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/overview.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/overviewVillages.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/troopTemplates.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/simulator.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/playerProfile.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/features/extraNotepad.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/trainerPaladin.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/scavenging.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/dailyBonus.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/bots/buildInstantFree.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/villageList.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/notepad.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/extraBuildQueue.js
+// @require      https://github.com/joelcosta2/Tribalwars_Script/raw/master/widgets/recruitTroops.js
 // @updateURL    https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
 // @downloadURL  https://github.com/joelcosta2/Tribalwars_Script/raw/master/main.user.js
 // @include      https://*.tribalwars.*/*
@@ -68,6 +70,7 @@
         cleanupLegacyReportsLocalStorage();
         await cleanupLegacyNotepadStorage();
         await hydrateNotepadCache();
+        await hydrateReservationsCache();
         cleanupLegacyMapDataLocalStorage();
         await hydrateMapDataCache();
         restoreTimeouts();

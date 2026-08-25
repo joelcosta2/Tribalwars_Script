@@ -1,5 +1,5 @@
 
-// Extra Memo — view/edit every village's Notepad-widget note directly from the native screen=memo page.
+// Notepad Page — view/edit every village's Notepad-widget note directly from the native screen=memo page.
 // Reuses the custom Notepad widget's own IndexedDB-backed cache, not the native TW memo.
 
 const EXTRA_MEMO_TOGGLE_KEY = 'extra_memo_show_all_villages';
@@ -39,7 +39,7 @@ function renderExtraMemoView(villageId) {
 
     if (noteText) {
         // white-space:pre-wrap preserves line breaks — convertBBCodeToHTML() doesn't convert them
-        // itself, same convention as getOverviewVillagesNotepadTooltipHtml() (feature_overviewVillages.user.js).
+        // itself, same convention as getOverviewVillagesNotepadTooltipHtml() (overviewVillages.js).
         body.style.whiteSpace = 'pre-wrap';
         body.innerHTML = convertBBCodeToHTML(noteText);
         resolveNotepadBBCodeLinks(body);

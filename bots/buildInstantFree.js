@@ -21,7 +21,7 @@
 //
 // Integration points (called externally):
 //   • start() in core_utils.user.js → checkAndScheduleBuildInstantFree()
-//   • scheduleCompletionNotification(villageId) in widget_extraBuildQueue.user.js (after a build
+//   • scheduleCompletionNotification(villageId) in extraBuildQueue.js (after a build
 //     finishes, for the current OR any background village) → checkAndScheduleBuildInstantFree(villageId)
 //     to re-arm for that village's next queued build.
 

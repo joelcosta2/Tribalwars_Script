@@ -88,6 +88,27 @@ function setVillageQueueFull(villageId, value) {
 // racing each other and sending duplicate upgrade requests for the same village's queue head.
 var buildQueueRequestInFlightByVillage = {};
 
+function setBuildQueueButtonLoading(button, isLoading) {
+    if (!button) return;
+
+    if (isLoading) {
+        if (button.dataset.originalContent == null) {
+            button.dataset.originalContent = button.innerHTML;
+        }
+        button.dataset.originalPointerEvents = button.style.pointerEvents;
+        button.setAttribute('aria-busy', 'true');
+        button.style.pointerEvents = 'none';
+        button.innerHTML = '<img src="https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif" alt="" style="height:14px;vertical-align:middle;">';
+        return;
+    }
+
+    button.removeAttribute('aria-busy');
+    button.style.pointerEvents = button.dataset.originalPointerEvents || '';
+    button.innerHTML = button.dataset.originalContent || '';
+    delete button.dataset.originalContent;
+    delete button.dataset.originalPointerEvents;
+}
+
 /**
  * Fetches a village's main-building page via AJAX. Works for the currently displayed village
  * as well as any other village belonging to the account — cookies/session apply account-wide,
@@ -190,7 +211,7 @@ function getBuildingDisplayName(buildId, doc) {
  * Builds the active-queue header + full upgradeable-buildings list as a standalone DOM
  * fragment (not inserted anywhere) — shared by the sidebar widget (injectBuildQueue) and the
  * overview_villages build-queue overlay (openVillageBuildQueueOverlay in
- * feature_overviewVillages.user.js), which renders it for a village that isn't the loaded page.
+ * overviewVillages.js), which renders it for a village that isn't the loaded page.
  * @param {string[]} availableBuildingsImgs - Image URLs of buildings that can currently be upgraded.
  * @param {string[]} buildingImgs - Image URLs used to determine if a building can be queued.
  * @param {number[]} availableBuildingLevels - Current level of each building in availableBuildingsImgs.
@@ -282,7 +303,7 @@ function buildBuildQueueContent(availableBuildingsImgs, buildingImgs, availableB
         upgradeLink.style.padding = '1px 3px';
         upgradeLink.textContent = t('buildQueue.level', { level: nextLevel });
         upgradeLink.onclick = function () {
-            addToBuildQueue(buildId, vId);
+            addToBuildQueue(buildId, vId, upgradeLink);
             if (onAction) onAction();
         }
 
@@ -860,12 +881,12 @@ function setCancelBuildIds(cancelButtons, villageId) {
  * @param {string} [build_id] - Building id to queue. Omit to process the next queued item.
  * @param {string|number} [villageId] - Village to act on. Defaults to the currently loaded village.
  */
-function addToBuildQueue(build_id, villageId) {
+function addToBuildQueue(build_id, villageId, actionButton) {
     const vId = villageId || game_data?.village?.id;
     const isCurrent = vId == game_data?.village?.id;
     if (build_id) {
         if (!isVillageQueueFull(vId) && !(bqGet('waiting_for_queue', vId) || {}).buildId) {
-            callUpgradeBuilding(build_id, vId);
+            callUpgradeBuilding(build_id, vId, actionButton);
         } else {
             var building_queue = bqGet('building_queue', vId) || [];
             // Compute and store the actual target level for this new queue entry
@@ -959,17 +980,19 @@ async function removeFromActiveBuildQueue(build_index, villageId) {
  * @param {string|null} id - Building id to upgrade, or null to trigger a queue cleanup.
  * @param {string|number} [villageId] - Defaults to the currently loaded village.
  */
-function callUpgradeBuilding(id, villageId) {
+function callUpgradeBuilding(id, villageId, actionButton) {
     const vId = villageId || game_data?.village?.id;
     const isCurrent = vId == game_data?.village?.id;
     if (id) {
         if (buildQueueRequestInFlightByVillage[vId]) return; // another trigger already has a request in transit
         buildQueueRequestInFlightByVillage[vId] = true;
+        setBuildQueueButtonLoading(actionButton, true);
         $.ajax({
             'url': getVillageLinkBase(vId) + 'main&action=upgrade_building&id=' + id + '&type=main&h=' + game_data.csrf,
             'type': 'GET',
             'complete': function () {
                 delete buildQueueRequestInFlightByVillage[vId];
+                setBuildQueueButtonLoading(actionButton, false);
             },
             'success': function (data) {
                 const parser = new DOMParser();

@@ -4,6 +4,20 @@ A desktop userscript that adds practical tools for managing TribalWars villages,
 
 Some features reproduce conveniences normally associated with a Premium Account. Others are independent utilities. Automation is optional and may not be allowed on every world.
 
+<table>
+	<tr>
+		<td><img src=".github/images/overviewExtraInfo2.png" alt="Visual Building Overview Details" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+		<td><img src=".github/images/largeMap.png" alt="Large Map" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+	</tr>
+	<tr>
+		<td><img src=".github/images/overviewVillages21.png" alt="Overview Villages" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+		<td><img src=".github/images/mapGroups.png" alt="Custom Map Groups" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+	</tr>
+</table>
+
+> **Important:** This project is intended for players **without** an active Premium Account. Some features may not work at all or may have compatibility issues.
+
+
 ## Requirements
 
 - Tampermonkey or another userscript manager that supports `@require`.
@@ -28,6 +42,7 @@ After installation, open the script settings in TribalWars and enable the featur
 > Shows all villages in a quick-access widget. The list is refreshed when the cached data is incomplete.
 
 ![Village List](.github/images/villageList.png)
+![Village List2](.github/images/villageListPopup.png)
 </details>
 
 <details>
@@ -57,11 +72,11 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 <details>
-<summary>Extra Memo</summary>
+<summary>Notepad Page</summary>
 
-> View and edit notes for every village directly from the native memo screen. Notes can be exported and imported as JSON.
+> Notes for every village can be managed from the notepad page. Notes can be exported and imported as JSON.
 
-![Extra Memo](.github/images/extraMemo.png)
+![Notepad Page](.github/images/extraMemo.png)
 </details>
 
 <details>
@@ -75,7 +90,7 @@ After installation, open the script settings in TribalWars and enable the featur
 <details>
 <summary>Building Queue Widget</summary>
 
-> Manage upgrades from the overview. The script can keep a local waiting queue and submit upgrades when resources and server slots are available.
+> Manage upgrades from the sidebar. The script can keep a local waiting queue and submit upgrades when resources and server slots are available.
 
 ![Building Queue](.github/images/extraBuildQueue2.png)
 </details>
@@ -98,7 +113,8 @@ After installation, open the script settings in TribalWars and enable the featur
 
 > This view requires at least two villages. Troop values may need a manual refresh and can be temporarily stale.
 
-![Overview Villages](.github/images/overviewVillages.png)
+![Overview Villages2](.github/images/overviewVillages21.png)
+![Overview Villages](.github/images/overviewVillages0.png)
 </details>
 
 <details>
@@ -150,6 +166,7 @@ After installation, open the script settings in TribalWars and enable the featur
 > Create coloured groups matching village coordinates, players or tribes. Groups are stored per world and player, and the first matching group takes priority.
 
 ![Custom Map Groups](.github/images/mapGroups.png)
+![Custom Map Groups2](.github/images/mapGroups2.png)
 </details>
 
 <details>
@@ -161,19 +178,17 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 <details>
-<summary>Map Attack Buttons</summary>
+<summary>Map Quick Action Buttons</summary>
 
-> Adds quick-send attack buttons to the map context menu using your saved troop templates.
+> Adds quick action buttons to the map context menu for quick attacks using saved troop templates, quick reservations and quick addition of villages to map groups.
 
-![Map Attack Buttons](.github/images/mapCtxButtons.png)
+![Map Quick Action Buttons](.github/images/mapCtxButtons.png)
 </details>
 
 <details>
-<summary>Map SDK Tester</summary>
+<summary>Map SDK</summary>
 
-> Opens a simple temporary tester on map pages for circles, lines, triangles, squares, icons and text on the main map, minimap or both. Enter a coordinate in `x|y` format, then choose the size, colors, opacity and line width; line and shape points are generated automatically. Squares and triangles use the village's top-left corner as their origin. Sizes from `0.1` to `50` are supported. Drawings are kept in memory and disappear after a page reload.
-
-> The local SDK adaptation is based on the Map SDK by Thomas "Sass" Ameye: https://shinko-to-kuma.com/scripts/mapSdk.js. Thank you to the author for providing the original foundation. The original MIT license and source reference are retained in `utils/mapSdk.js`; the unchanged source copy remains in `_game_source/_mapsdk.js`.
+> The local SDK adaptation is based on the Map SDK by Thomas "Sass" Ameye: https://shinko-to-kuma.com/scripts/mapSdk.js. Thank you to the author for providing the original foundation.
 </details>
 
 ### Reports and Simulator
@@ -197,26 +212,6 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 ### Automation
-
-<details>
-<summary>Auto Scavenging</summary>
-
-> Configure automation per village: choose the scavenge level, select all or specific units, and distribute troops using the balanced or fastest mode.
-
-> The bot retries failed requests, adds timing variation and disables itself after a send failure.
-
-![Auto Scavenging](.github/images/scavengeConfig.png)
-</details>
-
-<details>
-<summary>Auto Paladin Trainer</summary>
-
-> Automatically schedules the cheapest available paladin training regimen up to a chosen level.
-
-> Current limitation: this feature is intended for accounts with one village.
-
-![Auto Paladin Trainer](.github/images/autoPaladinTrainer.png)
-</details>
 
 <details>
 <summary>Auto Daily Bonus</summary>
@@ -257,7 +252,7 @@ After installation, open the script settings in TribalWars and enable the featur
 <details>
 <summary>Bot Protection Handling</summary>
 
-> When TribalWars displays a bot-protection screen, the script can stop its features automatically. This behavior is controlled in the settings.
+> When TribalWars displays an anti-bot screen, the script can stop its features automatically to prevent continuous requests while the protection is active, helping reduce the risk of bans. This behavior is controlled in the settings.
 </details>
 
 ## Data and Limitations
@@ -292,8 +287,6 @@ This project is not affiliated with, endorsed by or sponsored by InnoGames or Tr
 This project is provided for personal use and experimentation. Automation may violate the Terms of Service or local rules of a TribalWars world.
 
 The software is provided "as is", without guarantees of availability, accuracy or compatibility. It may not work on every world, country, language or game version. Some features interact with external services or parse TribalWars HTML, which may change without notice.
-
-Using the automatic Knight (Paladin) Trainer and/or Auto Scavenging carries a very high ban risk. Enable these bots only if you are willing to accept that risk.
 
 The building queue is a separate feature from these bots and has reportedly worked with at least 10 villages without a ban.
 

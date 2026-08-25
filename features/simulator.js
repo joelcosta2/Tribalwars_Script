@@ -66,7 +66,7 @@ function parseSpyWallLevel() {
     for (var t = 0; t < tables.length; t++) {
         var rows = tables[t].querySelectorAll('tr');
         for (var r = 0; r < rows.length; r++) {
-            if (!rows[r].querySelector('img[src*="wall.webp"]')) continue;
+            if (!rows[r].querySelector('img[src*="wall.webp"], img[src*="wall.png"]')) continue;
             var cells = rows[r].querySelectorAll('td');
             if (cells.length < 2) continue;
             var level = parseInt(cells[1].textContent.trim(), 10);

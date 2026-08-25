@@ -6,6 +6,7 @@ const BUILD_QUEUE_STORE_NAME = 'build_queue';
 const WORLD_REPORTS_STORE_NAME = 'world_reports';
 const VILLAGE_NOTEPAD_STORE_NAME = 'village_notepad';
 const MAP_DATA_STORE_NAME = 'map_data';
+const ALLY_RESERVATIONS_STORE_NAME = 'ally_reservations';
 
 var twDbPromise = null;
 // One entry per village: { [villageId]: { building_queue, building_queue_active, ... } }
@@ -14,6 +15,8 @@ var buildQueueMemoryCache = {};
 var notepadMemoryCache = {};
 // One entry per map/*.txt dump: { 'map_villages': rawText, 'map_players': rawText, 'map_allies': rawText }
 var mapDataMemoryCache = {};
+// One entry per reserved village: { [villageId]: { reservationId, villageId, coords, targetPlayerId, reservingPlayerId, reservingPlayerName, expiresAtMs } }
+var allyReservationsMemoryCache = {};
 
 /**
  * Opens (or returns the cached open) shared IndexedDB database used by all script features.
@@ -28,7 +31,7 @@ function openTwDb() {
             reject(new Error('IndexedDB unavailable'));
             return;
         }
-        const request = indexedDB.open(TW_DB_NAME, 4);
+        const request = indexedDB.open(TW_DB_NAME, 5);
         request.onupgradeneeded = function () {
             const db = request.result;
             if (!db.objectStoreNames.contains(BUILD_QUEUE_STORE_NAME)) {
@@ -42,6 +45,9 @@ function openTwDb() {
             }
             if (!db.objectStoreNames.contains(MAP_DATA_STORE_NAME)) {
                 db.createObjectStore(MAP_DATA_STORE_NAME);
+            }
+            if (!db.objectStoreNames.contains(ALLY_RESERVATIONS_STORE_NAME)) {
+                db.createObjectStore(ALLY_RESERVATIONS_STORE_NAME);
             }
         };
         request.onsuccess = function () { resolve(request.result); };
@@ -453,4 +459,103 @@ function cleanupLegacyMapDataLocalStorage() {
     if (localStorage.getItem(MAP_DATA_CLEANUP_FLAG)) return;
     ['map_villages', 'map_players', 'map_allies'].forEach(key => localStorage.removeItem(key));
     localStorage.setItem(MAP_DATA_CLEANUP_FLAG, '1');
+}
+
+/**
+ * Returns the full in-memory ally-reservations cache, keyed by village id.
+ * @returns {{[villageId: string]: {reservationId, villageId, coords, targetPlayerId, reservingPlayerId, reservingPlayerName, expiresAtMs}}}
+ */
+function reservationsGetAll() {
+    return allyReservationsMemoryCache;
+}
+
+/**
+ * Writes a single village's reservation record to the cache and IndexedDB — used for the
+ * optimistic update right after the user reserves a village via the map context menu.
+ * @param {string|number} villageId
+ * @param {*} record
+ * @returns {Promise<void>} Never rejects.
+ */
+function reservationSet(villageId, record) {
+    const vId = String(villageId);
+    allyReservationsMemoryCache[vId] = record;
+    return openTwDb().then(db => new Promise(resolve => {
+        const request = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite').objectStore(ALLY_RESERVATIONS_STORE_NAME).put(record, vId);
+        request.onsuccess = function () { resolve(); };
+        request.onerror = function () { resolve(); };
+    })).catch(e => console.warn('[TW Reservations] reservationSet failed for village ' + vId, e));
+}
+
+/**
+ * Deletes a single village's reservation record from the cache and IndexedDB — used for the
+ * optimistic update right after the user unreserves a village via the map context menu.
+ * @param {string|number} villageId
+ * @returns {Promise<void>} Never rejects.
+ */
+function reservationRemove(villageId) {
+    const vId = String(villageId);
+    delete allyReservationsMemoryCache[vId];
+    return openTwDb().then(db => new Promise(resolve => {
+        const request = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite').objectStore(ALLY_RESERVATIONS_STORE_NAME).delete(vId);
+        request.onsuccess = function () { resolve(); };
+        request.onerror = function () { resolve(); };
+    })).catch(e => console.warn('[TW Reservations] reservationRemove failed for village ' + vId, e));
+}
+
+/**
+ * Replaces every cached reservation with the provided map and persists the full replacement —
+ * used after each hourly full resync of the tribe's reservations list.
+ * @param {{[villageId: string]: *}} nextReservations
+ * @returns {Promise<void>} Never rejects.
+ */
+function reservationsReplaceAll(nextReservations) {
+    const normalized = {};
+    Object.keys(nextReservations || {}).forEach(villageId => {
+        normalized[String(villageId)] = nextReservations[villageId];
+    });
+
+    Object.keys(allyReservationsMemoryCache).forEach(key => delete allyReservationsMemoryCache[key]);
+    Object.assign(allyReservationsMemoryCache, normalized);
+
+    return openTwDb().then(db => new Promise(resolve => {
+        const tx = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(ALLY_RESERVATIONS_STORE_NAME);
+
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { resolve(); };
+
+        const clearRequest = store.clear();
+        clearRequest.onsuccess = function () {
+            Object.entries(normalized).forEach(([villageId, record]) => {
+                store.put(record, villageId);
+            });
+        };
+        clearRequest.onerror = function () { resolve(); };
+    })).catch(e => console.warn('[TW Reservations] reservationsReplaceAll failed', e));
+}
+
+/**
+ * Hydrates the in-memory ally-reservations cache from IndexedDB.
+ * @returns {Promise<void>} Resolves even if IndexedDB is unavailable.
+ */
+function hydrateReservationsCache() {
+    return openTwDb().then(db => new Promise(resolve => {
+        const store = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readonly').objectStore(ALLY_RESERVATIONS_STORE_NAME);
+        const keysRequest = store.getAllKeys();
+        const valuesRequest = store.getAll();
+        let pending = 2;
+        let keys, values;
+        function done() {
+            pending--;
+            if (pending === 0) {
+                Object.keys(allyReservationsMemoryCache).forEach(key => delete allyReservationsMemoryCache[key]);
+                (keys || []).forEach((villageId, index) => { allyReservationsMemoryCache[villageId] = values[index]; });
+                resolve();
+            }
+        }
+        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
+        keysRequest.onerror = done;
+        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
+        valuesRequest.onerror = done;
+    })).catch(e => console.warn('[TW Reservations] hydrateReservationsCache failed', e));
 }

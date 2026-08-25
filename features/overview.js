@@ -302,7 +302,7 @@ function getPlaceInfo() {
  * and injects a countdown on the statue tile. If the cache is missing or expired, fetches
  * the statue page to get the current data-endtime and refreshes the cache.
  * The cache is also updated whenever the user visits the statue page directly
- * (see injectScriptAutoTrainerPaladin in bot_trainerPaladin.user.js).
+ * (see injectScriptAutoTrainerPaladin in trainerPaladin.js).
  * @returns {string}
  */
 function getStatueInfo() {
@@ -533,7 +533,7 @@ function storeVillageUnitCounts(data, villageId = game_data.village?.id || 'unkn
     });
 
     // Merge onto existing counts — /train never lists Paladin/Nobleman/Militia (see
-    // parseSpecialUnitCounts in feature_overviewVillages.user.js), so overwriting wholesale
+    // parseSpecialUnitCounts in overviewVillages.js), so overwriting wholesale
     // would wipe those 3 back to absent/0 every time this village's recruit widget refreshes.
     const existingCounts = bqGet('village_unit_counts', villageId) || {};
     bqSet('village_unit_counts', villageId, Object.assign({}, existingCounts, unitCounts));
@@ -599,7 +599,7 @@ function storeVillageResourceSnapshot(data, villageId) {
 
 // In-flight requests keyed by villageId so concurrent callers (overview info panel + Recruit
 // Troops widget) requesting the same village share one request instead of firing duplicates
-// (mirrors storageOverviewFetchPromises in feature_overviewVillages.user.js).
+// (mirrors storageOverviewFetchPromises in overviewVillages.js).
 var trainInfoFetchPromises = {};
 
 /**

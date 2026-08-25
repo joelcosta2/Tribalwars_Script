@@ -18,6 +18,7 @@
  * callback after training finishes. Guards against double-scheduling.
  */
 async function checkAndSchedulePaladinTrainer() {
+    if (!window.PremiumFeaturesPrivateAutomations) return;
     if (!settings_cookies?.general?.show__auto_paladin_train?.enabled) return;
 
     // Clear any legacy redirect-based stored function from the old bot version
@@ -259,6 +260,8 @@ async function _reschedulePaladinFromPage() {
  * Training is handled by checkAndSchedulePaladinTrainer() called from start().
  */
 function injectScriptAutoTrainerPaladin() {
+    if (!window.PremiumFeaturesPrivateAutomations) return;
+
     // Live DOM: JS has already executed, so #knight_activity is populated
     const endtimeEl = document.querySelector('#knight_activity span[data-endtime]');
     if (endtimeEl?.dataset?.endtime) {

@@ -335,12 +335,16 @@ function createTabContent(groupName, index) {
 
     // Filter and build rows
     availableSettings.forEach(setting => {
+        if (!window.PremiumFeaturesPrivateAutomations &&
+            (setting.name === 'show__auto_paladin_train' || setting.name === 'show__auto_scavenge')) return;
         if (!currentGroup.includes(setting.name)) return;
 
         // 1. Create Main Setting Row
         const row = table.insertRow();
         const cellLabel = row.insertCell(0);
         const cellInput = row.insertCell(1);
+
+        if (setting.disabled) row.classList.add('setting-disabled');
 
         cellLabel.classList.add('settings-label-cell');
         cellLabel.textContent = setting.label;
@@ -349,6 +353,7 @@ function createTabContent(groupName, index) {
         if (setting.type === 'select') {
             const select = document.createElement('select');
             select.name = setting.name;
+            select.disabled = !!setting.disabled;
             (setting.options || []).forEach(opt => {
                 const optionEl = document.createElement('option');
                 optionEl.value = opt.value;
@@ -378,6 +383,7 @@ function createTabContent(groupName, index) {
             const checkbox = Object.assign(document.createElement('input'), {
                 type: 'checkbox',
                 name: setting.name,
+                disabled: !!setting.disabled,
                 checked: typeof settings_cookies.general[setting.name] === 'object'
                     ? settings_cookies.general[setting.name].enabled
                     : !!settings_cookies.general[setting.name]
@@ -410,6 +416,7 @@ function createTabContent(groupName, index) {
                 if (extraData.type === 'select') {
                     const extraSelect = document.createElement('select');
                     extraSelect.name = `${setting.name}__${extraKey}`;
+                    extraSelect.disabled = !!setting.disabled || !!extraData.disabled;
                     (extraData.options || []).forEach(opt => {
                         const optionEl = document.createElement('option');
                         optionEl.value = opt.value;
@@ -422,6 +429,7 @@ function createTabContent(groupName, index) {
                     const extraInput = Object.assign(document.createElement('input'), {
                         type: extraData.type,
                         name: `${setting.name}__${extraKey}`,
+                        disabled: !!setting.disabled || !!extraData.disabled,
                         value: settings_cookies.general[setting.name]?.[extraKey] ?? extraData.default
                     });
 
@@ -479,7 +487,6 @@ var availableSettings = [
     { "name": "show__recruit_troops", "label": t('settings.recruitTroopsLabel'), "description": t('settings.recruitTroopsDesc'), "group": t('settings.groupWidgets') },
     { "name": "show__notepad", "label": t('settings.notepadLabel'), "description": t('settings.notepadDesc'), "group": t('settings.groupWidgets') },
     { "name": "show__building_queue", "label": t('settings.buildingQueueLabel'), "description": t('settings.buildingQueueDesc'), "group": t('settings.groupWidgets') },
-    { "name": "show__building_queue_all", "label": t('settings.buildingQueueAllLabel'), "description": t('settings.buildingQueueAllDesc'), "group": t('settings.groupWidgets') },
 
     // Overview Villages Premium Features
     { "name": "show__overview_villages_queue", "label": t('settings.overviewVillagesQueueLabel'), "description": t('settings.overviewVillagesQueueDesc'), "group": t('settings.groupOverviewVillages') },
@@ -507,26 +514,22 @@ var availableSettings = [
     //adicionar opçoes para cada tipo
     //morale, last saque, last ressources, troops time,
     { "name": "show__outgoingInfo_map", "label": t('settings.mapCommandOverlayLabel'), "description": t('settings.mapCommandOverlayDesc'), "group": t('settings.groupMap') },
-    { "name": "show__heatmap_reports", "label": t('settings.heatmapReportsLabel'), "description": t('settings.heatmapReportsDesc'), "group": t('settings.groupMap') },
+    //not finished yet
+    { "name": "show__heatmap_reports", "label": t('settings.heatmapReportsLabel'), "description": t('settings.heatmapReportsDesc'), "group": t('settings.groupMap'), disabled: true },
     { "name": "show__ctx_attack_buttons", "label": t('settings.ctxAttackButtonsLabel'), "description": t('settings.ctxAttackButtonsDesc'), "group": t('settings.groupMap') },
+    { "name": "show__ally_reservations", "label": t('settings.allyReservationsLabel'), "description": t('settings.allyReservationsDesc'), "group": t('settings.groupMap') },
 
     // UI / Premium Features
     { "name": "show__navigation_arrows", "label": t('settings.navigationArrowsLabel'), "description": t('settings.navigationArrowsDesc'), "group": t('settings.groupUiUx') },
     { "name": "show__overview_premium_info", "label": t('settings.visualBuildingOverviewLabel'), "description": t('settings.visualBuildingOverviewDesc'), "group": t('settings.groupUiUx') },
-    //hide because not finished yet
-    //{ "name": "show__soft_dark_mode", "label": t('settings.softDarkModeLabel'), "description": t('settings.softDarkModeDesc'), "group": t('settings.groupUiUx') },
+    //not finished yet
+    { "name": "show__soft_dark_mode", "label": t('settings.softDarkModeLabel'), "description": t('settings.softDarkModeDesc'), "group": t('settings.groupUiUx'), disabled: true},
     { "name": "show__navigation_bar", "label": t('settings.navigationBarLabel'), "description": t('settings.navigationBarDesc'), "group": t('settings.groupUiUx') },
     { "name": "show__time_storage_full_hover", "label": t('settings.storageTimerLabel'), "description": t('settings.storageTimerDesc'), "group": t('settings.groupUiUx') },
     { "name": "show__player_profile_stats", "label": t('settings.playerProfileStatsLabel'), "description": t('settings.playerProfileStatsDesc'), "group": t('settings.groupUiUx') },
-    {
-        "name": "language", "label": t('settings.language'), "description": t('settings.languageDesc'), "type": "select", "group": t('settings.groupUiUx'),
-        "options": [
-            { "value": "en", "label": "English" },
-            { "value": "pt", "label": "Portugu\u00eas" }
-        ]
-    },
 
     // Automation
+    { "name": "show__building_queue_all", "label": t('settings.buildingQueueAllLabel'), "description": t('settings.buildingQueueAllDesc'), "group": t('settings.groupAutomation') },
     { "name": "show__auto_daily_bonus", "label": t('settings.autoDailyBonusLabel'), "description": t('settings.autoDailyBonusDesc'), "group": t('settings.groupAutomation') },
     { "name": "show__auto_build_instant_free", "label": t('settings.autoBuildInstantFreeLabel'), "description": t('settings.autoBuildInstantFreeDesc'), "group": t('settings.groupAutomation') },
     {
@@ -538,20 +541,27 @@ var availableSettings = [
 
     // Anti-Bot Protection settings
     { "name": "antiBot__disableOnDetection", "label": t('settings.antibot.disableOnDetection.label'), "description": t('settings.antibot.disableOnDetection.desc'), "group": t('settings.groupAntiBot') },
-    { "name": "antiBot__offlineMode", "label": t('settings.antibot.offlineMode.label'), "description": t('settings.antibot.offlineMode.desc') + '- NOT IMPLEMENTED', "group": t('settings.groupAntiBot') },
+    { "name": "antiBot__offlineMode", "label": t('settings.antibot.offlineMode.label'), "description": t('settings.antibot.offlineMode.desc') + '- NOT IMPLEMENTED', "group": t('settings.groupAntiBot'), disabled: true },
     {
         "name": "antiBot__cacheIntervals", "label": t('settings.antibot.cache.label'), "description": t('settings.antibot.cache.desc') + '- NOT IMPLEMENTED', "group": t('settings.groupAntiBot'),
         "type": "section",
         "extraSettings": {
-            "overviewMain": { "label": t('settings.antibot.cache.overviewMain.label'), "desc": t('settings.antibot.cache.overviewMain.desc'), "type": "number", "default": 1 },
-            "overviewTroops": { "label": t('settings.antibot.cache.overviewTroops.label'), "desc": t('settings.antibot.cache.overviewTroops.desc'), "type": "number", "default": 1 }
-        }
+            "overviewMain": { "label": t('settings.antibot.cache.overviewMain.label'), "desc": t('settings.antibot.cache.overviewMain.desc'), "type": "number", "default": 1 , disabled: true},
+            "overviewTroops": { "label": t('settings.antibot.cache.overviewTroops.label'), "desc": t('settings.antibot.cache.overviewTroops.desc'), "type": "number", "default": 1 , disabled: true}
+        },
+        disabled: true
     },
 
     // General / Utility
     { "name": "keep_awake", "label": t('settings.keepAwakeLabel'), "description": t('settings.keepAwakeDesc'), "group": t('settings.groupGeneral') },
     { "name": "redirect__train_buildings", "label": t('settings.redirectTrainBuildingsLabel'), "description": t('settings.redirectTrainBuildingsDesc'), "group": t('settings.groupGeneral') },
-    { "name": "remove__premium_promo", "label": t('settings.hidePremiumAdsLabel'), "description": t('settings.hidePremiumAdsDesc'), "group": t('settings.groupGeneral') }
+    { "name": "remove__premium_promo", "label": t('settings.hidePremiumAdsLabel'), "description": t('settings.hidePremiumAdsDesc'), "group": t('settings.groupGeneral') }, {
+        "name": "language", "label": t('settings.language'), "description": t('settings.languageDesc'), "type": "select", "group": t('settings.groupGeneral'),
+        "options": [
+            { "value": "en", "label": "English" },
+            { "value": "pt", "label": "Portugu\u00eas" }
+        ]
+    },
 ];
 
 /**

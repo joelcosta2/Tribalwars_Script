@@ -293,6 +293,10 @@ var customCSS = `
     width: 30%; /* Balanced width for labels */
 }
 
+.settings-table .setting-disabled {
+    opacity: 0.55;
+}
+
 .settings-input-cell {
     padding: 0 5px;
 }
@@ -327,6 +331,12 @@ var customCSS = `
 
 .custom-map-ctx-button {
     cursor: pointer;
+}
+.reservation-ctx-disabled {
+    opacity: .45 !important;
+    filter: grayscale(1);
+    pointer-events: none;
+    cursor: not-allowed;
 }
 .icon_outgoing_unit {
     width: 15px;

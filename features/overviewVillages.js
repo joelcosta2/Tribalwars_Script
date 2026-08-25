@@ -20,7 +20,7 @@ function formatQueueRemaining(ms) {
  * header/body via the given callback and re-renders every second (so a "time remaining"
  * countdown ticks down while hovered), stopping on mouseleave. Mirrors the countdown pattern
  * used by the per-village widget (injectAtiveQueueList/injectFakeQueueList in
- * widgets/widget_extraBuildQueue.user.js).
+ * widgets/extraBuildQueue.js).
  * @param {HTMLElement} anchor - Element carrying data-title (header) / data-tooltip-tpl (body).
  * @param {HTMLElement} hoverTarget - Element the mouse listeners are attached to (usually the icon span).
  * @param {string} headerHtml - Static header HTML (e.g. building name), set once.
@@ -331,7 +331,7 @@ function injectOverviewVillagesBuildQueueColumn() {
 }
 
 // Fixed column order for the per-unit troop columns (screen=overview_villages), matches the
-// game's own unit ordering (also used by widget_navigationBar.user.js's icon picker).
+// game's own unit ordering (also used by navigationBar.js's icon picker).
 const TROOP_UNIT_ORDER = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob', 'militia'];
 
 /**
@@ -341,7 +341,7 @@ const TROOP_UNIT_ORDER = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'ma
  * loaded/refreshed (see fetchAndStoreVillageTroopCounts/refreshAllVillagesTroopCounts).
  * Shows "in village/total" (raw format from storeVillageUnitCounts()), or plain "0" when this
  * unit has no cached data at all, plus the amount currently in the training queue in orange —
- * same colour/format convention as widget_recruitTroops.user.js.
+ * same colour/format convention as recruitTroops.js.
  * @param {HTMLElement} cell
  * @param {string|number} villageId
  * @param {string} unit
@@ -423,7 +423,7 @@ function fetchSpecialUnitCounts(villageId) {
  * Fetches a single village's /train page and stores its unit counts (in-village/total),
  * in-training-queue totals, and global unit metadata — mirroring
  * storeVillageUnitCounts()/storeAvailableUnitsCosts()/storeTrainQueueData()
- * (feature_overview.user.js) but parameterized by an explicit villageId instead of relying on
+ * (overview.js) but parameterized by an explicit villageId instead of relying on
  * game_data.village.id — those functions only ever write to the CURRENTLY displayed village, so
  * they can't be reused as-is to refresh other villages in the background. Per-village costs are
  * NOT stored here (not needed by this column). Also fetches Paladin/Nobleman/Militia counts (see
@@ -468,7 +468,7 @@ function fetchAndStoreVillageTroopCounts(villageId) {
         });
 
         // Total units currently in the training queue (barracks/stable/garage), same
-        // parsing logic as storeTrainQueueData() in feature_overview.user.js.
+        // parsing logic as storeTrainQueueData() in overview.js.
         const queueCounts = {};
         ['barracks', 'stable', 'garage'].forEach(function (building) {
             $(data).find('#trainqueue_wrap_' + building + ' tr').each(function (_, row) {
@@ -543,7 +543,7 @@ function refreshAllVillagesTroopCounts(table, triggerIcon) {
 /**
  * Re-fetches and re-renders a single village's troop columns in #production_table — used after
  * training troops via the quick-links Recruit overlay (see submitTroops/disperseTroops in
- * widget_recruitTroops.user.js) so the overview row doesn't show stale counts until the next
+ * recruitTroops.js) so the overview row doesn't show stale counts until the next
  * manual "\u21bb" refresh or full page load. No-ops if the table or that village's row aren't
  * present (e.g. not on the overview_villages page, or the column is disabled).
  * @param {string|number} villageId
@@ -590,7 +590,7 @@ function injectOverviewVillagesTroopsColumn() {
         th.style.cssText = 'white-space:nowrap;text-align:center;position:relative;';
 
         const img = document.createElement('img');
-        img.src = unitMeta[unit]?.img || ('graphic/unit/unit_' + unit + '.png');
+        img.src = unitMeta[unit]?.img || ('graphic/unit/unit_' + unit + '.webp');
         img.alt = unit;
         img.style.cssText = 'width:18px;height:18px;vertical-align:middle;';
         img.setAttribute('data-title', `<b>${escapeHtml(unitMeta[unit]?.name || unit)}</b>`);
@@ -636,7 +636,7 @@ const storageOverviewFetchPromises = {};
 
 /**
  * Fetches a village's /storage page and extracts its wood/stone/iron fill end-times (Unix
- * seconds, same `data-endtime` spans read by getStorageTime() in feature_overview.user.js).
+ * seconds, same `data-endtime` spans read by getStorageTime() in overview.js).
  * Also persists to `full_storage_times_{villageId}` (same key/format that function uses) so other
  * features benefit from the fresher data, but THIS feature's own display never reads that key
  * back — only the in-memory cache above, which is what enforces the same-page-load rule.
@@ -760,13 +760,13 @@ function injectOverviewVillagesStorageHover() {
 const VILLAGE_QUICKLINKS_CUSTOM_ITEMS = [
     { label: t('navIcon.mainBuilding'), screen: 'main', img: 'graphic/buildings/mid/main3.png' },
     { label: t('navIcon.market'), screen: 'market', img: 'graphic/buildings/market.webp' },
-    { label: t('navIcon.rallyPoint'), screen: 'train', img: 'graphic/unit/att.png' },
+    { label: t('navIcon.rallyPoint'), screen: 'train', img: 'graphic/unit/att.webp' },
     { label: t('navIcon.academy'), screen: 'snob', img: 'graphic/buildings/snob.webp' }
 ];
 
 // Second row of the popup: widgets rendered in an overlay instead of a plain navigation link.
 const VILLAGE_QUICKLINKS_WIDGETS = [
-    { label: t('button.recruit'), img: 'graphic/buildings/barracks.png', open: openVillageRecruitOverlay },
+    { label: t('button.recruit'), img: 'graphic/buildings/barracks.webp', open: openVillageRecruitOverlay },
     { label: t('buildQueue.title'), img: 'graphic/buildings/mid/main3.png', open: openVillageBuildQueueOverlay }
 ];
 
@@ -846,7 +846,7 @@ function appendQuickLinkIcon(container, item) {
  * Opens (or toggles closed) a floating popup near anchorEl with quick-navigation icons
  * resolved from the selected source, plus a separate row of widget shortcuts (currently just
  * Recruit) below a horizontal separator. Mirrors the floating popup_style picker pattern used
- * by _openNavIconPicker in widget_navigationBar.user.js: fixed-position div clamped to the
+ * by _openNavIconPicker in navigationBar.js: fixed-position div clamped to the
  * viewport, closed by re-clicking the anchor, picking a building icon, or clicking outside.
  * Picking a widget icon closes this popup and opens its overlay instead.
  * @param {string|number} villageId
@@ -923,7 +923,7 @@ function openVillageQuickLinksPopup(villageId, anchorEl) {
 
 /**
  * Builds a recruit context for a village that ISN'T necessarily the currently loaded page (see
- * createLiveRecruitContext in widget_recruitTroops.user.js for the sidebar-widget counterpart):
+ * createLiveRecruitContext in recruitTroops.js for the sidebar-widget counterpart):
  * resources come from the static villageResourceSnapshots cache (populated by fetchTrainInfo())
  * instead of live DOM, and there's no MutationObserver/village-poll since nothing here ticks.
  * @param {string|number} villageId
@@ -960,8 +960,64 @@ function createOverlayRecruitContext(villageId, containerEl) {
 }
 
 /**
+ * Makes an overlay movable by dragging its header, keeping the whole box inside the viewport.
+ * Pointer Events cover mouse, touch and stylus without making the overlay content draggable.
+ * @param {HTMLElement} box
+ * @param {HTMLElement} header
+ */
+function makeOverlayDraggable(box, header) {
+    header.style.cursor = 'grab';
+    header.style.touchAction = 'none';
+
+    let dragState = null;
+
+    function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+    }
+
+    header.addEventListener('pointerdown', function (event) {
+        if (event.button !== 0 || event.target.closest('a, button, input, textarea, select')) return;
+
+        const rect = box.getBoundingClientRect();
+        box.style.transform = 'none';
+        box.style.left = rect.left + 'px';
+        box.style.top = rect.top + 'px';
+        dragState = {
+            pointerId: event.pointerId,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+            width: rect.width,
+            height: rect.height
+        };
+        header.setPointerCapture(event.pointerId);
+        header.style.cursor = 'grabbing';
+        event.preventDefault();
+    });
+
+    header.addEventListener('pointermove', function (event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+        const maxLeft = Math.max(0, window.innerWidth - dragState.width);
+        const maxTop = Math.max(0, window.innerHeight - dragState.height);
+        box.style.left = clamp(event.clientX - dragState.offsetX, 0, maxLeft) + 'px';
+        box.style.top = clamp(event.clientY - dragState.offsetY, 0, maxTop) + 'px';
+        event.preventDefault();
+    });
+
+    function stopDragging(event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) return;
+        if (header.hasPointerCapture(event.pointerId)) header.releasePointerCapture(event.pointerId);
+        dragState = null;
+        header.style.cursor = 'grab';
+    }
+
+    header.addEventListener('pointerup', stopDragging);
+    header.addEventListener('pointercancel', stopDragging);
+}
+
+/**
  * Opens a modal overlay showing the shared recruit form (see renderRecruitForm in
- * widget_recruitTroops.user.js) for the given village, always fetching fresh training data on
+ * recruitTroops.js) for the given village, always fetching fresh training data on
  * open. Replaces any existing overlay if one is already open. Triggered from the "widgets" row
  * of openVillageQuickLinksPopup.
  * @param {string|number} villageId
@@ -998,6 +1054,7 @@ function openVillageRecruitOverlay(villageId) {
     box.appendChild(content);
     backdrop.appendChild(box);
     document.body.appendChild(backdrop);
+    makeOverlayDraggable(box, header);
 
     backdrop.addEventListener('mousedown', function (event) {
         if (event.target === backdrop) backdrop.remove();
@@ -1012,7 +1069,7 @@ function openVillageRecruitOverlay(villageId) {
 /**
  * Fetches a fresh /main page for the village and (re)renders the overlay's queue icons + full
  * upgrade-button list (see buildBuildQueueContent/injectAtiveQueueList/injectFakeQueueList in
- * widget_extraBuildQueue.user.js). Re-run after every add/remove/cancel action inside the
+ * extraBuildQueue.js). Re-run after every add/remove/cancel action inside the
  * overlay so it reflects the server's latest state \u2014 this village isn't the loaded page, so
  * nothing here ticks or refreshes on its own like the sidebar widget does.
  * @param {string|number} villageId
@@ -1093,6 +1150,7 @@ function openVillageBuildQueueOverlay(villageId) {
     box.appendChild(content);
     backdrop.appendChild(box);
     document.body.appendChild(backdrop);
+    makeOverlayDraggable(box, header);
 
     backdrop.addEventListener('mousedown', function (event) {
         if (event.target === backdrop) backdrop.remove();

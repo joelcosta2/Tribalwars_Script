@@ -1,5 +1,5 @@
 // Shared, village-agnostic recruit form: a "recruit context" (see createLiveRecruitContext in
-// this file / createOverlayRecruitContext in feature_overviewVillages.user.js) captures whatever
+// this file / createOverlayRecruitContext in overviewVillages.js) captures whatever
 // differs between "the currently loaded village" (live DOM resources, sidebar widget) and
 // "some other village" (a static fetched snapshot, rendered into a popup/overlay), so
 // calculateMaxTroops/submitTroops/disperseTroops/renderRecruitForm below work for either.
@@ -18,7 +18,7 @@ function setButtonLoadingState(button, isLoading, fallbackLabel) {
             button.dataset.originalContent = button.innerHTML;
         }
         button.disabled = true;
-        button.innerHTML = '<img src="https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif" id="" alt="" class="">';
+        button.innerHTML = '<img src="https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif" id="" alt="" class="" style="height:14px;vertical-align:middle;">';
         return;
     }
 
@@ -241,7 +241,7 @@ function openDisperseBatchMenu(event, ctx) {
     const menu = document.createElement('div');
     menu.id = 'disperse_batch_menu';
     // Above the recruit overlay's own stacking context (backdrop/box use 20001/20002 in
-    // feature_overviewVillages.user.js) so it's still visible when opened from that popup.
+    // overviewVillages.js) so it's still visible when opened from that popup.
     menu.style.cssText = 'position: fixed; z-index: 20003; background: #f4e4bc; border: 1px solid #7d510f; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); padding: 6px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;';
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
@@ -413,7 +413,7 @@ function renderRecruitForm(ctx) {
         unitTop.style.cssText = 'display: flex; align-items: center; gap: 4px; white-space: nowrap; flex-wrap: nowrap;';
 
         const img = document.createElement('img');
-        img.src = info.img || ('graphic/unit/unit_' + unit + '.png');
+        img.src = info.img || ('graphic/unit/unit_' + unit + '.webp');
         img.style.cssText = 'width: 22px; height: 22px; vertical-align: middle;';
         img.alt = unit;
 
