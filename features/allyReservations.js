@@ -180,6 +180,10 @@ function extractReservationPlannerError(html) {
     return doc.querySelector('.error_box .content')?.textContent.trim() || null;
 }
 
+function isReservationCooldownError(error) {
+    return /cooldown|não pode fazer outra reserva/i.test(error || '');
+}
+
 /**
  * Looks up the reservation id for a village among the CURRENT player's own reservations only
  * (group_id=creator_id) — capped at a handful per account (the planner enforces a small limit),
@@ -215,8 +219,11 @@ async function reserveVillage(village, x, y) {
         const error = extractReservationPlannerError(html);
         if (error) {
             UI.ErrorMessage(error);
-            // Someone may have grabbed it since our last sync — refresh before re-rendering.
-            await syncAllyReservations(true);
+            // A cooldown means nothing changed on the server; avoid refetching every page.
+            if (!isReservationCooldownError(error)) {
+                // Someone may have grabbed it since our last sync — refresh before re-rendering.
+                await syncAllyReservations(true);
+            }
             updateReservationCtxButtons(village, x, y);
             return;
         }
@@ -237,6 +244,7 @@ async function reserveVillage(village, x, y) {
         await reservationSet(village.id, record);
         UI.SuccessMessage(t('map.reservation.created'));
         updateReservationCtxButtons(village, x, y);
+        if (typeof addReservationIcons === 'function') addReservationIcons();
     } catch (error) {
         console.error('[Ally Reservations] Reserve failed for village ' + village.id, error);
     }
@@ -261,6 +269,7 @@ async function unreserveVillage(village, reservation, x, y) {
         await reservationRemove(village.id);
         UI.SuccessMessage(t('map.reservation.removed'));
         updateReservationCtxButtons(village, x, y);
+        if (typeof addReservationIcons === 'function') addReservationIcons();
     } catch (error) {
         console.error('[Ally Reservations] Unreserve failed for village ' + village.id, error);
     }
@@ -297,6 +306,14 @@ function updateReservationCtxButtons(village, x, y) {
         return;
     }
 
+    if (!isMapContextButtonEnabled('reservation')) {
+        mpLock.style.display = 'none';
+        mpLock.style.opacity = '0';
+        mpUnlock.style.display = 'none';
+        mpUnlock.style.opacity = '0';
+        return;
+    }
+
     $(mpLock).off('click.allyReservations');
     $(mpUnlock).off('click.allyReservations');
     mpUnlock.classList.remove('reservation-ctx-disabled');
@@ -325,7 +342,21 @@ function updateReservationCtxButtons(village, x, y) {
         mpLock.style.opacity = '1';
         $(mpLock).on('click.allyReservations', e => {
             e.preventDefault();
-            reserveVillage(village, x, y);
+            UI.ConfirmationBox(
+                t('map.reservation.reserveConfirm', { coords: `${x}|${y}` }),
+                [{
+                    text: t('button.ok'),
+                    callback: function () {
+                        setReservationCtxLoading(mpLock, true);
+                        reserveVillage(village, x, y)
+                            .finally(() => setReservationCtxLoading(mpLock, false));
+                    },
+                    confirm: true
+                }],
+                'tw_reserve_village_' + village.id,
+                false,
+                true
+            );
         });
         return;
     }
@@ -345,7 +376,21 @@ function updateReservationCtxButtons(village, x, y) {
         mpUnlock.setAttribute('data-title', t('map.reservation.unlockMine'));
         $(mpUnlock).on('click.allyReservations', e => {
             e.preventDefault();
-            unreserveVillage(village, reservation, x, y);
+            UI.ConfirmationBox(
+                t('map.reservation.removeConfirm', { coords: `${x}|${y}` }),
+                [{
+                    text: t('button.ok'),
+                    callback: function () {
+                        setReservationCtxLoading(mpUnlock, true);
+                        unreserveVillage(village, reservation, x, y)
+                            .finally(() => setReservationCtxLoading(mpUnlock, false));
+                    },
+                    confirm: true
+                }],
+                'tw_unreserve_village_' + village.id,
+                false,
+                true
+            );
         });
     } else {
         mpUnlock.classList.add('reservation-ctx-disabled');
@@ -354,6 +399,105 @@ function updateReservationCtxButtons(village, x, y) {
             date: reservation.expiresAtText || '?'
         }));
     }
+}
+
+/**
+ * Renders the reservation action in a native VillageContext menu outside the map.
+ * @param {{villageId:string, ownerId:string, x:number, y:number, coords:string}} context
+ * @param {HTMLAnchorElement} element
+ * @returns {boolean}
+ */
+function renderExternalReservationCtxAction(context, element) {
+    if (!game_data.player.ally || !context.villageId || context.x === null || context.y === null) return false;
+
+    const village = { id: context.villageId, owner: context.ownerId };
+    const reservation = getReservationForVillage(context.villageId);
+    element.classList.remove('reservation-ctx-disabled', 'mp_lock', 'mp_unlock');
+
+    if (String(context.ownerId) === String(game_data.player.id)) return false;
+
+    if (!reservation) {
+        element.title = t('map.reservation.reserveButton');
+        element.classList.add('mp_lock');
+        return true;
+    }
+
+    const isMine = String(reservation.reservingPlayerId) === String(game_data.player.id);
+    element.classList.add('mp_unlock');
+    element.title = isMine ? t('map.reservation.unlockMine') : t('map.reservation.reservedBy', {
+        name: reservation.reservingPlayerName || '?',
+        date: reservation.expiresAtText || '?'
+    });
+    if (!isMine) element.classList.add('reservation-ctx-disabled');
+    return true;
+}
+
+function setReservationCtxLoading(element, isLoading) {
+    if (!element) return;
+    element.setAttribute('aria-busy', String(isLoading));
+    element.style.pointerEvents = isLoading ? 'none' : '';
+    element.style.opacity = isLoading ? '0.6' : '';
+    element.style.backgroundImage = isLoading
+        ? 'url(https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif)'
+        : '';
+}
+
+function handleExternalReservationCtxAction(context, element) {
+    if (!game_data.player.ally || context.x === null || context.y === null) return;
+
+    const village = { id: context.villageId, owner: context.ownerId };
+    const reservation = getReservationForVillage(context.villageId);
+    if (!reservation) {
+        UI.ConfirmationBox(
+            t('map.reservation.reserveConfirm', { coords: context.coords }),
+            [{
+                text: t('button.ok'),
+                callback: function () {
+                    setReservationCtxLoading(element, true);
+                    reserveVillage(village, context.x, context.y)
+                        .finally(() => {
+                            setReservationCtxLoading(element, false);
+                            refreshCtxCustom();
+                        });
+                },
+                confirm: true
+            }],
+            'tw_reserve_village_' + context.villageId,
+            false,
+            true
+        );
+    } else if (String(reservation.reservingPlayerId) === String(game_data.player.id)) {
+        UI.ConfirmationBox(
+            t('map.reservation.removeConfirm', { coords: context.coords }),
+            [{
+                text: t('button.ok'),
+                callback: function () {
+                    setReservationCtxLoading(element, true);
+                    unreserveVillage(village, reservation, context.x, context.y)
+                        .finally(() => {
+                            setReservationCtxLoading(element, false);
+                            refreshCtxCustom();
+                        });
+                },
+                confirm: true
+            }],
+            'tw_unreserve_village_' + context.villageId,
+            false,
+            true
+        );
+    }
+}
+
+if (!isPremiumAccount() && typeof registerCtxCustomAction === 'function') {
+    registerCtxCustomAction({
+        id: 'reservations',
+        slot: 1,
+        title: t('map.reservation.reserveButton'),
+        className: 'reservation-ctx-button',
+        spriteClass: 'mp_lock',
+        render: renderExternalReservationCtxAction,
+        onClick: handleExternalReservationCtxAction
+    });
 }
 
 /**
@@ -382,7 +526,7 @@ function startReservationContextWatcher() {
     };
 }
 
-if (typeof TWMap !== 'undefined' && settings_cookies.general['show__ally_reservations']) {
+if (typeof TWMap !== 'undefined' && !isPremiumAccount() && isMapContextButtonEnabled('reservation')) {
     syncAllyReservations();
     startReservationContextWatcher();
 }

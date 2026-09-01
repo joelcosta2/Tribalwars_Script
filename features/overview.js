@@ -14,11 +14,6 @@ infoOverview.statue = infoOverview.statue || "";
 infoOverview.wall = infoOverview.wall || "";
 infoOverview.farm = infoOverview.farm || "";
 
-// In-memory only, populated by fetchTrainInfo() for whichever village it last fetched (current
-// or another one) — lets non-live recruit contexts (e.g. a different village's overlay) read a
-// resources/population snapshot without needing that village's page to be the one loaded.
-var villageResourceSnapshots = {};
-
 
 /**
  * Fetches storage fill times from the storage screen and injects a countdown onto the
@@ -34,7 +29,7 @@ function getStorageTime(callback) {
         localStorage.setItem('storage_capacity', storageCapacity.textContent);
     }
 
-    if (settings_cookies.general['show__time_storage_full_hover'] && game_data) {
+    if (game_data) {
         $.ajax({
             url: game_data.link_base_pure + 'storage',
             method: "GET",
@@ -415,7 +410,11 @@ function setOngoingBuildingLevels() {
     var fakeBuildingQueue = bqGet('building_queue');
     var fakeBuildIds = fakeBuildingQueue ? fakeBuildingQueue.map(item => item?.replace(/[0-9]/g, '')) : [];
 
-    document.querySelectorAll('.order-level').forEach(el => el.textContent = '');
+    document.querySelectorAll('.order-level, [id^="order_level_"]').forEach(el => {
+        el.textContent = '';
+        el.style.fontWeight = '';
+        el.style.color = '';
+    });
     Object.keys(infoOverview).forEach(key => {
         let count = buildIds.filter(id => id === key).length;
         let fakeCount = fakeBuildIds.filter(id => id === key).length;
@@ -545,11 +544,14 @@ function storeVillageUnitCounts(data, villageId = game_data.village?.id || 'unkn
  * Format: { spear: 152, sword: 100, axe: 69, ... }
  * @param {string} data - Raw HTML of the training screen.
  * @param {string} [villageId] - Defaults to the currently loaded village.
+ * @param {boolean} [renderOverview=false] - Whether to render queue icons on the current overview.
  */
-function storeTrainQueueData(data, villageId = game_data.village?.id || 'unknown') {
+function storeTrainQueueData(data, villageId = game_data.village?.id || 'unknown', renderOverview = false) {
     const queueCounts = {};
+    const queueCountsByBuilding = {};
 
     ['barracks', 'stable', 'garage'].forEach(function (building) {
+        queueCountsByBuilding[building] = {};
         $(data).find('#trainqueue_wrap_' + building + ' tr').each(function (_, row) {
             // Find the unit sprite div which has class like "unit_sprite unit_sprite_smaller spear"
             const spriteDiv = $(row).find('div.unit_sprite_smaller');
@@ -574,27 +576,54 @@ function storeTrainQueueData(data, villageId = game_data.village?.id || 'unknown
 
             const count = parseInt(countMatch[1], 10);
             queueCounts[unitType] = (queueCounts[unitType] || 0) + count;
+            queueCountsByBuilding[building][unitType] = (queueCountsByBuilding[building][unitType] || 0) + count;
         });
     });
 
     bqSet('train_queue_data', villageId, queueCounts);
+    if (renderOverview) renderTrainingQueueIcons(queueCountsByBuilding);
+}
+
+/**
+ * Renders one unit icon per queued unit type in the matching non-visual summary cell.
+ * The tooltip value is the total quantity queued for that unit in the building.
+ * @param {Object} queueCountsByBuilding - Queue totals grouped by building and unit type.
+ */
+function renderTrainingQueueIcons(queueCountsByBuilding) {
+    Object.entries({ barracks: 'barracks', stable: 'stable', garage: 'garage' }).forEach(function ([building, rowBuilding]) {
+        const cell = document.querySelector(`#l_${rowBuilding} td.building_extra`);
+        if (!cell) return;
+
+        cell.querySelectorAll('.non-visual-training-icon').forEach(icon => icon.remove());
+        Object.entries(queueCountsByBuilding[building] || {}).forEach(function ([unitType, total]) {
+            if (total <= 0) return;
+
+            const image = document.createElement('img');
+            image.className = 'non-visual-training-icon';
+            image.src = `/graphic/unit/unit_${unitType}.webp`;
+            image.alt = unitType;
+            image.setAttribute('data-title', String(total));
+            cell.appendChild(image);
+        });
+    });
+
+    if (typeof UI !== 'undefined' && typeof UI.ToolTip === 'function') {
+        UI.ToolTip($('#show_summary .non-visual-training-icon'));
+    }
 }
 
 /**
  * Parses the wood/stone/iron/population snapshot from a fetched game page (any screen's header
- * carries these) and caches it in villageResourceSnapshots, keyed by villageId. Since this isn't
- * necessarily the loaded page, the values are a static snapshot, not a live-ticking one.
+ * carries these) and caches it via resourcesManager.js's setVillageResources, keyed by villageId.
+ * Since this isn't necessarily the loaded page, the values are a static snapshot, not a
+ * live-ticking one.
  * @param {string} data - Raw HTML of any game.php page.
  * @param {string} villageId
  */
 function storeVillageResourceSnapshot(data, villageId) {
-    villageResourceSnapshots[villageId] = {
-        wood: parseInt($(data).find('#wood').first().text().replace(/\D/g, ''), 10) || 0,
-        stone: parseInt($(data).find('#stone').first().text().replace(/\D/g, ''), 10) || 0,
-        iron: parseInt($(data).find('#iron').first().text().replace(/\D/g, ''), 10) || 0,
-        pop: parseInt($(data).find('#pop_current_label').first().text().replace(/\D/g, ''), 10) || 0,
-        popMax: parseInt($(data).find('#pop_max_label').first().text().replace(/\D/g, ''), 10) || 0
-    };
+    const snapshot = readVillageResourceSnapshot(data);
+    if (!snapshot) return;
+    setVillageResources(villageId, snapshot);
 }
 
 // In-flight requests keyed by villageId so concurrent callers (overview info panel + Recruit
@@ -666,7 +695,7 @@ function fetchTrainInfo(callback, villageId = game_data?.village?.id || 'unknown
 
                 // Extract and store unit recruitment costs, queue data, and resource snapshot
                 storeAvailableUnitsCosts(data, villageId);
-                storeTrainQueueData(data, villageId);
+                storeTrainQueueData(data, villageId, updateTiles);
                 storeVillageResourceSnapshot(data, villageId);
                 resolve(data);
             },
@@ -688,6 +717,9 @@ function fetchTrainInfo(callback, villageId = game_data?.village?.id || 'unknown
  * Calls each building's info function and persists the results to localStorage.
  */
 function updatePremiumInfoOverview() {
+    ensureNonVisualSummaryCells();
+    updateNonVisualBuildIcons();
+
     const show__overview_premium_info = settings_cookies.general['show__overview_premium_info'];
 
     if (show__overview_premium_info) {
@@ -716,6 +748,93 @@ function updatePremiumInfoOverview() {
 }
 
 /**
+ * Adds the premium summary's extra-information column to non-premium building rows.
+ * Existing cells are preserved so native premium content is not disturbed.
+ */
+function ensureNonVisualSummaryCells() {
+    document.querySelectorAll('#show_summary tr[id^="l_"]').forEach(function (row) {
+        const firstCell = row.querySelector('td');
+        if (!firstCell || firstCell.style.width !== '20px') {
+            const buildCell = document.createElement('td');
+            buildCell.style.width = '20px';
+            row.insertBefore(buildCell, firstCell || null);
+        }
+
+        const buildingCell = row.querySelector('td:nth-child(2)');
+        if (buildingCell) buildingCell.style.whiteSpace = 'nowrap';
+
+        if (!row.querySelector('td.building_extra')) {
+            const cell = document.createElement('td');
+            cell.className = 'building_extra';
+            row.appendChild(cell);
+        }
+    });
+}
+
+/**
+ * Adds the native-style upgrade icon to summary rows whose next level is available.
+ * Availability is read from the visible build buttons on the current village's main page.
+ */
+function updateNonVisualBuildIcons() {
+    const villageId = game_data?.village?.id;
+    if (!villageId || typeof fetchVillageMainPage !== 'function') return;
+
+    fetchVillageMainPage(villageId).then(function (result) {
+        const mainDocument = result.doc;
+        document.querySelectorAll('#show_summary tr[id^="l_"]').forEach(function (row) {
+            const buildingId = row.id.slice(2);
+            const buildCell = row.querySelector('td');
+            if (!buildCell) return;
+
+            const existingIcon = buildCell.querySelector('.premium-build-icon');
+            if (existingIcon) existingIcon.remove();
+
+            const mainRow = mainDocument.querySelector('#main_buildrow_' + buildingId);
+            const buildButton = Array.from(mainRow?.querySelectorAll('.btn-build') || [])
+                .find(button => button.style.display !== 'none');
+            if (!buildButton) return;
+
+            const upgradeLink = document.createElement('a');
+            upgradeLink.className = 'upgrade_level premium-build-icon';
+            upgradeLink.id = 'upgrade_level_' + buildingId;
+            upgradeLink.href = '#';
+            upgradeLink.onclick = function (event) {
+                event.preventDefault();
+                if (typeof setBuildQueueButtonLoading === 'function') {
+                    setBuildQueueButtonLoading(upgradeLink, true);
+                }
+                if (typeof addToBuildQueue === 'function') {
+                    addToBuildQueue(buildingId, villageId, upgradeLink);
+                }
+                return false;
+            };
+
+            const dataTitle = buildButton.getAttribute('data-title') ||
+                (typeof createResourceElementsString === 'function'
+                    ? createResourceElementsString(
+                        buildingId,
+                        parseInt(buildButton.dataset.levelNext, 10),
+                        villageId
+                    )
+                    : '');
+            if (dataTitle) upgradeLink.setAttribute('data-title', dataTitle);
+
+            const image = document.createElement('img');
+            image.src = 'graphic/overview/build.webp';
+            image.alt = t('buildQueue.level', { level: buildButton.dataset.levelNext || '' });
+            upgradeLink.appendChild(image);
+            buildCell.appendChild(upgradeLink);
+        });
+
+        if (typeof UI !== 'undefined' && typeof UI.ToolTip === 'function') {
+            UI.ToolTip($('#show_summary .premium-build-icon'));
+        }
+    }).catch(function () {
+        // A failed refresh leaves the stable empty cells in place and no stale icons.
+    });
+}
+
+/**
  * Injects (or replaces) a countdown or text sub-label inside the named building's visual tile.
  * Clears any existing interval before starting a new one to prevent timer leaks.
  * @param {string} buildingName - CSS class suffix of the target tile (e.g. 'main', 'barracks').
@@ -724,6 +843,11 @@ function updatePremiumInfoOverview() {
  * @param {number} [endtime=0] - Unix timestamp in seconds for the countdown target.
  */
 function addToVisualLabelExtra(buildingName, newTextContent, isTimer = false, endtime = 0) {
+    const nonVisualTextContent = ['wood', 'stone', 'iron'].includes(buildingName)
+        ? String(newTextContent).split('\n').pop()
+        : newTextContent;
+    addToNonVisualLabelExtra(buildingName, nonVisualTextContent, isTimer, endtime);
+
     const labelStorage = document.getElementsByClassName(`visual-label-${buildingName}`)[0];
 
     if (labelStorage) {
@@ -758,12 +882,61 @@ function addToVisualLabelExtra(buildingName, newTextContent, isTimer = false, en
 }
 
 /**
+ * Injects a countdown or text sub-label into the matching non-visual summary row.
+ * @param {string} buildingName - ID suffix of the target summary row.
+ * @param {string} newTextContent - Initial text to display.
+ * @param {boolean} [isTimer=false] - If true, starts a live countdown from endtime.
+ * @param {number} [endtime=0] - Unix timestamp in seconds for the countdown target.
+ */
+function addToNonVisualLabelExtra(buildingName, newTextContent, isTimer = false, endtime = 0) {
+    const row = document.querySelector(`#l_${buildingName}`);
+    if (!row) return;
+
+    let cell = row.querySelector('td.building_extra');
+    if (!cell) {
+        cell = document.createElement('td');
+        cell.className = 'building_extra';
+        row.appendChild(cell);
+    }
+
+    let extra = cell.querySelector('.non-visual-label-extra');
+    if (extra) {
+        if (extra.dataset.interval) {
+            clearInterval(parseInt(extra.dataset.interval, 10));
+            delete extra.dataset.interval;
+        }
+    } else {
+        extra = document.createElement('strong');
+        extra.className = 'non-visual-label-extra';
+        extra.style.fontWeight = 'bold';
+        cell.appendChild(extra);
+    }
+
+    extra.textContent = newTextContent;
+
+    if (isTimer && endtime > 0) {
+        extra.dataset.interval = setInterval(function () {
+            startTimerOnLabel(endtime, extra);
+        }, 500);
+    }
+}
+
+/**
  * Appends a "+N" indicator to the order-level element of a building tile.
  * @param {string} buildingName - CSS class suffix of the target tile.
  * @param {number} level - Number of queued upgrades to display.
  * @param {boolean} fakeQueue - If true, colours the indicator orange (fake/pending queue).
  */
 function addToVisualLevelLabel(buildingName, level, fakeQueue) {
+    const nonVisualOrderLevel = document.querySelector(`#order_level_${buildingName}`);
+    if (nonVisualOrderLevel) {
+        nonVisualOrderLevel.textContent = nonVisualOrderLevel.textContent + `+${level}`;
+        nonVisualOrderLevel.style.fontWeight = "bold";
+        if (fakeQueue) {
+            nonVisualOrderLevel.style.color = "orange";
+        }
+    }
+
     const labelStorage = document.querySelector(`.visual-label-${buildingName}`);
     if (labelStorage) {
         const orderLevel = labelStorage.querySelector('.order-level');

@@ -26,7 +26,7 @@ function getCurrentLanguage() {
 function setLanguage(lang) {
     if (SUPPORTED_LANGUAGES.indexOf(lang) === -1) return;
     settings_cookies.general.language = lang;
-    localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
+    safeLocalStorageSet('settings_cookies', JSON.stringify(settings_cookies));
     location.reload();
 }
 

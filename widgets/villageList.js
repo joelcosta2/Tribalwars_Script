@@ -15,9 +15,12 @@ function getVillagesDataURL() {
 
     for (i = 0; i < villgersNum; i++) {
         var url = villages[i].url,
-            name = villages[i].name;
+            name = villages[i].name,
+            villageId = new URL(url, window.location.origin).searchParams.get('village'),
+            currentVillageId = typeof game_data !== 'undefined' ? game_data.village?.id : null,
+            selectedClass = String(villageId) === String(currentVillageId) ? 'selected' : '';
 
-        villagesDataUrl = villagesDataUrl + "<tr><td style='' class=''><a class='' href='" + url + "'><span class='icon header village'></span>" + name + "</a></td></tr>"
+        villagesDataUrl = villagesDataUrl + "<tr><td style='' class='" + selectedClass + "'><a class='' href='" + url + "'><span class='icon header village'></span>" + name + "</a></td></tr>"
     }
     return villagesDataUrl;
 }
@@ -46,52 +49,79 @@ function injectVillagesListWidget(columnToUse) {
 }
 
 /**
+ * Reads the village rows from an overview_villages document.
+ * @param {Document|HTMLElement} root
+ * @returns {Array<{name:string, url:string, coords:string}>}
+ */
+function parseVillageList(root) {
+    const villageList = [];
+    const seenVillageIds = new Set();
+    const rows = root.querySelectorAll('#production_table tbody tr .quickedit-vn[data-id]');
+
+    rows.forEach(function (villageElement) {
+        const villageId = villageElement.dataset.id;
+        const link = villageElement.querySelector('.quickedit-content > a');
+        const label = villageElement.querySelector('.quickedit-label');
+        if (!villageId || !link || !label || seenVillageIds.has(villageId)) return;
+
+        const villageUrl = new URL(link.href, window.location.origin);
+        if (villageUrl.searchParams.get('village') !== villageId) return;
+
+        const labelText = label.textContent || '';
+        const coordsMatch = labelText.match(/\((\d{1,3}\|\d{1,3})\)/);
+        if (!coordsMatch) return;
+
+        const name = (label.dataset.text || labelText.slice(0, coordsMatch.index)).trim();
+        if (!name) return;
+
+        seenVillageIds.add(villageId);
+        villageList.push({ name, url: villageUrl.toString(), coords: coordsMatch[1] });
+    });
+
+    return villageList;
+}
+
+/**
  * Ensures the village list in localStorage is up to date.
- * If the stored list is missing or its count differs from the server count, fetches
- * the overview_villages page and re-caches the name, URL, and coords of every village.
- * @returns {string|undefined} JSON string of the refreshed village list, or undefined if no update was needed.
+ * The current overview_villages table is used to refresh names without a request.
+ * If the cache is missing or its count differs from the server count, fetches the
+ * overview_villages page as a fallback and re-caches the village data.
+ * @returns {string} JSON string of the current village list.
  */
 function prepareVillageList() {
-    const villages_info = JSON.parse(localStorage.getItem('villages_info') || '[]');
-    const villages_count = Array.isArray(villages_info) ? villages_info.length : 0;
-    var jsonToSave = localStorage.getItem('villages_info') || '[]';
+    let villagesInfo = [];
+    try {
+        const parsedVillages = JSON.parse(localStorage.getItem('villages_info') || '[]');
+        villagesInfo = Array.isArray(parsedVillages) ? parsedVillages : [];
+    } catch {
+        villagesInfo = [];
+    }
+
+    const isOverviewVillages = typeof game_data !== 'undefined' && game_data.screen === 'overview_villages';
+    if (isOverviewVillages) {
+        const currentPageVillages = parseVillageList(document);
+        if (currentPageVillages.length) {
+            villagesInfo = currentPageVillages;
+            localStorage.setItem('villages_info', JSON.stringify(villagesInfo));
+        }
+    }
 
     const serverVillagesCount = (typeof game_data !== 'undefined' && game_data.player && !isNaN(Number(game_data.player.villages))) ? Number(game_data.player.villages) : 0;
-
-    if (!villages_info || serverVillagesCount !== villages_count) {
-        jsonToSave = '[]';
+    if (!villagesInfo.length || serverVillagesCount !== villagesInfo.length) {
         $.ajax({
             url: game_data.link_base_pure + 'overview_villages',
             type: 'GET',
             async: false,
             success: function (data) {
-                var tempElement = document.createElement('div');
+                const tempElement = document.createElement('div');
                 tempElement.innerHTML = data;
-                let rows = tempElement.querySelectorAll('#production_table tbody tr');
-                let villageList = [];
-                
-                rows.forEach(function (row) {
-                    let link = row.querySelector('td:first-child span:first-child a');
-                    if (!link) return;
-                    let name = link.querySelector('span').innerText.split('(')[0];
-                    let coords = link.querySelector('span').innerText.split('(')[1];
-                    let url = link.href;
-
-                    villageList.push({ name: name, url: url, coords: coords.replace(')', '')});
-                });
-
-                jsonToSave = JSON.stringify(villageList);
-            },
-            error: function () {
-                // Keep last valid value in storage; fallback stays as empty list string.
+                const fetchedVillages = parseVillageList(tempElement);
+                if (fetchedVillages.length) villagesInfo = fetchedVillages;
             }
         });
 
-        if (typeof jsonToSave === 'string') {
-            localStorage.setItem('villages_info', jsonToSave);
-        } else {
-            localStorage.setItem('villages_info', '[]');
-            }
+        if (villagesInfo.length) localStorage.setItem('villages_info', JSON.stringify(villagesInfo));
     }
-    return jsonToSave;
+
+    return JSON.stringify(villagesInfo);
 }

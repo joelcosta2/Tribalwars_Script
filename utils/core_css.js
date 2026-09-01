@@ -1,51 +1,12 @@
 
 
 var customCSS = `
-.not-hidden {
-    display: block;
-}
-.btn-build.current-quest {
-    min-width: 0;
-    padding: 3px 9px;
-    background: linear-gradient(to bottom, #0bac00 0%,#0e7a1e 100%);
-}
-.btn-build.current-quest:hover {
-    background: linear-gradient(to bottom, #13c600 0%,#129e23 100%);
-}
-
-#toggleButton.toggle-on {
-    background-color: green;
-}
-
-#toggleButton {
-    width: 35px;
-    height: 18px;
-    margin-left: 5px;
-    background-color: red;
-    border: none;
-    border-radius: 15px;
-    position: relative;
-    cursor: pointer;
-}
-
-#toggleButton:before {
-    content: '';
-    position: absolute;
-    top: 3px;
-    left: 5px;
-    width: 12px;
-    height: 12px;
-    background-color: white;
-    border-radius: 50%;
-    transition: transform 0.3s, background-color 0.3s;
-}
-
-.toggle-on:before {
-    transform: translateX(12px);
-}
-
 .warn_90 {
     color: #c61212;
+}
+
+.farm_icon_c:hover {
+    cursor: pointer;
 }
 
 .village-duration, .village-caries, .village-arrive {
@@ -92,6 +53,8 @@ var customCSS = `
 .arrowLeft, .arrowRight {
     cursor: pointer;
     display: inline-block;
+    width: 14px;
+    height: 22px;
 }
 
 .village-list-toggle {
@@ -118,7 +81,7 @@ var customCSS = `
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2); /* Slight dimming */
+    pointer-events: none;
     z-index: 999;
 }
 
@@ -132,6 +95,7 @@ var customCSS = `
     max-height: 90vh;
     overflow: hidden;
     z-index: 1000;
+    pointer-events: auto;
 }
 
 #group_popup_content {
@@ -146,6 +110,9 @@ var customCSS = `
 }
 
 .popup_menu {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     cursor: unset;
 }
 
@@ -159,13 +126,18 @@ var customCSS = `
 
 /* Custom Settings Styles */
 
-.script-settings-btn {
+.sidebar-icon {
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: opacity 0.2s ease;
 }
 
-.script-settings-btn:hover {
-    opacity: 0.7;
+.sidebar-icon-fixed {
+    position: absolute;
+    left: -65px;
+    top: 39px;
 }
 
 .script-settings-btn-fixed {
@@ -178,13 +150,54 @@ var customCSS = `
     background-image: url('https://dspt.innogamescdn.com/asset/b56f49d7/graphic/icons/settings.png');
 }
 
-/* Only applied on overview_villages (see injectScriptSettingsButtom): its wide multi-village table
-   pushes the page into horizontal scroll, so the native left:-65px gutter trick goes off-screen */
+.sidebar-farm-assistant-icon {
+    background-image: url('/graphic/icons/farm_assistent.png');
+}
+
+.sidebar-recruit-icon {
+    background-image: url('/graphic/buildings/barracks.webp');
+}
+
+.sidebar-coin-minting-icon {
+    background-size: auto !important;
+    background-color: #E9D0A9 !important;
+    background: url('/graphic/gold.webp') center / contain no-repeat;
+}
+
+.sidebar-coin-minting-icon:hover {
+    background-color: #F9E0B9 !important;
+}
+
+.hammer-icon {
+    background-size: 18px;
+}
+
+.sidebar-icon-offset {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+/* Keeps the sidebar visible when the layout has insufficient space */
 .questlog-pin-left {
     position: fixed !important;
     top: 55px !important;
     left: 5px !important;
-    z-index: 500 !important;
+    z-index: 12000 !important;
+}
+
+.questlog-pin-left > .sidebar-icon {
+    position: relative !important;
+    z-index: 12001 !important;
+}
+
+.twpf-pinned-sidebar {
+    position: fixed !important;
+    top: 55px !important;
+    left: 5px !important;
+    z-index: 30000 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .script-settings-popup {
@@ -293,6 +306,24 @@ var customCSS = `
     width: 30%; /* Balanced width for labels */
 }
 
+.twpf-settings-help-link {
+    display: inline-flex;
+    width: 8px;
+    height: 8px;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    font-size: 7px;
+    line-height: 8px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.twpf-settings-help-link img {
+    width: 10px;
+    height: 10px;
+}
+
 .settings-table .setting-disabled {
     opacity: 0.55;
 }
@@ -302,6 +333,7 @@ var customCSS = `
 }
 
 .extra-setting-row td {
+    padding: 4px;
     padding-left: 25px;
     font-size: 0.9em;
     color: #555;
@@ -320,6 +352,121 @@ var customCSS = `
     cursor: pointer;
 }
 
+.custom-quicklinks-settings-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.village-quicklinks-content {
+    padding: 8px;
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    border-radius: 8px 8px 0 0;
+}
+
+.custom-quicklink-settings-item {
+    width: 28px;
+    height: 28px;
+    padding: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 1px solid #9b7a3d;
+    background: #f4e4bc;
+    color: #603000;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.custom-quicklink-settings-item:hover {
+    background: #ecdcb5;
+}
+
+.custom-quicklink-settings-item img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+.custom-quicklink-editor-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.custom-quicklink-editor-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 360px;
+    max-width: calc(100vw - 24px);
+    transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
+.custom-quicklink-editor-close {
+    float: right;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.custom-quicklink-editor-content {
+    padding: 10px;
+}
+
+.custom-quicklink-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+
+.custom-quicklink-editor-field input {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.custom-quicklink-editor-icon-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.custom-quicklink-editor-icon-controls input {
+    flex: 1;
+}
+
+.custom-quicklink-editor-preview,
+.custom-quicklink-editor-picker {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.custom-quicklink-editor-picker {
+    cursor: pointer;
+}
+
+.custom-quicklink-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.custom-quicklink-editor-delete {
+    margin-left: auto;
+}
+
 
 /* Scavenge bot config panel */
 #scavenge_bot_config div.vis {
@@ -331,6 +478,20 @@ var customCSS = `
 
 .custom-map-ctx-button {
     cursor: pointer;
+}
+.ctx-custom {
+    width: 24px;
+    height: 24px;
+    z-index: 11950;
+}
+.ctx-custom.mp_lock {
+    background-position: -48px 0;
+}
+.ctx-custom.mp_unlock {
+    background-position: -216px 0;
+}
+.ctx-custom.mp_invite {
+    background-position: -384px 0;
 }
 .reservation-ctx-disabled {
     opacity: .45 !important;
@@ -374,5 +535,33 @@ var customCSS = `
     opacity: 0.8;
 }
 
+/* Extra memo note-type tabs on screen=memo */
+.extra-memo-type-tabs {
+    margin: 8px 0;
+}
+.extra-memo-type-tabs .modemenu {
+    clear: both;
+    margin-bottom: 0;
+}
+.extra-memo-type-tabs .modemenu td {
+    cursor: pointer;
+}
+.extra-memo-type-tabs .modemenu td:hover {
+    opacity: 0.8;
+}
+.extra-memo-type-panel {
+    display: none;
+}
+.extra-memo-type-panel.active {
+    display: block;
+}
+.extra-memo-backup-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 `;
-GM_addStyle(customCSS);
+if (!isPremiumAccount()) {
+    GM_addStyle(customCSS);
+}

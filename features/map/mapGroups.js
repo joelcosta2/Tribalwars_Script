@@ -551,12 +551,53 @@ function renderMapGroupsList() {
 
     groups.forEach((group, index) => {
         const row = document.createElement('tr');
+        row.draggable = true;
+        row.style.cursor = 'grab';
+
+        row.ondragstart = (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', group.id);
+            row.style.opacity = '0.5';
+        };
+        row.ondragend = () => {
+            row.style.opacity = '';
+            row.style.cursor = 'grab';
+        };
+        row.ondragover = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            row.style.outline = '2px solid #7d510f';
+        };
+        row.ondragleave = () => { row.style.outline = ''; };
+        row.ondrop = (e) => {
+            e.preventDefault();
+            row.style.outline = '';
+            const draggedId = e.dataTransfer.getData('text/plain');
+            const draggedIndex = groups.findIndex(item => item.id === draggedId);
+            if (draggedIndex < 0 || draggedIndex === index) return;
+
+            const [draggedGroup] = groups.splice(draggedIndex, 1);
+            groups.splice(draggedIndex < index ? index - 1 : index, 0, draggedGroup);
+            saveCustomMapGroups(groups);
+            renderMapGroupsList();
+        };
+
+        const tdDragHandle = document.createElement('td');
+        tdDragHandle.style.width = '20px';
+        tdDragHandle.style.textAlign = 'center';
+        const dragHandle = document.createElement('span');
+        dragHandle.textContent = '\u2630';
+        dragHandle.title = t('map.dragToReorder');
+        dragHandle.style.cursor = 'grab';
+        dragHandle.style.fontSize = '16px';
+        tdDragHandle.appendChild(dragHandle);
 
         const tdActive = document.createElement('td');
         const activeCheckbox = Object.assign(document.createElement('input'), {
             type: 'checkbox',
             checked: group.active
         });
+        activeCheckbox.draggable = false;
         activeCheckbox.onclick = () => { group.active = activeCheckbox.checked; saveCustomMapGroups(groups); };
         tdActive.appendChild(activeCheckbox);
 
@@ -577,38 +618,16 @@ function renderMapGroupsList() {
         const tdActions = document.createElement('td');
         tdActions.style.whiteSpace = 'nowrap';
 
-        const upBtn = document.createElement('a');
-        upBtn.className = 'btn';
-        upBtn.textContent = '\u25b2';
-        upBtn.style.marginRight = '2px';
-        if (index === 0) upBtn.style.visibility = 'hidden';
-        upBtn.onclick = (e) => {
-            e.preventDefault();
-            [groups[index - 1], groups[index]] = [groups[index], groups[index - 1]];
-            saveCustomMapGroups(groups);
-            renderMapGroupsList();
-        };
-
-        const downBtn = document.createElement('a');
-        downBtn.className = 'btn';
-        downBtn.textContent = '\u25bc';
-        downBtn.style.marginRight = '6px';
-        if (index === groups.length - 1) downBtn.style.visibility = 'hidden';
-        downBtn.onclick = (e) => {
-            e.preventDefault();
-            [groups[index + 1], groups[index]] = [groups[index], groups[index + 1]];
-            saveCustomMapGroups(groups);
-            renderMapGroupsList();
-        };
-
         const editBtn = document.createElement('a');
         editBtn.className = 'btn';
+        editBtn.draggable = false;
         editBtn.textContent = t('button.edit');
         editBtn.style.marginRight = '4px';
         editBtn.onclick = (e) => { e.preventDefault(); openMapGroupsForm(group.id); };
 
         const deleteBtn = document.createElement('a');
         deleteBtn.className = 'btn';
+        deleteBtn.draggable = false;
         deleteBtn.textContent = t('button.remove');
         deleteBtn.onclick = (e) => {
             e.preventDefault();
@@ -628,8 +647,8 @@ function renderMapGroupsList() {
             );
         };
 
-        tdActions.append(upBtn, downBtn, editBtn, deleteBtn);
-        row.append(tdActive, tdColor, tdName, tdType, tdActions);
+        tdActions.append(editBtn, deleteBtn);
+        row.append(tdActive, tdColor, tdName, tdType, tdActions, tdDragHandle);
         tbody.appendChild(row);
     });
 
@@ -820,7 +839,7 @@ function openMapGroupsForm(groupId) {
     });
 }
 
-if (typeof TWMap !== 'undefined') {
+if (typeof TWMap !== 'undefined' && !isPremiumAccount()) {
     installMapHighlighterHook();
 
     mapReady().then(() => {

@@ -5,9 +5,8 @@
  */
 async function getOutgoingCommandsFromOverview() {
     const { general } = settings_cookies;
-
     // Early exit if features are disabled
-    if (!general['show__extra_options_map_hover'] && !general['show__outgoingInfo_map']) {
+    if (!isMapHoverInfoEnabled() && !general['show__outgoingInfo_map']) {
         return;
     }
 
@@ -31,164 +30,133 @@ async function getOutgoingCommandsFromOverview() {
         const doc = parser.parseFromString(htmlText, 'text/html');
         const outgoingTable = doc.querySelector('#commands_outgoings');
 
-        // Handle case where no outgoing commands exist
         if (!outgoingTable) {
             localStorage.setItem('outgoing_units_saved', JSON.stringify([]));
+            localStorage.setItem('outgoing_commands_detailed', JSON.stringify([]));
             _outgoingCommandsCache = [];
+            _outgoingCommandsDetailedCache = [];
             return;
         }
 
         const commandRows = outgoingTable.querySelectorAll('.command-row');
         const outgoingUnitsMap = new Map();
-
+        const outgoingCommandsDetailed = [];
         Array.from(commandRows).forEach(row => {
             const villageLabel = row.querySelector('.quickedit-label');
             const hoverDetails = row.querySelectorAll('.command_hover_details img');
-
-            // Extract unit names from image sources
-            const unitList = Array.from(hoverDetails)
-                .map(img => {
-                    const match = img.src.match(/\/([^/]+)\.(?:png|webp)$/);
-                    return match ? match[1] : null;
-                })
-                .filter(Boolean); // Remove null values
-
-            const villageCoords = villageLabel?.innerText.match(/\((.*?)\)/)?.[1] || "";
+            const unitList = Array.from(hoverDetails).map(img => {
+                const match = img.src.match(/\/([^/]+)\.(?:png|webp)$/);
+                return match ? match[1] : null;
+            }).filter(Boolean);
+            const labelText = villageLabel?.innerText.trim() || '';
+            const villageCoords = labelText.match(/\((.*?)\)/)?.[1] || '';
             if (!villageCoords) return;
-
-            const existing = outgoingUnitsMap.get(villageCoords) || { name: villageCoords, imgs: [] };
+            const commandType = row.querySelector('.command_hover_details[data-command-type]')?.dataset.commandType;
+            const existing = outgoingUnitsMap.get(villageCoords) || {
+                name: villageCoords,
+                imgs: [],
+                commandTypes: { attack: 0, return: 0 }
+            };
             existing.imgs.push(...unitList);
+            if (commandType === 'attack' || commandType === 'return') {
+                existing.commandTypes[commandType]++;
+            }
             outgoingUnitsMap.set(villageCoords, existing);
+
+            // Per-command detail for the map popup's "Own commands" table — kept separate from
+            // the aggregated map above (which only drives the map icon overlay).
+            const endtimeSpan = row.querySelector('span[data-endtime]');
+            const arrivalCell = endtimeSpan?.closest('td')?.previousElementSibling;
+            outgoingCommandsDetailed.push({
+                targetCoords: villageCoords,
+                sourceLabel: labelText.replace(/\(.*?\)/, '').trim(),
+                icons: unitList,
+                endtime: endtimeSpan ? parseInt(endtimeSpan.dataset.endtime, 10) : null,
+                arrivalText: arrivalCell ? arrivalCell.textContent.replace(/\s+/g, ' ').trim() : ''
+            });
         });
 
         const outgoing_units = Array.from(outgoingUnitsMap.values()).map(entry => ({
             name: entry.name,
-            imgs: entry.imgs.join(',')
+            imgs: entry.imgs.join(','),
+            commandTypes: entry.commandTypes
         }));
-
-        // Save processed data and update in-memory cache
         localStorage.setItem('outgoing_units_saved', JSON.stringify(outgoing_units));
+        localStorage.setItem('outgoing_commands_detailed', JSON.stringify(outgoingCommandsDetailed));
         _outgoingCommandsLastFetch = Date.now();
         _outgoingCommandsCache = outgoing_units;
-
-        // Trigger map update if enabled
+        _outgoingCommandsDetailedCache = outgoingCommandsDetailed;
         if (general['show__outgoingInfo_map'] && typeof mapReady === 'function') {
             await mapReady();
             addOutgoingIcons();
         }
-
-        if (general['show__heatmap_reports'] && typeof mapReady === 'function') {
-            await mapReady();
-            rebuildReportHeatmapMapSdkElements();
-        }
-
     } catch (error) {
-        console.error("[Outgoing Commands] Failed to fetch overview data:", error);
+        console.error('[Outgoing Commands] Failed to fetch overview data:', error);
     }
 }
 
-/**
- * Promisified version of the map waiter.
- */
-const mapReady = () => new Promise((resolve) => {
+const mapReady = () => new Promise(resolve => {
     const check = setInterval(() => {
         if (document.querySelector("[id^='map_village_']")) {
             clearInterval(check);
             resolve();
         }
     }, 200);
-    // Timeout after 10 seconds to avoid memory leaks
     setTimeout(() => { clearInterval(check); resolve(); }, 10000);
 });
 
-/**
- * Renders outgoing unit icons directly onto the map based on saved command data.
- */
 function addOutgoingIcons() {
     if (_outgoingCommandsCache === null) {
         const raw = localStorage.getItem('outgoing_units_saved');
         if (!raw) return;
         _outgoingCommandsCache = JSON.parse(raw);
     }
-    const outgoingCommands = _outgoingCommandsCache;
     const mapContainer = document.getElementById('map_container');
     if (!mapContainer) return;
-
-    // Remove existing icons to prevent duplicates during map re-renders
     document.querySelectorAll('.outgoing_units_overlay').forEach(el => el.remove());
 
-    outgoingCommands.forEach(command => {
-        // Formats "500|500" to "500500" to match TWMap.villages keys
+    _outgoingCommandsCache.forEach(command => {
         const villageCoords = command.name.replace('|', '');
         const villageInfo = TWMap.villages[villageCoords];
-
         if (!villageInfo) return;
-
         const villageElement = document.getElementById(`map_village_${villageInfo.id}`);
-        if (!villageElement) return;
+        if (!villageElement?.parentNode) return;
 
-        const { top, left } = villageElement.style;
-        const icons = command.imgs.split(',').filter(Boolean);
-        const iconCounts = icons.reduce((acc, icon) => {
-            acc[icon] = (acc[icon] || 0) + 1;
-            return acc;
-        }, {});
-        const uniqueIcons = Object.keys(iconCounts);
+        const commandTypes = command.commandTypes || {};
+        const visibleTypes = ['attack', 'return'].filter(type => Number(commandTypes[type]) > 0);
+        if (!visibleTypes.length) return;
 
-        // Use a fragment to batch DOM injections for better performance
+        const iconSize = 16;
+        const iconGap = 1;
+        const overlayWidth = visibleTypes.length * iconSize + (visibleTypes.length - 1) * iconGap;
+        const top = parseFloat(villageElement.style.top);
+        const left = parseFloat(villageElement.style.left);
+        if (!Number.isFinite(top) || !Number.isFinite(left)) return;
+
         const fragment = document.createDocumentFragment();
 
-        uniqueIcons.forEach(icon => {
-            const iconId = `icon-${villageCoords}-${icon}`;
-
-            // Skip if icon already exists (extra safety)
-            if (document.getElementById(iconId)) return;
-
+        visibleTypes.forEach(type => {
             const cell = document.createElement('div');
-            cell.className = 'icon_outgoing_unit outgoing_units_overlay';
-            cell.id = iconId;
-
-            Object.assign(cell.style, {
-                position: 'relative',
-                width: '15px',
-                height: '15px',
-                display: 'block'
-            });
-
-            const farmIcon = document.createElement('img');
-            farmIcon.src = `/graphic/command/${icon}.png`;
-            farmIcon.alt = '';
-            Object.assign(farmIcon.style, {
-                width: '15px',
-                height: '15px',
-                display: 'block'
-            });
-
-            cell.appendChild(farmIcon);
-
-            const count = iconCounts[icon];
+            cell.className = 'outgoing_command_marker';
+            cell.dataset.commandType = type;
+            Object.assign(cell.style, { position: 'relative', width: `${iconSize}px`, height: `${iconSize}px` });
+            const icon = document.createElement('img');
+            icon.src = `/graphic/map/${type}.png`;
+            icon.alt = '';
+            Object.assign(icon.style, { width: `${iconSize}px`, height: `${iconSize}px`, display: 'block' });
+            cell.appendChild(icon);
+            const count = Number(commandTypes[type]);
             if (count > 1) {
                 const badge = document.createElement('span');
                 badge.textContent = `${count}x`;
                 Object.assign(badge.style, {
-                    position: 'absolute',
-                    top: '-4px',
-                    right: '-7px',
-                    padding: '0 2px',
-                    minWidth: '12px',
-                    height: '11px',
-                    lineHeight: '11px',
-                    fontSize: '9px',
-                    fontWeight: 'bold',
-                    textAlign: 'center',
-                    color: '#fff',
-                    background: 'rgba(0,0,0,0.75)',
-                    borderRadius: '6px',
+                    position: 'absolute', top: '-4px', right: '-7px', padding: '0 2px', minWidth: '12px',
+                    height: '11px', lineHeight: '11px', fontSize: '9px', fontWeight: 'bold', textAlign: 'center',
+                    color: '#fff', background: 'rgba(0,0,0,0.75)', borderRadius: '6px',
                     boxShadow: '0 0 0 1px rgba(255,255,255,0.35)'
                 });
                 cell.appendChild(badge);
             }
-
             fragment.appendChild(cell);
         });
 
@@ -197,21 +165,58 @@ function addOutgoingIcons() {
         overlay.className = 'outgoing_units_overlay';
         Object.assign(overlay.style, {
             position: 'absolute',
-            top: top,
-            left: left,
+            top: `${top + 1}px`,
+            left: `${left + (villageElement.offsetWidth || 32) - overlayWidth - 1}px`,
             zIndex: '10',
             pointerEvents: 'none',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 15px)',
-            gridAutoRows: '15px',
-            gap: '1px',
-            width: 'max-content',
+            display: 'flex',
+            gap: `${iconGap}px`,
+            width: `${overlayWidth}px`,
+            height: `${iconSize}px`,
             alignItems: 'start'
         });
-
         overlay.appendChild(fragment);
+        villageElement.parentNode.insertBefore(overlay, villageElement);
+    });
+}
 
-        // Batch insert before the village element
+function addReservationIcons() {
+    if (typeof reservationsGetAll !== 'function') return;
+
+    document.querySelectorAll('.reservation_map_overlay').forEach(el => el.remove());
+
+    const reservations = reservationsGetAll();
+    if (!reservations) return;
+
+    Object.values(reservations).forEach(reservation => {
+        const villageInfo = TWMap.villages?.[reservation.coords?.replace('|', '')];
+        if (!villageInfo) return;
+
+        const villageElement = document.getElementById(`map_village_${villageInfo.id}`);
+        if (!villageElement?.parentNode) return;
+
+        const top = parseFloat(villageElement.style.top);
+        const left = parseFloat(villageElement.style.left);
+        if (!Number.isFinite(top) || !Number.isFinite(left)) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'reservation_map_overlay';
+        Object.assign(overlay.style, {
+            position: 'absolute',
+            top: `${top + 17}px`,
+            left: `${left}px`,
+            width: '18px',
+            height: '18px',
+            zIndex: '4',
+            pointerEvents: 'none'
+        });
+
+        const icon = document.createElement('img');
+        const isMine = String(reservation.reservingPlayerId) === String(game_data?.player?.id);
+        icon.src = `/graphic/map/${isMine ? 'reserved_player' : 'reserved_ally'}.png`;
+        icon.alt = '';
+        Object.assign(icon.style, { width: '18px', height: '18px', display: 'block' });
+        overlay.appendChild(icon);
         villageElement.parentNode.insertBefore(overlay, villageElement);
     });
 }
@@ -283,48 +288,7 @@ function addFarmAttackIcons() {
  * Intensity = 70% frequency weight + 30% recency weight over a 14-day window.
  */
 function rebuildReportHeatmapMapSdkElements() {
-    if (typeof MapSdk === 'undefined' || typeof TWMap === 'undefined') return;
-    if (!settings_cookies.general['show__heatmap_reports'] || !_reportsListCache) return;
-
-    MapSdk.polygons = MapSdk.polygons.filter(element => !element._twpfHeatmap);
-
-    // Aggregate attack counts and latest timestamp per coordinate
-    const attackCounts = {};
-    const latestAttack = {};
-    _reportsListCache.forEach(report => {
-        if (!report.coords) return;
-        attackCounts[report.coords] = (attackCounts[report.coords] || 0) + 1;
-        const ts = new Date(convertDateToISO(report.date) || 0).getTime();
-        if (!latestAttack[report.coords] || ts > latestAttack[report.coords]) {
-            latestAttack[report.coords] = ts;
-        }
-    });
-
-    const maxCount = Math.max(...Object.values(attackCounts), 1);
-    const now = Date.now();
-    const maxAge = 14 * 24 * 60 * 60 * 1000;
-
-    Object.keys(attackCounts).forEach(coords => {
-        const match = coords.match(/^(\d{1,3})\|(\d{1,3})$/);
-        if (!match) return;
-        const x = Number(match[1]);
-        const y = Number(match[2]);
-
-        const count = attackCounts[coords];
-        const ageRatio = Math.max(0, 1 - (now - (latestAttack[coords] || 0)) / maxAge);
-        const intensity = Math.min(1, (count / maxCount) * 0.7 + ageRatio * 0.3);
-        const alpha = (0.15 + intensity * 0.3).toFixed(2);
-
-        MapSdk.polygons.push({
-            _twpfHeatmap: true,
-            coords: [{ x, y }, { x: x + 1, y }, { x: x + 1, y: y + 1 }, { x, y: y + 1 }],
-            anchor: 'topLeft',
-            styling: { main: { fillStyle: `rgba(220,50,50,${alpha})` } },
-            drawOnMap: true, drawOnMini: false
-        });
-    });
-
-    MapSdk.redraw();
+    return window.TWPFMapReports?.rebuild();
 }
 
 /**
@@ -333,279 +297,22 @@ function rebuildReportHeatmapMapSdkElements() {
  * and saves the result to localStorage.
  */
 async function getReportsList() {
-    if (!settings_cookies.general?.['show__extra_options_map_hover']) return;
-
-    if (_reportsListCache === null) {
-        _reportsListCache = await reportGetAll();
-    }
-    const storedReports = _reportsListCache;
-
-    // Time-gate: skip fetch if synced within the last 15 minutes — UNLESS the store is
-    // actually empty (e.g. cleared via DevTools without also clearing reports_last_fetch),
-    // in which case we always force a fresh sync regardless of the timestamp.
-    const FETCH_TTL_MS = 15 * 60 * 1000;
-    const lastFetch = parseInt(localStorage.getItem('reports_last_fetch') || '0', 10);
-    if (storedReports.length > 0 && (Date.now() - lastFetch) < FETCH_TTL_MS) {
-        if (settings_cookies.general?.['show__heatmap_reports']) {
-            await mapReady();
-            rebuildReportHeatmapMapSdkElements();
-        }
-        return;
-    }
-
-    const reportsMap = new Map(storedReports.map(report => [report.coords, report]));
-    const knownIds = new Set(storedReports.map(report => report.id));
-
-    const groupIds = [0, 7600];
-    const allNewReports = [];
-
-    try {
-        // We use a standard for...of loop here on purpose.
-        // This ensures group 7600 only starts after group 0 is completely finished.
-        for (const id of groupIds) {
-            const newReports = await fetchAllReports(id, knownIds);
-            allNewReports.push(...newReports);
-
-            // Optional: Add a small 200ms rest between groups for extra safety
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        const changedCoords = new Set();
-        allNewReports.forEach(report => {
-            const existingReport = reportsMap.get(report.coords);
-            if (!existingReport || isNewer(report.date, existingReport.date)) {
-                // Fresh sighting for this coords — any previously cached loot/spy data belonged
-                // to the older report and no longer applies, so it's dropped (not merged forward).
-                reportsMap.set(report.coords, report);
-                changedCoords.add(report.coords);
-            }
-        });
-
-        // Prune entries older than 30 days to prevent unbounded growth
-        const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-        const pruneThreshold = Date.now() - PRUNE_AGE_MS;
-        const removedCoords = [];
-        for (const [coords, report] of reportsMap) {
-            const ts = new Date(convertDateToISO(report.date) || 0).getTime();
-            if (ts > 0 && ts < pruneThreshold) {
-                reportsMap.delete(coords);
-                removedCoords.push(coords);
-            }
-        }
-
-        _reportsListCache = [...reportsMap.values()];
-        // Only persist what actually changed — one small record per coord, not the whole list.
-        await Promise.all([
-            ...[...changedCoords].filter(c => reportsMap.has(c)).map(c => reportSet(c, reportsMap.get(c))),
-            ...removedCoords.map(c => reportRemove(c))
-        ]);
-        localStorage.setItem('reports_last_fetch', String(Date.now()));
-        // Refresh the heatmap overlay with the newly fetched report data.
-        if (settings_cookies.general?.['show__heatmap_reports']) {
-            await mapReady();
-            rebuildReportHeatmapMapSdkElements();
-        }
-    } catch (err) {
-        console.error("[Report Manager] Error syncing reports:", err);
-    }
+    if (!window.TWPFMapReports || !isMapHoverInfoEnabled('lastAttack')) return;
+    return window.TWPFMapReports.sync({ force: true });
 }
 
 /**
- * Fetches all reports for a group sequentially to prevent server rate-limiting.
- * @param {number} groupId - The ID of the report group.
- * @returns {Promise<Array>} List of extracted reports.
+ * Synchronizes attack reports when the map is entered, so the heatmap does not
+ * depend on a later village hover to discover newer reports.
  */
-async function fetchAllReports(groupId, knownIds = new Set()) {
-    const firstPageData = await fetchReportsPage(groupId, 0);
-    if (!firstPageData) return [];
+async function syncMapReportsOnLoad() {
+    const reportsManager = window.TWPFMapReports;
+    if (!reportsManager) return;
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(firstPageData, 'text/html');
-
-    // Calculate total pages based on navigation items
-    const navItems = doc.querySelectorAll('.paged-nav-item');
-    const totalPages = navItems.length + 1;
-
-    // Start with reports from the first page
-    let allReports = extractReports(doc);
-
-    // Early-stop: if a known report is already on the first page, no need to paginate further
-    if (knownIds.size > 0 && allReports.some(r => knownIds.has(r.id))) {
-        return allReports;
+    const syncResult = await reportsManager.sync({ force: true });
+    if (syncResult?.changed || reportsManager.needsInitialBuild?.()) {
+        await reportsManager.rebuild?.();
     }
-
-    // Fetch subsequent pages one by one (Sequential)
-    // TribalWars uses increments of 12 for the 'from' parameter
-    for (let i = 1; i < totalPages; i++) {
-        const offset = i * 12;
-        const pageData = await fetchReportsPage(groupId, offset);
-
-        if (pageData) {
-            const pageDoc = parser.parseFromString(pageData, 'text/html');
-            const pageReports = extractReports(pageDoc);
-            allReports.push(...pageReports);
-
-            // Early-stop: found a known report — everything after is already cached
-            if (knownIds.size > 0 && pageReports.some(r => knownIds.has(r.id))) {
-                break;
-            }
-        }
-
-        // Add a small safety delay (throttle) between requests
-        // 200ms is usually enough to stay under the radar
-        await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    return allReports;
-}
-
-/**
- * Fetches a specific page of reports using the native Fetch API.
- * @param {number} groupId - The ID of the report group.
- * @param {number} from - The starting offset for pagination.
- * @returns {Promise<string|null>} The HTML content of the page or null on failure.
- */
-async function fetchReportsPage(groupId, from) {
-    const url = `${game_data.link_base_pure}report&mode=attack&group_id=${groupId}&from=${from}`;
-
-    try {
-        const response = await fetch(url);
-
-        // Check if the request was successful (status 200-299)
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // Return the HTML as text to be parsed by DOMParser in the calling function
-        return await response.text();
-    } catch (error) {
-        console.error(`[Report Manager] Failed to fetch reports from ${url}:`, error);
-        return null;
-    }
-}
-
-/**
- * Extracts report data from a parsed DOM element.
- * @param {HTMLElement|Document} doc - The element containing the report list.
- * @returns {Array} List of extracted report objects.
- */
-function extractReports(doc) {
-    const reports = [];
-    const reportLabels = doc.querySelectorAll('.quickedit-label');
-
-    reportLabels.forEach(label => {
-        // Use .closest() to find the table row containing this report
-        const row = label.closest('tr');
-        const title = label.closest('.report-title');
-        if (!row) return;
-
-        const reportId = title.getAttribute('data-id');
-        const labelText = label.textContent;
-
-        // Optimized Regex: Extracts the last (xxx|yyy) coordinates found in the text
-        const coordsMatch = labelText.match(/\((\d{1,3}\|\d{1,3})\)(?=[^\(]*$)/);
-
-        if (coordsMatch && reportId) {
-            // Scope the search to the current row for better performance
-            const dateElement = row.querySelectorAll('.nowrap')[1];
-
-            if (dateElement) {
-                const dotImg = row.querySelector('.report-subject img[src*="dots/"]');
-                reports.push({
-                    id: reportId,
-                    coords: coordsMatch[1],
-                    date: dateElement.innerText.trim(),
-                    dot: dotImg ? { src: dotImg.src, title: dotImg.getAttribute('data-title') || '' } : null
-                });
-            }
-        }
-    });
-
-    return reports;
-}
-
-/**
- * Compares two date strings to determine if the first is more recent.
- * @param {string} date1 - The new report date string.
- * @param {string} date2 - The existing report date string from storage.
- * @returns {boolean} True if date1 is strictly newer than date2.
- */
-function isNewer(date1, date2) {
-    // If we don't have an existing date to compare against, the new one is "newer"
-    if (!date2) return true;
-    if (!date1) return false;
-
-    // Convert to timestamps (milliseconds) for faster numeric comparison
-    const time1 = new Date(convertDateToISO(date1)).getTime();
-    const time2 = new Date(convertDateToISO(date2)).getTime();
-
-    // Handle invalid date cases (NaN)
-    if (isNaN(time1)) return false;
-    if (isNaN(time2)) return true;
-
-    return time1 > time2;
-}
-
-/**
- * Converts TribalWars date strings to ISO format.
- * Handles standard "Month DD, HH:MM" and relative "today/yesterday at HH:MM".
- * @param {string} dateStr - Raw date string from the game.
- * @returns {string|null} ISO 8601 string or null if parsing fails.
- */
-function convertDateToISO(dateStr) {
-    if (!dateStr) return null;
-
-    const now = new Date();
-    const targetDate = new Date();
-    const lowerDate = dateStr.toLowerCase();
-
-    // 1. Handle relative dates: "today at 12:00", "yesterday at 12:00" (EN)
-    //    and "hoje às 12:00", "ontem às 12:00" (PT)
-    const isToday = lowerDate.includes('today') || lowerDate.includes('hoje');
-    const isYesterday = lowerDate.includes('yesterday') || lowerDate.includes('ontem');
-    if (lowerDate.includes(':') && (isToday || isYesterday)) {
-        const timeMatch = dateStr.match(/(\d{1,2}):(\d{2})/);
-        if (!timeMatch) return null;
-
-        const dayOffset = isYesterday ? -1 : 0;
-        targetDate.setTime(twWallClockToEpochMs(
-            parseInt(timeMatch[1], 10),
-            parseInt(timeMatch[2], 10),
-            0,
-            dayOffset
-        ));
-    }
-    // 2. Handle standard format: "mar. 14, 17:56"
-    else {
-        const parts = dateStr.match(/([a-z]{3})\.?\s+(\d+),\s+(\d{1,2}):(\d{2})/i);
-        if (!parts) return null;
-
-        const monthMap = {
-            // English
-            jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-            // Portuguese (months that differ from English abbreviations)
-            fev: 1, abr: 3, mai: 4, ago: 7, set: 8, out: 9, dez: 11
-        };
-
-        const monthAbbr = parts[1].toLowerCase().replace('.', '');
-        const month = monthMap[monthAbbr];
-        const day = parseInt(parts[2], 10);
-        const hour = parseInt(parts[3], 10);
-        const minute = parseInt(parts[4], 10);
-
-        // Build UTC epoch using server timezone: "mon. 14, 17:56" is 17:56 server-local time
-        let yearToUse = now.getFullYear();
-        let epochMs = Date.UTC(yearToUse, month, day) + hour * 3600000 + minute * 60000 - serverTimezoneOffsetMs;
-        // Year Wrap-around: If the report is "Dec 31" but it's currently Jan 1st,
-        // the report belongs to last year.
-        if (epochMs > Timing.getCurrentServerTime()) {
-            epochMs = Date.UTC(yearToUse - 1, month, day) + hour * 3600000 + minute * 60000 - serverTimezoneOffsetMs;
-        }
-        targetDate.setTime(epochMs);
-    }
-
-    return targetDate.toISOString();
 }
 
 /**
@@ -678,23 +385,271 @@ function insertReportData(report, popUpBody) {
 }
 
 /**
- * Scans a DOM subtree for the game's standard "<span class='icon header wood'>...</span>1234"
- * resource icon+amount pattern and returns the parsed wood/stone/iron numbers.
- * @param {Element|null} container
- * @returns {{wood:number, stone:number, iron:number}|null} Null if no resource icons found.
+ * Injects a "reserved by / expires" row for a village reserved via the ally-reservations
+ * planner (features/allyReservations.js) — replicates the premium map popup's own reservation
+ * display using our non-premium reservation tracking instead.
+ * @param {Object} tgtVillage - Village object from TWMap.villages (needs `.id`).
+ * @param {HTMLElement} popUpBody
  */
-function extractResourceAmounts(container) {
-    if (!container) return null;
-    const amounts = {};
-    let found = false;
-    ['wood', 'stone', 'iron'].forEach(res => {
-        const icon = container.querySelector('.icon.header.' + res);
-        if (!icon) return;
-        found = true;
-        const wrapper = icon.closest('.nowrap') || icon.parentElement;
-        amounts[res] = parseInt((wrapper?.textContent || '').replace(/\D/g, ''), 10) || 0;
+function insertReservationInfoRow(tgtVillage, popUpBody) {
+    if (!popUpBody || typeof getReservationForVillage !== 'function') return;
+
+    const reservation = getReservationForVillage(tgtVillage?.id);
+    if (!reservation) return;
+
+    const row = document.createElement('tr');
+    row.id = 'info_reservation';
+    const th = document.createElement('th');
+    th.textContent = t('map.reservationLabel');
+    const td = document.createElement('td');
+    td.textContent = t('map.reservation.reservedBy', {
+        name: reservation.reservingPlayerName || '?',
+        date: reservation.expiresAtText || '?'
     });
-    return found ? amounts : null;
+    row.append(th, td);
+    popUpBody.appendChild(row);
+}
+
+const OWN_VILLAGE_DATA_TTL_MS = 5 * 60 * 1000;
+const OWN_VILLAGE_HOVER_INTENT_MS = 500;
+let _ownVillageHoverIntentTimer = null;
+const _ownVillageFetchInFlight = new Set();
+
+/**
+ * True when the troop or building snapshot for this village is missing or older than the TTL.
+ * @param {string|number} villageId
+ * @returns {boolean}
+ */
+function isOwnVillageDataStale(villageId) {
+    const troopsFetchedAt = Number(bqGet('troop_place_fetched_at', villageId) || 0);
+    const buildingsStale = typeof isVillageBuildingLevelsStale === 'function'
+        ? isVillageBuildingLevelsStale(villageId, OWN_VILLAGE_DATA_TTL_MS)
+        : true;
+    return (Date.now() - troopsFetchedAt >= OWN_VILLAGE_DATA_TTL_MS) || buildingsStale;
+}
+
+/**
+ * Debounced (hover-intent) active refresh of an own village's troops/buildings/resources, so
+ * the map popup reflects near-live data instead of whatever another feature happened to cache.
+ * Only fires network requests once the popup has stayed on the same village for
+ * OWN_VILLAGE_HOVER_INTENT_MS, and only if that village's data is actually stale — a quick
+ * sweep across many own villages never triggers a request per village.
+ * @param {Object} tgtVillage - Village object from TWMap.villages (needs `.id`).
+ */
+function scheduleOwnVillageRefresh(tgtVillage) {
+    clearTimeout(_ownVillageHoverIntentTimer);
+    if (!tgtVillage?.id || !isOwnVillageDataStale(tgtVillage.id) || _ownVillageFetchInFlight.has(tgtVillage.id)) return;
+
+    _ownVillageHoverIntentTimer = setTimeout(() => {
+        if (TWMap.popup._currentVillage !== tgtVillage.id || _ownVillageFetchInFlight.has(tgtVillage.id)) return;
+        _ownVillageFetchInFlight.add(tgtVillage.id);
+
+        Promise.all([
+            typeof fetchAndStoreVillageTroopCounts === 'function'
+                ? fetchAndStoreVillageTroopCounts(tgtVillage.id, { mode: 'place' })
+                : Promise.resolve(),
+            typeof fetchAndStoreVillageBuildingLevels === 'function'
+                ? fetchAndStoreVillageBuildingLevels(tgtVillage.id)
+                : Promise.resolve()
+        ]).finally(() => {
+            _ownVillageFetchInFlight.delete(tgtVillage.id);
+            // Popup may have moved to a different village (or closed) while we waited.
+            if (TWMap.popup._currentVillage !== tgtVillage.id) return;
+            const liveBody = document.getElementById('map_popup')?.querySelector('tbody');
+            if (liveBody) insertOwnVillageDetailsRows(tgtVillage, liveBody);
+        });
+    }, OWN_VILLAGE_HOVER_INTENT_MS);
+}
+
+/**
+ * Builds a bordered icon+value table (same visual style as the native troops/buildings tables
+ * in the premium popup: alternating #F8F4E8/#DED3B9 cell backgrounds, icon row on top, value
+ * row below) instead of a generic CSS grid — matches the original markup far more closely.
+ * @param {Array<{icon:string, title:string, valueHtml:string}>} items
+ * @returns {HTMLTableElement|null}
+ */
+function createBorderedIconValueTable(items) {
+    if (!items || !items.length) return null;
+    const table = document.createElement('table');
+    table.style.cssText = 'border:1px solid #DED3B9';
+    table.width = '100%';
+    table.cellPadding = 0;
+    table.cellSpacing = 0;
+
+    const iconRow = document.createElement('tr');
+    iconRow.className = 'center';
+    const valueRow = document.createElement('tr');
+    valueRow.className = 'center';
+
+    items.forEach((item, index) => {
+        const bg = index % 2 === 0 ? '#F8F4E8' : '#DED3B9';
+
+        const iconTd = document.createElement('td');
+        iconTd.style.cssText = `padding:2px;background-color:${bg}`;
+        const img = document.createElement('img');
+        img.src = item.icon;
+        img.title = item.title;
+        iconTd.appendChild(img);
+        iconRow.appendChild(iconTd);
+
+        const valueTd = document.createElement('td');
+        valueTd.style.cssText = `padding:2px;background-color:${bg}`;
+        valueTd.innerHTML = item.valueHtml || '';
+        valueRow.appendChild(valueTd);
+    });
+
+    table.append(iconRow, valueRow);
+    return table;
+}
+
+/**
+ * Renders resources/population/trader/troops/buildings/note rows for the player's own village,
+ * replicating the premium map popup's own-village panel as closely as possible in both content
+ * AND layout (resources inline table, population+trader sharing one row, bordered troops/
+ * buildings tables) from actively-refreshed local caches (see scheduleOwnVillageRefresh for the
+ * fetch side). Shows a throbber while data is stale — never mixes fresh and stale numbers.
+ * @param {Object} tgtVillage - Village object from TWMap.villages (needs `.id`).
+ * @param {HTMLElement} popUpBody
+ */
+function insertOwnVillageDetailsRows(tgtVillage, popUpBody) {
+    document.querySelectorAll('.info-own-village-row').forEach(el => el.remove());
+    if (!popUpBody || !tgtVillage?.id || !isMapHoverInfoEnabled('ownVillageInfo')) return;
+
+    const villageId = tgtVillage.id;
+    const assetBase = _getNavAssetBase();
+    const appendRow = row => { if (row) { row.classList.add('info-own-village-row'); popUpBody.appendChild(row); } };
+
+    if (isOwnVillageDataStale(villageId)) {
+        const loadingRow = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 2;
+        const throbber = document.createElement('img');
+        throbber.src = '/graphic/throbber.gif';
+        throbber.alt = t('common.loading');
+        td.appendChild(throbber);
+        loadingRow.appendChild(td);
+        appendRow(loadingRow);
+    } else {
+        const resources = getVillageResources(villageId);
+        if (resources) {
+            // Single inline table (wood/stone/iron/total), matching #info_resources_row's
+            // nested <table> in the native premium popup.
+            const resourcesRow = document.createElement('tr');
+            const resourcesTd = document.createElement('td');
+            resourcesTd.colSpan = 2;
+            const resourcesTable = document.createElement('table');
+            resourcesTable.cellPadding = 0;
+            resourcesTable.className = 'nowrap';
+            const resourcesTr = document.createElement('tr');
+            const total = (resources.wood || 0) + (resources.stone || 0) + (resources.iron || 0);
+            [
+                ['wood', t('common.wood'), resources.wood],
+                ['stone', t('common.clay'), resources.stone],
+                ['iron', t('common.iron'), resources.iron],
+                ['ressources', t('common.resources'), total]
+            ].forEach(([cls, title, value]) => {
+                const cell = document.createElement('td');
+                const icon = document.createElement('span');
+                icon.className = 'icon header ' + cls;
+                icon.title = title;
+                cell.append(icon, document.createTextNode(String(value)));
+                resourcesTr.appendChild(cell);
+            });
+            resourcesTable.appendChild(resourcesTr);
+            resourcesTd.appendChild(resourcesTable);
+            resourcesRow.appendChild(resourcesTd);
+            appendRow(resourcesRow);
+        }
+
+        // Population + trader share a single row (two <td>s), same as the native popup.
+        const merchants = bqGet('market_transports', villageId)?.status?.merchants;
+        const hasPop = resources && Number.isFinite(resources.pop) && Number.isFinite(resources.popMax);
+        const hasMerchants = merchants && (merchants.available != null || merchants.total != null);
+        if (hasPop || hasMerchants) {
+            const popTraderRow = document.createElement('tr');
+            const popTd = document.createElement('td');
+            if (hasPop) {
+                const popIcon = document.createElement('img');
+                popIcon.src = assetBase + 'face.webp';
+                popIcon.style.cssText = 'vertical-align:middle;margin-right:4px';
+                popTd.append(popIcon, document.createTextNode(`${resources.pop}/${resources.popMax}`));
+            }
+            const traderTd = document.createElement('td');
+            if (hasMerchants) {
+                const traderIcon = document.createElement('img');
+                traderIcon.src = assetBase + 'overview/trader.webp';
+                traderIcon.style.cssText = 'vertical-align:middle;margin-right:4px';
+                traderTd.append(traderIcon, document.createTextNode(`${merchants.available ?? '-'}/${merchants.total ?? '-'}`));
+            }
+            popTraderRow.append(popTd, traderTd);
+            appendRow(popTraderRow);
+        }
+
+        // Troops: bordered table, all trackable unit types, "total<br>(home)" per cell —
+        // matches the native popup's unit_count_home layout.
+        const troopCounts = bqGet('village_unit_counts', villageId);
+        if (troopCounts) {
+            const unitOrder = typeof getOverviewVillagesTroopUnitOrder === 'function'
+                ? getOverviewVillagesTroopUnitOrder()
+                : Object.keys(troopCounts);
+            const troopItems = unitOrder.map(unit => {
+                const [homeStr, totalStr] = String(troopCounts[unit] || '0/0').split('/');
+                const home = parseInt(homeStr, 10) || 0;
+                const total = parseInt(totalStr, 10) || home;
+                return {
+                    icon: assetBase + 'unit/unit_' + unit + '.webp',
+                    title: getUnitDisplayName(unit),
+                    valueHtml: total > 0 ? `${total}<br><span class="unit_count_home">(${home})</span>` : ''
+                };
+            });
+            const troopsTable = createBorderedIconValueTable(troopItems);
+            if (troopsTable) {
+                const troopsRow = document.createElement('tr');
+                const troopsTd = document.createElement('td');
+                troopsTd.colSpan = 2;
+                troopsTd.appendChild(troopsTable);
+                troopsRow.appendChild(troopsTd);
+                appendRow(troopsRow);
+            }
+        }
+
+        // Buildings: bordered table, one column per building found in the fetched screen=main.
+        const buildingLevels = getVillageBuildingLevels(villageId);
+        if (buildingLevels) {
+            const buildingItems = Object.keys(buildingLevels).map(buildingId => ({
+                icon: assetBase + 'buildings/' + buildingId + '.webp',
+                title: getBuildingDisplayName(buildingId, document),
+                valueHtml: String(buildingLevels[buildingId])
+            }));
+            const buildingsTable = createBorderedIconValueTable(buildingItems);
+            if (buildingsTable) {
+                const buildingsRow = document.createElement('tr');
+                const buildingsTd = document.createElement('td');
+                buildingsTd.colSpan = 2;
+                buildingsTd.appendChild(buildingsTable);
+                buildingsRow.appendChild(buildingsTd);
+                appendRow(buildingsRow);
+            }
+        }
+    }
+
+    // Notepad note — <hr> + label + content in one cell, matching the native "Bloco de notas:" row.
+    const note = notepadGetAll()[String(villageId)];
+    if (note) {
+        const noteRow = document.createElement('tr');
+        const noteTd = document.createElement('td');
+        noteTd.colSpan = 2;
+        noteTd.appendChild(document.createElement('hr'));
+        const label = document.createElement('u');
+        label.textContent = t('map.notepadNote') + ':';
+        noteTd.appendChild(label);
+        const noteDiv = document.createElement('div');
+        noteDiv.style.whiteSpace = 'pre-wrap';
+        noteDiv.innerHTML = convertBBCodeToHTML(note);
+        noteTd.appendChild(noteDiv);
+        noteRow.appendChild(noteTd);
+        appendRow(noteRow);
+    }
 }
 
 /**
@@ -703,7 +658,7 @@ function extractResourceAmounts(container) {
  * on first access via fetch.
  */
 async function getReportInfoToMap(currentCoords, currentPopUpBody) {
-    if (!settings_cookies.general['show__extra_options_map_hover']) return;
+    if (!isMapHoverInfoEnabled()) return;
 
     // --- Morale (server-authoritative via the game's calculate_morale API) ---
     // The formula-based approach is unreliable: it ignores whether morale is enabled
@@ -715,8 +670,21 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
     // enemy-report data — the village's current owner is what matters, not who
     // owned it when the report was generated.
     const isOwnVillage = tgtVillage?.owner === game_data?.player?.id.toString();
-    
-    if (tgtVillage?.owner && !isOwnVillage) {
+
+    // --- Reservation (via features/allyReservations.js, not native premium data) ---
+    document.getElementById('info_reservation')?.remove();
+    if (isMapHoverInfoEnabled('reservation') && !isOwnVillage) {
+        insertReservationInfoRow(tgtVillage, currentPopUpBody);
+    }
+
+    // --- Own village details (resources/population/buildings/troops/trader/note) ---
+    document.querySelectorAll('.info-own-village-row').forEach(el => el.remove());
+    if (isOwnVillage) {
+        insertOwnVillageDetailsRows(tgtVillage, currentPopUpBody);
+        scheduleOwnVillageRefresh(tgtVillage);
+    }
+
+    if (isMapHoverInfoEnabled('morale') && tgtVillage?.owner && !isOwnVillage) {
         const defPoints = TWMap.players?.[tgtVillage.owner]?.points;
         const defName   = TWMap.players?.[tgtVillage.owner]?.name || '';
         const ownerId   = tgtVillage.owner;
@@ -782,79 +750,17 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
         }
     }
 
-    if (_reportsListCache === null) {
-        _reportsListCache = await reportGetAll();
-    }
-    const reports_list = _reportsListCache;
+    const reports_list = window.TWPFMapReports
+        ? await window.TWPFMapReports.hydrate()
+        : [];
 
-    if (_outgoingCommandsCache === null) {
-        const raw = localStorage.getItem('outgoing_units_saved');
-        if (raw) _outgoingCommandsCache = JSON.parse(raw);
-    }
-    const outgoing_units_saved = _outgoingCommandsCache;
-
-    if (reports_list && !isOwnVillage) {
+    if (isMapHoverInfoEnabled('lastAttack') && reports_list && !isOwnVillage) {
         for (let i = 0; i < reports_list.length; i++) {
             const report = reports_list[i];
 
             if (report.coords.includes(currentCoords)) {
-                // Use cached data if already fetched for this report
-                if (report.fetchedFull) {
-                    insertReportData(report, currentPopUpBody);
-                } else {
-                    // No cached data — fetch the full report page, extract structured loot/spy
-                    // numbers (not raw HTML), then delegate display to insertReportData()
-                    try {
-                        const response = await fetch('/game.php?screen=report&view=' + report.id);
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        const html = await response.text();
-
-                        const parser = new DOMParser();
-                        const tempDoc = parser.parseFromString(html, 'text/html');
-
-                        // Extract loot: wood/stone/iron amounts + population looted/total.
-                        // Find the row that actually holds the resource icons instead of
-                        // assuming it's always the first <tr> (row order/count can vary).
-                        const lootRow = Array.from(tempDoc.querySelectorAll('#attack_results tr'))
-                            .find(tr => tr.querySelector('.icon.header.wood, .icon.header.stone, .icon.header.iron'));
-                        if (lootRow) {
-                            const cells = lootRow.querySelectorAll('td');
-                            report.loot = extractResourceAmounts(cells[0]);
-                            if (report.loot) {
-                                const popParts = (cells[1]?.textContent || '').split('/').map(s => parseInt(s.replace(/\D/g, ''), 10) || 0);
-                                report.loot.popLooted = popParts[0] || 0;
-                                report.loot.popTotal = popParts[1] || 0;
-                            }
-                        } else if (tempDoc.getElementById('attack_results')) {
-                            console.warn('[Report] #attack_results found but no resource icons inside it for report ' + report.id);
-                        }
-
-                        // Extract discovered resources (spy report), excluding the relic row.
-                        // Queried directly against the table (not `tbody`) since a missing
-                        // explicit <tbody> in the source HTML shouldn't matter either way.
-                        const spyTable = tempDoc.getElementById('attack_spy_resources');
-                        if (spyTable) {
-                            spyTable.querySelectorAll('tr').forEach(tr => {
-                                if (tr.querySelector('.relic-quality-shoddy, [class*="relic-quality"], [class*="inline-relic"]')) {
-                                    tr.remove();
-                                }
-                            });
-                            report.spyDiscover = extractResourceAmounts(spyTable);
-                            if (!report.spyDiscover) {
-                                console.warn('[Report] #attack_spy_resources found but no resource icons inside it for report ' + report.id);
-                            }
-                        }
-
-                        report.fetchedFull = true;
-
-                        // Use the same display function as the cached path
-                        insertReportData(report, currentPopUpBody);
-
-                        await reportSet(report.coords, report);
-                    } catch (error) {
-                        console.error('[Report] Failed to fetch report:', error);
-                    }
-                }
+                const hydratedReport = await window.TWPFMapReports.hydrateFullReport(report);
+                if (hydratedReport) insertReportData(hydratedReport, currentPopUpBody);
                 break;
             }
         }
@@ -862,7 +768,7 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
 
     // --- Travel time: all units, compact grid (icons row + H:MM times row) ---
     document.getElementById('info_travel_time')?.remove();
-    if (typeof calculateDistanceToTarget === 'function' && game_data?.units) {
+    if (isMapHoverInfoEnabled('troopDistance') && typeof calculateDistanceToTarget === 'function' && game_data?.units) {
         if (_unitSpeedsCache === null) {
             _unitSpeedsCache = JSON.parse(localStorage.getItem('units_speed') || '{}');
         }
@@ -908,26 +814,75 @@ async function getReportInfoToMap(currentCoords, currentPopUpBody) {
         }
     }
 
-    if (outgoing_units_saved) {
-        outgoing_units_saved.forEach(function (unit) {
-            if (unit.name.includes(currentCoords)) {
-                const span1Element = document.createElement('span');
-                span1Element.className = 'icon-container';
-                const icons = unit.imgs.split(',');
-                icons.forEach(function (icon) {
-                    if (icon !== '') {
-                        const img1Element = document.createElement('img');
-                        img1Element.src = _getNavAssetBase() + 'command/' + icon + '.png';
-                        img1Element.alt = '';
-                        span1Element.appendChild(img1Element);
-                    }
-                });
-
-                const popUpTitle = currentPopUpBody.querySelector('th');
-                if (popUpTitle) popUpTitle.insertBefore(span1Element, popUpTitle.firstChild);
-            }
-        });
+    document.getElementById('info_outgoing_commands_table')?.remove();
+    if (isMapHoverInfoEnabled('lastAttack')) {
+        insertOutgoingCommandsTable(currentCoords, currentPopUpBody);
     }
+}
+
+/**
+ * Renders a mini "Own commands" table (icons + source + absolute arrival + countdown) for every
+ * own outgoing command heading to the currently hovered village — replicates the premium map
+ * popup's own commands list, replacing the old title-icon-only version.
+ * @param {string} currentCoords
+ * @param {HTMLElement} currentPopUpBody
+ */
+function insertOutgoingCommandsTable(currentCoords, currentPopUpBody) {
+    if (_outgoingCommandsDetailedCache === null) {
+        const raw = localStorage.getItem('outgoing_commands_detailed');
+        if (raw) _outgoingCommandsDetailedCache = JSON.parse(raw);
+    }
+    const commands = (_outgoingCommandsDetailedCache || []).filter(cmd => cmd.targetCoords === currentCoords);
+    if (!commands.length) return;
+
+    const wrapperRow = document.createElement('tr');
+    wrapperRow.id = 'info_outgoing_commands_table';
+    const wrapperTd = document.createElement('td');
+    wrapperTd.colSpan = 2;
+
+    const table = document.createElement('table');
+    table.className = 'vis';
+    table.style.width = '100%';
+
+    const headRow = document.createElement('tr');
+    const headLabels = [
+        t('map.ownCommandsIncoming', { count: commands.length }),
+        t('map.arrival'),
+        t('map.arrivesIn')
+    ];
+    headLabels.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        headRow.appendChild(th);
+    });
+    table.appendChild(headRow);
+
+    commands.forEach(cmd => {
+        const row = document.createElement('tr');
+
+        const iconsTd = document.createElement('td');
+        (cmd.icons || []).forEach(icon => {
+            const img = document.createElement('img');
+            img.src = _getNavAssetBase() + 'command/' + icon + '.png';
+            img.alt = '';
+            iconsTd.appendChild(img);
+        });
+        iconsTd.appendChild(document.createTextNode(' ' + cmd.sourceLabel));
+
+        const arrivalTd = document.createElement('td');
+        arrivalTd.textContent = cmd.arrivalText || '';
+
+        const countdownTd = document.createElement('td');
+        const remaining = cmd.endtime && typeof endTimeToTimer === 'function' ? endTimeToTimer(cmd.endtime) : null;
+        countdownTd.textContent = remaining ? remaining.join(':') : '';
+
+        row.append(iconsTd, arrivalTd, countdownTd);
+        table.appendChild(row);
+    });
+
+    wrapperTd.appendChild(table);
+    wrapperRow.appendChild(wrapperTd);
+    currentPopUpBody.appendChild(wrapperRow);
 }
 
 /**
@@ -1039,7 +994,7 @@ function createBigMapOption() {
         input.onclick = () => {
             const isEnabled = !settings_cookies.general['show__big_map'];
             settings_cookies.general['show__big_map'] = isEnabled;
-            localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
+            safeLocalStorageSet('settings_cookies', JSON.stringify(settings_cookies));
 
             isEnabled ? setMapSize() : location.reload();
         };
@@ -1123,7 +1078,10 @@ const _farmAttackCoordsSet = new Set();
 // Avoids repeated JSON.parse(localStorage.getItem(...)) on each onMovePixel call.
 // Updated whenever the underlying data is written.
 let _outgoingCommandsCache = null;
-let _reportsListCache = null;
+
+// Per-command detail (endtime/arrival/source) backing the map popup's "Own commands" table —
+// parallel to _outgoingCommandsCache, which stays aggregated for the map icon overlay.
+let _outgoingCommandsDetailedCache = null;
 
 // Session-only TTL for outgoing commands fetch — resets on every page load
 // so a refresh always gets fresh data from the server.
@@ -1139,15 +1097,9 @@ function scheduleMapIconsRefresh() {
         _mapIconsRefreshScheduled = false;
         if (settings_cookies.general['show__outgoingInfo_map']) addOutgoingIcons();
         addFarmAttackIcons();
+        addReservationIcons();
     }, 0);
 }
-
-// Per-village session cache for troop templates.
-// Skips re-fetching the rally point dialog for already-visited villages.
-const _troopTemplateSessionCache = new Map();
-
-// Shared storage namespace with troopTemplates.js
-const _CUSTOM_TEMPLATES_STORAGE_PREFIX = 'twpf_custom_troop_templates_v1';
 
 // Cache for unit speed data — set once at startup, safe to hold in memory.
 let _unitSpeedsCache = null;
@@ -1170,69 +1122,6 @@ const UNIT_NAME_KEYS = {
 };
 function getUnitDisplayName(unit) {
     return UNIT_NAME_KEYS[unit] ? t(UNIT_NAME_KEYS[unit]) : unit;
-}
-
-/**
- * Returns the localStorage key for account-wide custom troop templates.
- */
-function getCustomTroopTemplatesStorageKey() {
-    const world = game_data?.world || window.location.hostname || 'unknown_world';
-    const player = game_data?.player?.id || 'unknown_player';
-    return `${_CUSTOM_TEMPLATES_STORAGE_PREFIX}_${world}_${player}`;
-}
-
-/**
- * Converts custom templates saved by feature_TroopTemplates into the same shape
- * expected by TroopTemplates/current map buttons.
- */
-function getCustomTemplatesForMap() {
-    let rawTemplates = [];
-    try {
-        const raw = localStorage.getItem(getCustomTroopTemplatesStorageKey());
-        const parsed = raw ? JSON.parse(raw) : [];
-        rawTemplates = Array.isArray(parsed) ? parsed : [];
-    } catch {
-        rawTemplates = [];
-    }
-
-    const units = Array.isArray(game_data?.units) ? game_data.units : [];
-
-    return rawTemplates.map((tpl) => {
-        const mapped = {
-            id: `custom_local_${tpl.id}`,
-            player_id: String(game_data?.player?.id || 'custom'),
-            name: tpl?.name || t('map.customTemplateName'),
-            used: 0,
-            use_all: []
-        };
-
-        units.forEach((unit) => {
-            const value = parseInt(tpl?.units?.[unit], 10);
-            mapped[unit] = Number.isFinite(value) && value > 0 ? String(value) : '0';
-        });
-
-        return mapped;
-    });
-}
-
-/**
- * Builds a TroopTemplates.current object composed of server templates + custom local templates.
- */
-function mergeTemplatesWithCustom(baseTemplates) {
-    const merged = {};
-    const source = baseTemplates || {};
-
-    Object.keys(source).forEach((key) => {
-        if (!String(key).startsWith('custom_local_')) {
-            merged[key] = source[key];
-        }
-    });
-
-    getCustomTemplatesForMap().forEach((tpl) => {
-        merged[tpl.id] = tpl;
-    });
-
-    return merged;
 }
 
 /**
@@ -1287,6 +1176,118 @@ function getVillageIDByCoord(coords) {
 }
 
 let lastFocusId = -1;
+let _farmContextRenderToken = 0;
+const _farmContextButtons = new Map();
+let _farmContextSyncFrame = null;
+let _farmContextObserver = null;
+
+const FARM_CONTEXT_SLOT_OFFSETS = [
+    { left: -64, top: 0 },
+    { left: 64, top: 0 },
+    { left: 0, top: -32 },
+    { left: 0, top: 32 },
+    { left: -64, top: 32 },
+    { left: 64, top: 32 }
+];
+
+function getFarmContextButtonPosition(index, fallbackElement) {
+    const offset = FARM_CONTEXT_SLOT_OFFSETS[index];
+    const left = parseFloat(fallbackElement?.style.left);
+    const top = parseFloat(fallbackElement?.style.top);
+    if (!offset || !Number.isFinite(left) || !Number.isFinite(top)) return null;
+
+    // mp_info is the stable centre anchor. Never derive positions from the
+    // native button grid: that grid is rebuilt asynchronously during a jump.
+    const centerX = left + (fallbackElement.offsetWidth || 32) / 2;
+    const centerY = top + (fallbackElement.offsetHeight || 32) / 2;
+    return {
+        left: centerX - 12 + offset.left,
+        top: centerY - 12 + offset.top
+    };
+}
+
+function syncFarmContextButtons() {
+    _farmContextSyncFrame = null;
+    const referenceElement = document.getElementById('mp_info');
+    const referenceStyle = referenceElement ? window.getComputedStyle(referenceElement) : null;
+    const isHidden = !referenceStyle || referenceStyle.display === 'none' || referenceStyle.opacity === '0';
+
+    _farmContextButtons.forEach((buttonData, button) => {
+        if (!button.isConnected) {
+            _farmContextButtons.delete(button);
+            return;
+        }
+
+        if (isHidden) {
+            button.style.display = referenceStyle?.display || 'none';
+            button.style.visibility = referenceStyle?.visibility || 'hidden';
+            button.style.opacity = referenceStyle?.opacity || '0';
+            button.style.pointerEvents = 'none';
+            return;
+        }
+
+        button.style.display = referenceStyle.display;
+        button.style.visibility = referenceStyle.visibility;
+        button.style.opacity = referenceStyle.opacity;
+        button.style.pointerEvents = 'auto';
+
+        const position = getFarmContextButtonPosition(buttonData.index, referenceElement);
+        if (!position) return;
+        button.style.left = `${position.left}px`;
+        button.style.top = `${position.top}px`;
+    });
+}
+
+function scheduleFarmContextSync() {
+    if (_farmContextSyncFrame !== null) return;
+    _farmContextSyncFrame = requestAnimationFrame(syncFarmContextButtons);
+}
+
+function registerFarmContextButton(button, index, isBarbarian) {
+    _farmContextButtons.set(button, { index, isBarbarian });
+    scheduleFarmContextSync();
+}
+
+function clearFarmContextButtons() {
+    _farmContextButtons.forEach((_buttonData, button) => button.remove());
+    _farmContextButtons.clear();
+    if (_farmContextSyncFrame !== null) {
+        cancelAnimationFrame(_farmContextSyncFrame);
+        _farmContextSyncFrame = null;
+    }
+}
+
+function startFarmContextSync() {
+    if (_farmContextObserver || typeof MutationObserver === 'undefined') return;
+    _farmContextObserver = new MutationObserver((mutations) => {
+        if (mutations.some(mutation => !mutation.target.closest?.('.fake-farm-assistant-button'))) {
+            scheduleFarmContextSync();
+        }
+    });
+    _farmContextObserver.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden']
+    });
+}
+
+function shouldShowFarmContextButtons(village) {
+    const ownerId = village?.owner;
+    if (ownerId === undefined || ownerId === null || String(ownerId) === '0') return true;
+    if (String(ownerId) === String(game_data?.player?.id)) return false;
+
+    const ownAllyId = game_data?.player?.ally?.id
+        ?? game_data?.player?.ally_id
+        ?? game_data?.player?.ally;
+    if (!ownAllyId) return true;
+
+    const player = TWMap.players?.[ownerId] || getCachedPlayerById(ownerId);
+    const villageAllyId = village.ally_id
+        ?? village.allyId
+        ?? player?.ally_id
+        ?? player?.allyId;
+    return !villageAllyId || String(villageAllyId) !== String(ownAllyId);
+}
 
 /**
  * Monitors the map's context menu focus.
@@ -1294,121 +1295,76 @@ let lastFocusId = -1;
  * Uses event-driven overrides on TWMap.context.spawn/hide instead of setInterval polling.
  */
 function startMapContextWatcher() {
+    if (!isMapContextButtonEnabled('attackButtons')) return;
+    startFarmContextSync();
     const _origSpawn = TWMap.context.spawn.bind(TWMap.context);
     TWMap.context.spawn = function(village, x, y) {
         // Hide our buttons before the game repositions mp_att — prevents them from
         // visibly jumping from the previous village's position to the new one.
-        document.querySelectorAll('.custom-map-ctx-button').forEach(el => {
-            el.style.display = 'none';
-            el.style.opacity = '0';
-        });
+        clearFarmContextButtons();
         _origSpawn(village, x, y);
         const newFocus = 1000 * x + y;
         if (newFocus !== lastFocusId) {
             lastFocusId = newFocus;
+            const renderToken = ++_farmContextRenderToken;
+            if (!shouldShowFarmContextButtons(village)) return;
             const focusCoords = `${x}|${y}`;
             GM_setValue('target_village', village.id);
             GM_setValue('target_distance', calculateDistanceToTarget(focusCoords));
-            initializeTroopTemplates(village.id, parseInt(village.owner, 10) === 0);
+            initializeTroopTemplates(village.id, parseInt(village.owner, 10) === 0, renderToken);
         }
     };
 
     const _origHide = TWMap.context.hide.bind(TWMap.context);
     TWMap.context.hide = function() {
         _origHide();
+        ++_farmContextRenderToken;
+        clearFarmContextButtons();
         lastFocusId = -1;
     };
 }
 
-let _troopTemplateAbortController = null;
+const FARM_ASSISTANT_MAP_SLOT_DESCRIPTORS = [
+    { key: 'a', index: 0, buttonIndex: 2, translationKey: 'farmAssistant.templateA' },
+    { key: 'b', index: 1, buttonIndex: 3, translationKey: 'farmAssistant.templateB' },
+    { key: 'c', index: 2, buttonIndex: 4, translationKey: 'farmAssistant.templateC' }
+];
 
 /**
- * Fetches and initializes troop templates for a specific target village.
- * Simulates opening the rally point command window to get template data.
+ * Initializes the three Farm Assistant quick attack buttons for a target village.
  * @param {string|number} targetID - The ID of the target village.
  */
-async function initializeTroopTemplates(targetID, isBarbarian = false) {
+function initializeTroopTemplates(targetID, isBarbarian = false, renderToken = _farmContextRenderToken) {
     if (!targetID) return;
 
-    // Cancel any in-flight request for a previous village
-    if (_troopTemplateAbortController) {
-        _troopTemplateAbortController.abort();
-        _troopTemplateAbortController = null;
-    }
+    if (renderToken !== _farmContextRenderToken) return;
+    clearFarmContextButtons();
 
-    // Remove existing "fake" buttons before re-rendering to avoid UI clutter
-    document.querySelectorAll('.fake-farm-assistant-button').forEach(el => el.remove());
+    const slots = typeof getFarmAssistantMapSlots === 'function'
+        ? getFarmAssistantMapSlots()
+        : [null, null];
 
-    // Session cache hit: render directly without a network request
-    if (_troopTemplateSessionCache.has(targetID)) {
-        const cachedTemplates = _troopTemplateSessionCache.get(targetID);
-        const mergedTemplates = mergeTemplatesWithCustom(cachedTemplates);
-        TroopTemplates.current = mergedTemplates;
-        Object.values(mergedTemplates).filter(t => t.player_id).forEach((template, index) => {
-            if (typeof addFakeFarmAssistantButton === 'function') addFakeFarmAssistantButton(template, index, isBarbarian);
+    slots.forEach((slot, index) => {
+        if (!slot) return;
+        if (index === 2 && typeof getFarmAssistantTemplateCMode === 'function'
+            && getFarmAssistantTemplateCMode() === 'auto') return;
+        const descriptor = FARM_ASSISTANT_MAP_SLOT_DESCRIPTORS[index];
+        if (!descriptor) return;
+        const template = {
+            id: 'farm_assistant_' + descriptor.key,
+            player_id: String(game_data?.player?.id || 'farm_assistant'),
+            name: slot.name || t(descriptor.translationKey),
+            units: slot.units || {}
+        };
+
+        (game_data.units || []).forEach(unit => {
+            template[unit] = String(parseInt(slot.units?.[unit], 10) || 0);
         });
-        return;
-    }
-
-    _troopTemplateAbortController = new AbortController();
-    const signal = _troopTemplateAbortController.signal;
-
-    const url = `${window.location.origin}${game_data.link_base_pure}place&ajax=command&target=${targetID}`;
-
-    try {
-        // 1. Modern fetch instead of $.ajax for better async handling
-        const response = await fetch(url, { signal });
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-
-        const data = await response.json();
-        const htmlContent = data.dialog;
-
-        if (!htmlContent) {
-            console.warn("[Templates] No dialog content returned.");
-            return;
-        }
-
-        // 2. Extract TroopTemplates JSON string
-        // The regex looks for the object assigned to TroopTemplates.current
-        const templateMatch = htmlContent.match(/TroopTemplates\.current\s*=\s*({.*?});/);
-
-        if (templateMatch?.[1]) {
-            const templatesData = JSON.parse(templateMatch[1]);
-
-            // Store in session cache to avoid re-fetching for the same village
-            _troopTemplateSessionCache.set(targetID, templatesData);
-
-            // Sync with game's global object, including local custom templates.
-            const mergedTemplates = mergeTemplatesWithCustom(templatesData);
-            TroopTemplates.current = mergedTemplates;
-
-            // 3. Re-bind template selection event (scoped cleanup)
-            const $selectTemplate = $(".evt-select-template");
-            $selectTemplate.off('change').on('change', function () {
-                TroopTemplates.useTemplate(this);
-            });
-
-            // 4. Generate buttons for each template found
-            const templatesArray = Object.values(mergedTemplates).filter(t => t.player_id);
-
-            templatesArray.forEach((template, index) => {
-                // We pass the template object and index to the button creator
-                if (typeof addFakeFarmAssistantButton === 'function') {
-                    addFakeFarmAssistantButton(template, index, isBarbarian);
-                }
-            });
-
-            console.log(`[Templates] Initialized ${templatesArray.length} templates for target ${targetID}`);
-        } else {
-            console.warn("[Templates] Could not find TroopTemplates in the response dialog.");
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') return; // Intentionally cancelled, not an error
-        console.error("[Templates] Critical error during initialization:", error);
-    }
+        addFakeFarmAssistantButton(template, descriptor.buttonIndex, isBarbarian, descriptor);
+    });
 }
 
-if (typeof TWMap !== 'undefined') {
+if (typeof TWMap !== 'undefined' && !isPremiumAccount()) {
     // Hide native Farm Assistant context buttons if the feature is not active for this account
     if (!game_data.features?.FarmAssistent?.active) {
         const style = document.createElement('style');
@@ -1420,9 +1376,10 @@ if (typeof TWMap !== 'undefined') {
     GM_setValue("target_village", 0);
     getOutgoingCommandsFromOverview();
     createBigMapOption();
-    if (settings_cookies.general['show__extra_options_map_hover']) {
+    // Check for new reports on every map page entry, independently of map display settings.
+    syncMapReportsOnLoad();
+    if (isMapHoverInfoEnabled()) {
         var originalHandleMouseMove = TWMap.popup.handleMouseMove;
-        getReportsList();
         TWMap.popup.handleMouseMove = function (e) {
             TWMap.popup.extraInfo = true;
             originalHandleMouseMove.call(this, e);
@@ -1437,7 +1394,7 @@ if (typeof TWMap !== 'undefined') {
 
             if (currentPopUpBody && !currentPopUpBody.querySelector('#map_popup_extra')) {
                 currentPopUpBody.appendChild(tr);
-                document.querySelectorAll("#info_last_attack, #info_outgoing_units, #info_travel_time, #info_morale").forEach(el => el.remove());
+                document.querySelectorAll("#info_last_attack, #info_outgoing_units, #info_travel_time, #info_morale, #info_reservation, #info_outgoing_commands_table, .info-own-village-row").forEach(el => el.remove());
                 getReportInfoToMap(currentCoords, currentPopUpBody);
             }
         };
@@ -1445,7 +1402,9 @@ if (typeof TWMap !== 'undefined') {
     if (settings_cookies.general['show__big_map']) {
         setMapSize();
     }
-    if (settings_cookies.general['show__outgoingInfo_map'] || settings_cookies.general['show__heatmap_reports']) {
+    if (settings_cookies.general['show__outgoingInfo_map']
+        || window.TWPFMapReports?.isEnabled()
+        || typeof reservationsGetAll === 'function') {
         if (TWMap.mapHandler) {
             // Fires only when a sector actually spawns (far rarer than onMovePixel's per-pixel
             // drag events) — chains after any other spawnSector wrapper (e.g. MapSdk's own).
@@ -1453,11 +1412,18 @@ if (typeof TWMap !== 'undefined') {
             TWMap.mapHandler.spawnSector = function (data, sector) {
                 _previousSpawnSector.call(this, data, sector);
                 scheduleMapIconsRefresh();
+                if (window.TWPFMapReports?.isEnabled() && window.TWPFMapReports.needsInitialBuild?.()) {
+                    window.TWPFMapReports.notifyUpdated();
+                }
             }
         }
     }
 
-    if (settings_cookies.general['show__ctx_attack_buttons']) {
+    if (typeof reservationsGetAll === 'function') {
+        mapReady().then(addReservationIcons);
+    }
+
+    if (isMapContextButtonEnabled('attackButtons')) {
         startMapContextWatcher();
     }
 }
@@ -1468,16 +1434,12 @@ if (typeof TWMap !== 'undefined') {
  * @param {Object} template - A TroopTemplate object.
  * @param {number} index - Zero-based index; index 0 also clears buttons from the previous village.
  */
-function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
+function addFakeFarmAssistantButton(template, index, isBarbarian = false, slotDescriptor = null) {
     const ctxButtons = document.getElementById("map-ctx-buttons");
-    // Always use mp_att as reference for show/hide tracking (it animates normally for all
-    // attackable villages, including barbarians). For barbarian villages the position is
-    // read from mp_farm_a/mp_farm_b inside updateBasedOnReference instead.
-    const referenceElement = document.getElementById("mp_att");
 
     //remove previous buttons
     if (index === 0) {
-        document.querySelectorAll('.custom-map-ctx-button').forEach(element => element.remove());
+        clearFarmContextButtons();
     }
 
     if (!ctxButtons) {
@@ -1485,24 +1447,31 @@ function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
         return;
     }
 
-    if (!referenceElement) {
-        console.warn("[MapCTX] #mp_att reference element not found.");
-        return;
-    }
-
     // create ctx button for map
     const newButton = document.createElement("a");
-    newButton.className = "mp custom-map-ctx-button";
-    newButton.id = "mp_farm_f" + index;
+    newButton.className = "mp custom-map-ctx-button fake-farm-assistant-button";
+    newButton.id = "mp_farm_f" + (index - 2);
     newButton.style.borderRadius = '5px';
-    newButton.setAttribute("data-tooltip-tpl", generateTemplateTooltipData(template));
+    const isLoading = !template;
+    if (isLoading) {
+        newButton.style.backgroundImage = 'url(https://dsbr.innogamescdn.com/asset/f441272cc5/graphic/loading.gif)';
+        newButton.style.cursor = 'wait';
+        newButton.style.pointerEvents = 'none';
+        newButton.setAttribute('aria-label', t('common.loading'));
+    } else {
+        newButton.setAttribute("data-tooltip-tpl", generateTemplateTooltipData(template));
+    }
 
-    if (index === 0) {
+    const descriptor = slotDescriptor || FARM_ASSISTANT_MAP_SLOT_DESCRIPTORS[index - 2];
+    if (descriptor?.key === 'a') {
         newButton.style.backgroundImage = 'url(data:image/png;base64,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)'
     } else {
         // Subsequent templates (index > 0) use a different icon
         newButton.style.backgroundImage = 'url(data:image/png;base64,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)'
     }
+
+    newButton.classList.add('farm_icon', 'farm_icon_' + (descriptor?.key || 'a'));
+    if (!isLoading) newButton.style.backgroundImage = '';
 
     newButton.onmouseover = function () {
         toggleTooltip(newButton, true)
@@ -1513,6 +1482,7 @@ function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
     }
 
     newButton.onclick = async function fetchData() {
+        if (isLoading) return;
         const originalBackgroundImage = newButton.style.backgroundImage;
         // Capture focus synchronously at click time — lastFocusId can change
         // during the async launchAttack() if the user moves focus elsewhere.
@@ -1545,20 +1515,43 @@ function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
 
             console.log(`Launching attack from template '${template.name}' on target ${targetId}`);
 
+            const focusStr = focusAtClick > 0 ? focusAtClick.toString().padStart(6, '0') : '';
+            const targetCoords = focusStr
+                ? focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6)
+                : '';
+            const baseline = targetCoords && typeof getQuickFarmAttackReportBaseline === 'function'
+                ? getQuickFarmAttackReportBaseline(targetCoords)
+                : {};
+
             // 4. Call the previously defined launch function
             const attackSucceeded = await launchAttack(unitsToLaunch, targetId);
 
             // 5. Only update map icons if the attack was actually sent.
             // Use focusAtClick (captured before the await) — not lastFocusId,
             // which may have changed while the request was in flight.
-            if (attackSucceeded && focusAtClick > 0) {
-                const focusStr = focusAtClick.toString().padStart(6, '0');
-                const targetCoords = focusStr.substring(0, 3) + '|' + focusStr.substring(3, 6);
+            if (attackSucceeded) {
+                if (targetCoords) {
+                    // Add a temporary barracks icon to show the attack was sent.
+                    // This is replaced by real outgoing-command icons on next page load.
+                    _farmAttackCoordsSet.add(targetCoords);
+                    if (typeof addFarmAttackIcons === 'function') addFarmAttackIcons();
+                }
 
-                // Add a temporary barracks icon to show the attack was sent.
-                // This is replaced by real outgoing-command icons on next page load.
-                _farmAttackCoordsSet.add(targetCoords);
-                if (typeof addFarmAttackIcons === 'function') addFarmAttackIcons();
+                if (typeof recordQuickFarmAttack === 'function') {
+                    recordQuickFarmAttack({
+                        sourceVillageId: game_data.village.id,
+                        targetVillageId: targetId,
+                        targetCoords,
+                        units: unitsToLaunch,
+                        previousReportId: baseline.previousReportId,
+                        previousReportAtMs: baseline.previousReportAtMs,
+                        templateName: template.name,
+                        templateSlot: descriptor?.key || 'a',
+                        origin: 'map-context',
+                        playerId: game_data.player?.id,
+                        world: game_data.world
+                    });
+                }
             }
 
         } catch (error) {
@@ -1568,103 +1561,7 @@ function addFakeFarmAssistantButton(template, index, isBarbarian = false) {
         }
     };
 
-    let syncInterval = null;
-
-    /**
-     * Synchronizes the position, display, and opacity of CTX button
-     * with the referenceElement (mp_att).
-     */
-    function updateBasedOnReference(index) {
-        const ref = referenceElement;
-        const btn = newButton;
-
-        if (!ref || !btn) return;
-
-        const refStyle = window.getComputedStyle(ref);
-
-        btn.style.display = refStyle.display;
-        btn.style.visibility = refStyle.visibility;
-
-        if (refStyle.display === 'none' || refStyle.opacity === '0') {
-            btn.style.opacity = refStyle.opacity;
-            btn.style.pointerEvents = 'none';
-        } else {
-            btn.style.pointerEvents = 'auto';
-            btn.style.opacity = refStyle.opacity;
-
-            if (isBarbarian) {
-                // For barbarian villages: read position directly from the native (hidden)
-                // farm assist elements — the game sets their left/top even when display:none.
-                const posEl = index === 0
-                    ? (document.getElementById('mp_farm_a') || document.getElementById('mp_farm_b'))
-                    : (document.getElementById('mp_farm_b') || document.getElementById('mp_farm_a'));
-
-                if (posEl?.style.left) {
-                    btn.style.left = posEl.style.left;
-                    btn.style.top = index <= 1
-                        ? posEl.style.top
-                        : `${parseFloat(posEl.style.top) + (index - 1) * 36}px`;
-                }
-            } else {
-                // Use the reference element's own style coordinates (same container as native TW buttons)
-                const refLeft = parseFloat(ref.style.left) || 0;
-                const refTop = parseFloat(ref.style.top) || 0;
-
-                btn.style.left = `${refLeft + 32}px`;
-                btn.style.top = index === 0
-                    ? `${refTop - 15}px`
-                    : `${refTop + 53 + (index - 1) * 36}px`;
-            }
-        }
-    }
-
-    /**
-     * MutationObserver to watch for attribute changes
-     */
-    const observer = new MutationObserver(() => {
-        // Immediate sync when a change is detected
-        updateBasedOnReference(index);
-
-        // "Insurance Policy": jQuery animations (fadeIn/fadeOut) update the style attribute 
-        // many times per second. We force a sync at 60fps for 500ms to "stick" to the animation.
-        if (syncInterval) clearInterval(syncInterval);
-
-        let duration = 0;
-        syncInterval = setInterval(() => {
-            updateBasedOnReference(index);
-            duration += 16; // Approximately 1 frame at 60fps
-
-            // Stop the loop after 500ms (typical duration of a TW fade effect)
-            if (duration > 500) {
-                clearInterval(syncInterval);
-                syncInterval = null;
-            }
-        }, 16);
-    });
-
-    // Observe style, class, and hidden attributes
-    observer.observe(referenceElement, {
-        attributes: true,
-        attributeFilter: ["style", "class", "hidden"]
-    });
-
-    // Initial synchronization
-    updateBasedOnReference(index);
-
-    // Parent monitoring: if the referenceElement is completely removed from the DOM
-    // (common in dynamic UI refreshes), we need to know.
-    if (referenceElement.parentElement) {
-        const parentObserver = new MutationObserver((mutations) => {
-            for (let mutation of mutations) {
-                const removed = Array.from(mutation.removedNodes);
-                if (removed.includes(referenceElement)) {
-                    console.warn("Reference element was removed from DOM. Sync stopped.");
-                    // You might want to re-initialize your logic here if the element is recreated
-                }
-            }
-        });
-        parentObserver.observe(referenceElement.parentElement, { childList: true });
-    }
+    registerFarmContextButton(newButton, index, isBarbarian);
 
     /**
      * Builds the HTML tooltip content for a troop template button.

@@ -88,6 +88,38 @@ function setVillageQueueFull(villageId, value) {
 // racing each other and sending duplicate upgrade requests for the same village's queue head.
 var buildQueueRequestInFlightByVillage = {};
 
+function getBuildingMaxLevel(buildId) {
+    try {
+        const levels = JSON.parse(localStorage.getItem('buildings_data') || '{}')[buildId];
+        const numericLevels = Object.keys(levels || {})
+            .map(level => parseInt(level, 10))
+            .filter(level => !isNaN(level));
+        return numericLevels.length ? Math.max(...numericLevels) : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function getNextBuildLevel(buildId, villageId, includeNewEntry = true) {
+    const vId = villageId || game_data?.village?.id;
+    const levelInfo = bqGet('nextLevelBuildsQueueInfo', vId) || {};
+    const activeQueue = bqGet('building_queue_active', vId) || [];
+    const waitingQueue = bqGet('building_queue', vId) || [];
+    const currentLevel = Number(levelInfo[buildId]?.currentLevel) || 0;
+    const activeCount = activeQueue.filter(id => id.replace(/\d+/g, '') === buildId).length;
+    const waitingCount = waitingQueue.filter(id => id === buildId).length;
+    return currentLevel + activeCount + waitingCount + (includeNewEntry ? 1 : 0);
+}
+
+function isBuildLevelAtMaximum(buildId, targetLevel) {
+    const maxLevel = getBuildingMaxLevel(buildId);
+    return maxLevel !== null && Number(targetLevel) > maxLevel;
+}
+
+function showBuildMaximumMessage(villageId, buildId) {
+    showAutoHideBox('[' + getVillageName(villageId) + '] ' + t('buildQueue.maxLevelReached', { name: getBuildingDisplayName(buildId, document) }), false);
+}
+
 function setBuildQueueButtonLoading(button, isLoading) {
     if (!button) return;
 
@@ -138,19 +170,7 @@ function fetchVillageMainPage(villageId) {
  * @returns {{wood: number, stone: number, iron: number, pop: number, popMax: number}|null}
  */
 function readResourcesFromDoc(doc) {
-    const woodEl = doc.querySelector('#wood');
-    const stoneEl = doc.querySelector('#stone');
-    const ironEl = doc.querySelector('#iron');
-    if (!woodEl || !stoneEl || !ironEl) return null;
-    const popEl = doc.querySelector('#pop_current_label');
-    const popMaxEl = doc.querySelector('#pop_max_label');
-    return {
-        wood: parseInt(woodEl.textContent.replace(/\D/g, '') || '0'),
-        stone: parseInt(stoneEl.textContent.replace(/\D/g, '') || '0'),
-        iron: parseInt(ironEl.textContent.replace(/\D/g, '') || '0'),
-        pop: popEl ? parseInt(popEl.textContent.replace(/\D/g, '') || '0') : undefined,
-        popMax: popMaxEl ? parseInt(popMaxEl.textContent.replace(/\D/g, '') || '0') : undefined
-    };
+    return readVillageResourceSnapshot(doc);
 }
 
 /**
@@ -178,7 +198,7 @@ function hasEnoughForBuild(resources, buildInfo) {
 function readCurrentVillageDomResources(villageId) {
     const vId = villageId || game_data?.village?.id;
     if (vId != game_data?.village?.id) return null;
-    return readResourcesFromDoc(document);
+    return readVillageResourceSnapshot(document);
 }
 
 // Static id -> navIcon i18n key fallback for building names. .visual-label-X (see
@@ -188,7 +208,7 @@ const BUILDING_NAME_KEYS = {
     main: 'mainBuilding', barracks: 'barracks', stable: 'stable', garage: 'workshop',
     church: 'church', church_f: 'church', watchtower: 'watchtower', snob: 'academy',
     smith: 'smithy', place: 'rallyPoint', statue: 'statue', market: 'market',
-    wood: 'timberCamp', stone: 'clayPit', iron: 'ironMine', farm: 'farm',
+    wood: 'wood', stone: 'clayPit', iron: 'ironMine', farm: 'farm',
     storage: 'warehouse', hide: 'hidingPlace', wall: 'wall'
 };
 
@@ -264,6 +284,8 @@ function buildBuildQueueContent(availableBuildingsImgs, buildingImgs, availableB
         nextLevel += queuedBuilding || 0;
         nextLevel += activeQueuedCount || 0;
 
+        if (isBuildLevelAtMaximum(buildId, nextLevel)) return;
+
         const canAddToQueue = buildingImgs.includes(url);
 
         var cell = document.createElement('td');
@@ -303,6 +325,9 @@ function buildBuildQueueContent(availableBuildingsImgs, buildingImgs, availableB
         upgradeLink.style.padding = '1px 3px';
         upgradeLink.textContent = t('buildQueue.level', { level: nextLevel });
         upgradeLink.onclick = function () {
+            if (upgradeLink.getAttribute('aria-busy') === 'true') return;
+            setBuildQueueButtonLoading(upgradeLink, true);
+            if (typeof toggleTooltip === 'function') toggleTooltip(upgradeLink, false);
             addToBuildQueue(buildId, vId, upgradeLink);
             if (onAction) onAction();
         }
@@ -419,6 +444,9 @@ function parseAndStoreQueueState(tempElement, villageId) {
             const nextLevelTimeStr = tds[4]?.innerText.trim() || '';
             buildingLevelsInfo[buildId] = { currentLevel, nextLevelTimeStr };
         }
+
+        const serverCost = getServerBuildCost(tempElement, buildId);
+        if (serverCost) updateCachedBuildCost(buildId, serverCost);
     });
 
     bqSet('nextLevelBuildsQueueInfo', villageId, buildingLevelsInfo);
@@ -450,6 +478,67 @@ function getCurrentQueueListElement(tempElement, allBuildingsImgs, villageId) {
     injectFakeQueueList(queueBuildIdsActive, buildQueueElment, allBuildingsImgs, vId, document);
 
     return buildQueueElment;
+}
+
+/**
+ * Reads the server-calculated cost for the next upgrade from a main page response.
+ * The data-cost attributes are preferable to translated text and already include the
+ * world's current rules and modifiers.
+ * @param {Document} doc - Parsed main page response.
+ * @param {string} buildId - Building identifier.
+ * @returns {{level:number, wood:number, stone:number, iron:number, pop:number}|null}
+ */
+function getServerBuildCost(doc, buildId) {
+    const row = doc.querySelector('#main_buildrow_' + buildId);
+    if (!row) return null;
+
+    const levelLink = row.querySelector('a[data-level-next]');
+    const level = Number(levelLink?.getAttribute('data-level-next'));
+    const getCost = selector => {
+        const value = Number(row.querySelector(selector)?.getAttribute('data-cost'));
+        return Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    const wood = getCost('.cost_wood[data-cost]');
+    const stone = getCost('.cost_stone[data-cost]');
+    const iron = getCost('.cost_iron[data-cost]');
+    const popText = row.querySelector('.population')?.parentElement?.textContent || '';
+    const popMatch = popText.match(/\d+/);
+    const pop = popMatch ? Number(popMatch[0]) : 0;
+
+    if (!Number.isInteger(level) || level <= 0 || wood === null || stone === null || iron === null) {
+        return null;
+    }
+
+    return { level, wood, stone, iron, pop };
+}
+
+/**
+ * Updates one cached building level with costs supplied by the game server.
+ * @param {string} buildId - Building identifier.
+ * @param {{level:number, wood:number, stone:number, iron:number, pop:number}} serverCost
+ * @returns {boolean} Whether the cached cost changed.
+ */
+function updateCachedBuildCost(buildId, serverCost) {
+    const allBuildingsData = JSON.parse(localStorage.getItem('buildings_data') || '{}');
+    const currentCost = allBuildingsData[buildId]?.[serverCost.level];
+    if (currentCost &&
+        currentCost.wood === serverCost.wood &&
+        currentCost.stone === serverCost.stone &&
+        currentCost.iron === serverCost.iron &&
+        currentCost.pop === serverCost.pop) {
+        return false;
+    }
+
+    allBuildingsData[buildId] = allBuildingsData[buildId] || {};
+    allBuildingsData[buildId][serverCost.level] = {
+        ...currentCost,
+        wood: serverCost.wood,
+        stone: serverCost.stone,
+        iron: serverCost.iron,
+        pop: serverCost.pop
+    };
+    localStorage.setItem('buildings_data', JSON.stringify(allBuildingsData));
+    return true;
 }
 
 /**
@@ -885,32 +974,48 @@ function addToBuildQueue(build_id, villageId, actionButton) {
     const vId = villageId || game_data?.village?.id;
     const isCurrent = vId == game_data?.village?.id;
     if (build_id) {
+        const targetLevel = getNextBuildLevel(build_id, vId);
+        if (isBuildLevelAtMaximum(build_id, targetLevel)) {
+            setBuildQueueButtonLoading(actionButton, false);
+            showBuildMaximumMessage(vId, build_id);
+            return;
+        }
         if (!isVillageQueueFull(vId) && !(bqGet('waiting_for_queue', vId) || {}).buildId) {
             callUpgradeBuilding(build_id, vId, actionButton);
         } else {
             var building_queue = bqGet('building_queue', vId) || [];
             // Compute and store the actual target level for this new queue entry
-            const _levInfo = bqGet('nextLevelBuildsQueueInfo', vId) || {};
-            const _actQueue = bqGet('building_queue_active', vId) || [];
-            const _actCount = _actQueue.filter(x => x.replace(/\d+/g, '') === build_id).length;
-            const _qCount = building_queue.filter(x => x === build_id).length;
-            const _targetLevel = (_levInfo[build_id]?.currentLevel || 0) + _actCount + _qCount + 1;
             building_queue.push(build_id);
             bqSet('building_queue', vId, building_queue);
             var _bql = bqGet('building_queue_levels', vId) || [];
-            _bql.push(_targetLevel);
+            _bql.push(targetLevel);
             bqSet('building_queue_levels', vId, _bql);
 
             updateBuildQueueTimers(vId);
 
             // No cached page to patch anymore — always fetch a fresh copy for the current village.
-            if (isCurrent) fetchBuildQueueWidget(true);
+            if (isCurrent) fetchBuildQueueWidget(true, function () { setBuildQueueButtonLoading(actionButton, false); });
+            else setBuildQueueButtonLoading(actionButton, false);
             showAutoHideBox('[' + getVillageName(vId) + '] ' + t('buildQueue.addedToWaitingQueue'), false);
         }
     } else {
         const building_queue = bqGet('building_queue', vId) || [];
         const waitingFor = bqGet('waiting_for_queue', vId) || {};
         if (!isVillageQueueFull(vId) && building_queue.length) {
+            const waitingBuildId = building_queue[0];
+            const queuedTargetLevel = bqGet('building_queue_levels', vId)?.[0] || getNextBuildLevel(waitingBuildId, vId, false);
+            if (isBuildLevelAtMaximum(waitingBuildId, queuedTargetLevel)) {
+                building_queue.shift();
+                bqSet('building_queue', vId, building_queue);
+                const queuedLevels = bqGet('building_queue_levels', vId) || [];
+                queuedLevels.shift();
+                bqSet('building_queue_levels', vId, queuedLevels);
+                clearVillageBuildQueueTimeout(vId);
+                bqSet('waiting_for_queue', vId, {});
+                showBuildMaximumMessage(vId, waitingBuildId);
+                if (isCurrent) fetchBuildQueueWidget(true);
+                return;
+            }
             // If a build was waiting for resources, the timer just fired meaning resources should now be available.
             // Clear the waiting state so callUpgradeBuilding can proceed normally.
             if (waitingFor.buildId) {
@@ -984,6 +1089,15 @@ function callUpgradeBuilding(id, villageId, actionButton) {
     const vId = villageId || game_data?.village?.id;
     const isCurrent = vId == game_data?.village?.id;
     if (id) {
+        const queuedBuilds = bqGet('building_queue', vId) || [];
+        const targetLevel = queuedBuilds[0] === id
+            ? (bqGet('building_queue_levels', vId) || [])[0] || getNextBuildLevel(id, vId, false)
+            : getNextBuildLevel(id, vId);
+        if (isBuildLevelAtMaximum(id, targetLevel)) {
+            setBuildQueueButtonLoading(actionButton, false);
+            showBuildMaximumMessage(vId, id);
+            return;
+        }
         if (buildQueueRequestInFlightByVillage[vId]) return; // another trigger already has a request in transit
         buildQueueRequestInFlightByVillage[vId] = true;
         setBuildQueueButtonLoading(actionButton, true);
@@ -1006,17 +1120,23 @@ function callUpgradeBuilding(id, villageId, actionButton) {
                 if (isError !== null || !main) {
                     // Detect full queue from the response HTML in case the cached flag is stale
                     const queueFullInResponse = tempElement.querySelectorAll('.btn-cancel').length >= getMaxBuildQueueSize();
+                    const serverCost = getServerBuildCost(tempElement, id);
+                    if (serverCost) {
+                        updateCachedBuildCost(id, serverCost);
+                    }
                     // Error: item was NOT removed — if it came from a direct click (not queue), add to front
                     if (!wasFromQueue) {
                         building_queue.unshift(id);
-                        bqSet('building_queue', vId, building_queue);
-                        const _levInfoErr = bqGet('nextLevelBuildsQueueInfo', vId) || {};
-                        const _actQueueErr = bqGet('building_queue_active', vId) || [];
-                        const _actCountErr = _actQueueErr.filter(x => x.replace(/\d+/g, '') === id).length;
-                        const _failedLevel = (_levInfoErr[id]?.currentLevel || 0) + _actCountErr + 1;
                         var _bqlErr = bqGet('building_queue_levels', vId) || [];
-                        _bqlErr.unshift(_failedLevel);
+                        _bqlErr.unshift(targetLevel);
                         bqSet('building_queue_levels', vId, _bqlErr);
+                        bqSet('building_queue', vId, building_queue);
+                    } else if (wasFromQueue) {
+                        const _bqlErr = bqGet('building_queue_levels', vId) || [];
+                        if (_bqlErr.length) {
+                            _bqlErr[0] = targetLevel;
+                            bqSet('building_queue_levels', vId, _bqlErr);
+                        }
                     }
                     var missingRessourceBuildRow = tempElement.querySelector('#main_buildrow_' + id + ' .inactive');
                     var timeAvailable = missingRessourceBuildRow ? extractBuildTimeFromHTML(missingRessourceBuildRow.textContent) : null;
@@ -1389,15 +1509,26 @@ function startBuildQueueResourcePolling(villageId) {
  * DISPLAYED village. Also starts resource polling if a build is waiting for resources.
  * @param {boolean} [update=false] - If true, replaces the existing widget element.
  */
-function fetchBuildQueueWidget(update = false) {
+function fetchBuildQueueWidget(update = false, onComplete) {
     if (settings_cookies.general['show__building_queue']) {
+        const initialColumn = typeof update === 'string' ? update : null;
+        const shouldReplace = initialColumn ? false : update;
+        if (initialColumn) {
+            const loadingContainer = document.createElement('div');
+            loadingContainer.id = 'building_queue_loading';
+            loadingContainer.appendChild(createWidgetLoadingElement());
+            createWidgetElement({ identifier: t('buildQueue.title'), contents: loadingContainer, columnToUse: initialColumn, update: false, description: t('buildQueue.description'), widgetKey: 'building_queue', loading: true });
+        }
         startBuildQueueResourcePolling();
         $.ajax({
             'url': game_data.link_base_pure + 'main',
             'type': 'GET',
             'cache': false,
             'success': function (data) {
-                injectQueues(data, update);
+                injectQueues(data, initialColumn ? true : shouldReplace);
+            },
+            'complete': function () {
+                if (onComplete) onComplete();
             }
         });
     }

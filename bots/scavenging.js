@@ -193,7 +193,7 @@ function _scavDistributeTroops(unitCounts, activeTiers, capTargets, totalCap) {
 function computeScavengeOptimizedDistribution(unitCounts, unlockedOptsData, mode) {
     const totalCap = SCAVENGE_UNIT_ORDER.reduce((s, u) => s + (unitCounts[u] || 0) * (SCAVENGE_UNIT_CARRY[u] || 0), 0);
     if (!totalCap || !unlockedOptsData.length) {
-        return { distributionByOption: {}, tableHtml: '<p style="color:#e06060;">No units or no unlocked options to distribute.</p>' };
+        return { distributionByOption: {}, tableHtml: '<p style="color:#e06060;">' + t('scavenge.noUnitsOrOptions') + '</p>' };
     }
     const capTargets = mode === 'fastest' ? _scavOptimizeFastest(totalCap, unlockedOptsData) : _scavOptimizeBalanced(totalCap, unlockedOptsData);
     const troopSplit = _scavDistributeTroops(unitCounts, unlockedOptsData, capTargets, totalCap);
@@ -220,7 +220,7 @@ function computeScavengeOptimizedDistribution(unitCounts, unlockedOptsData, mode
         const res = cap > 0 ? Math.round(cap * opt.ratio) : 0;
         const dur = cap > 0 ? _scavDuration(cap, opt.ratio) : 0;
         const ds = dur > 0 ? `${String(Math.floor(dur/3600)).padStart(2,'0')}:${String(Math.floor((dur%3600)/60)).padStart(2,'0')}:${String(Math.round(dur%60)).padStart(2,'0')}` : '-';
-        html += `<tr><td><b>Level ${i + 1}</b></td>`;
+        html += `<tr><td><b>${t('scavenge.levelFallback', { level: i + 1 })}</b></td>`;
         unitCols.forEach(u => { html += `<td>${troopSplit[u]?.[i] || 0}</td>`; });
         html += `<td>${cap}</td><td>${res}</td><td>${ds}</td></tr>`;
     });
@@ -405,7 +405,7 @@ async function sendScavengeSquadApi(unitCounts, optionId, carryMax) {
     let data;
     let success = false;
     let returnMs = 0;
-    let notificationText = `Scavenge ${optionId}: `;
+    let notificationText = t('scavenge.notifySendFailed', { optionId });
     try {
         const response = await fetch(
             game_data.link_base_pure + 'scavenge_api&ajaxaction=send_squads',
@@ -422,7 +422,6 @@ async function sendScavengeSquadApi(unitCounts, optionId, carryMax) {
             }
         );
         if (!response.ok) {
-            notificationText += `failed for option ${optionId}`;
             if (typeof showAutoHideBox === 'function') showAutoHideBox(notificationText, true);
             return { success: false, returnMs: 0 };
         }
@@ -434,10 +433,9 @@ async function sendScavengeSquadApi(unitCounts, optionId, carryMax) {
             console.warn('[AutoScavenge] Send rejected:', squadResponse?.error ?? 'no squad_responses in response');
         }
 
-        notificationText += success ? `sent to option ${optionId}` : `failed for option ${optionId}`;
+        notificationText = success ? t('scavenge.notifySendSuccess', { optionId }) : t('scavenge.notifySendFailed', { optionId });
     } catch (e) {
         console.error('[AutoScavenge] API send failed:', e);
-        notificationText += `failed for option ${optionId}`;
         if (typeof showAutoHideBox === 'function') showAutoHideBox(notificationText, true);
         return { success: false, returnMs: 0 };
     }

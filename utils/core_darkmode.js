@@ -184,5 +184,7 @@ select,
 }
 `;
 
-    GM_addStyle(softDarkModeCss);
+    if (!isPremiumAccount()) {
+        GM_addStyle(softDarkModeCss);
+    }
 })();

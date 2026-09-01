@@ -53,7 +53,7 @@ function _openNavIconPicker(targetInput, anchorEl, onSelect) {
         { src: 'buildings/place.webp',      title: t('navIcon.rallyPoint') },
         { src: 'buildings/statue.webp',     title: t('navIcon.statue') },
         { src: 'buildings/market.webp',     title: t('navIcon.market') },
-        { src: 'buildings/wood.webp',       title: t('navIcon.timberCamp') },
+        { src: 'buildings/wood.webp',       title: t('navIcon.wood') },
         { src: 'buildings/stone.webp',      title: t('navIcon.clayPit') },
         { src: 'buildings/iron.webp',       title: t('navIcon.ironMine') },
         { src: 'buildings/farm.webp',       title: t('navIcon.farm') },

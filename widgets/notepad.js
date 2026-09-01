@@ -10,6 +10,70 @@ function getNotepadStorage() {
     return notepadGetAll();
 }
 
+function ensureNotepadBBCodePickers() {
+    if (!document.getElementById('bb_popup_container')) {
+        const popupContainer = document.createElement('div');
+        popupContainer.id = 'bb_popup_container';
+        popupContainer.className = 'bb_popup_container';
+        document.body.appendChild(popupContainer);
+    }
+
+    if (typeof BBCodes !== 'undefined') {
+        const villageId = getCurrentNotepadVillageId();
+        if (!BBCodes.ajax_unit_url && villageId) {
+            BBCodes.ajax_unit_url = `/game.php?village=${villageId}&screen=api&ajax=load_unit_icon_selector`;
+        }
+        if (!BBCodes.ajax_building_url && villageId) {
+            BBCodes.ajax_building_url = `/game.php?village=${villageId}&screen=api&ajax=load_building_icon_selector`;
+        }
+    }
+}
+
+function closeNotepadBBCodePickers() {
+    ['bb_sizes', 'bb_color_picker', 'unit_picker', 'building_picker', 'emoji_picker'].forEach(id => {
+        document.getElementById(id)?.style.setProperty('display', 'none');
+    });
+}
+
+function positionNotepadIconPicker(pickerId, event) {
+    let attempts = 0;
+    const positionPicker = function () {
+        const picker = document.getElementById(pickerId);
+        if (!picker || picker.style.display === 'none' || !picker.offsetParent) {
+            if (attempts++ < 20) window.setTimeout(positionPicker, 25);
+            return;
+        }
+
+        const trigger = event.currentTarget;
+        const triggerRect = trigger.getBoundingClientRect();
+        const pickerRect = picker.getBoundingClientRect();
+        const pageLeft = window.scrollX || document.documentElement.scrollLeft;
+        const pageTop = window.scrollY || document.documentElement.scrollTop;
+        const viewportWidth = document.documentElement.clientWidth;
+        const viewportHeight = document.documentElement.clientHeight;
+        const gap = 2;
+        const edge = 4;
+
+        let left = (event.clientX ?? triggerRect.left) + pageLeft;
+        let top = (event.clientY ?? triggerRect.bottom) + pageTop + gap;
+        const rightEdge = pageLeft + viewportWidth - edge;
+        const bottomEdge = pageTop + viewportHeight - edge;
+
+        if (left + pickerRect.width > rightEdge) {
+            left = Math.max(pageLeft + edge, triggerRect.right + pageLeft - pickerRect.width);
+        }
+        if (top + pickerRect.height > bottomEdge) {
+            top = Math.max(pageTop + edge, triggerRect.top + pageTop - pickerRect.height - gap);
+        }
+
+        picker.style.position = 'absolute';
+        picker.style.left = `${left}px`;
+        picker.style.top = `${top}px`;
+    };
+
+    positionPicker();
+}
+
 /**
  * Loads the saved note for the current village from the in-memory cache and renders it
  * as HTML (converting BBCode) inside the notepad display area.
@@ -52,7 +116,13 @@ function resolveNotepadBBCodePlaceholder(el) {
         var parts = value.split('|');
         var village = getCachedVillageByCoords(parts[0], parts[1]);
         if (village) {
+            const parent = el.parentElement;
             el.outerHTML = `<span class="village_anchor contexted" data-player="${village.ownerId}" data-id="${village.id}"><a target="_self" href="/game.php?village=${villageId}&screen=info_village&id=${village.id}">${escapeHtml(village.name)} (${village.x}|${village.y}) ${escapeHtml(village.continent)}</a><a class="ctx" href="#"></a></span>`;
+            const villageAnchor = parent?.querySelector(`.village_anchor[data-id="${village.id}"]`);
+            const contextButton = villageAnchor?.querySelector('.ctx');
+            if (contextButton && typeof VillageContext !== 'undefined') {
+                $(contextButton).on('click', VillageContext.toggleForVillage);
+            }
         }
     }
 }
@@ -80,8 +150,7 @@ function saveNote(closeNotepad = true) {
         loadNote();
         toggleElement('edit_notepad_link_script');
         // Popups live in document.body (see injectNotepadWidget) so they must be hidden explicitly
-        document.getElementById('bb_sizes')?.style.setProperty('display', 'none');
-        document.getElementById('bb_color_picker')?.style.setProperty('display', 'none');
+        closeNotepadBBCodePickers();
     }
 }
 
@@ -128,6 +197,7 @@ function buildBBCodeButtonsToolbar(idPrefix = '') {
     // Sprite sheet base: reuse the game's own CDN asset (falls back to the last-known hash
     // if `image_base` isn't defined for some reason).
     const bbcodeSpriteBase = typeof image_base !== 'undefined' ? image_base : 'https://dspt.innogamescdn.com/asset/95eda994/graphic/';
+    ensureNotepadBBCodePickers();
 
     // Button definitions: BBCode tag, tooltip title, and sprite sheet offset.
     // `open`/`close` override the default `[tag]`/`[/tag]` wrap for tags needing extra content.
@@ -143,6 +213,9 @@ function buildBBCodeButtonsToolbar(idPrefix = '') {
         { id: "bb_button_url",           tag: "url",     title: t('format.url'),           pos: "-160px" },
         { id: "bb_button_spoiler",       tag: "spoiler", title: t('format.spoiler'),       pos: "-260px", open: "[spoiler=Spoiler]", close: "[/spoiler]" },
         { id: "bb_button_table",         tag: "table",   title: t('format.table'),         pos: "-280px", open: "[table]\n[**]", close: "[||]head2[/**]\n[*]test1[|]test2\n[/table]" },
+        { id: "bb_button_units",         picker: "unit",  title: t('format.units'),        pos: "-300px" },
+        { id: "bb_button_building",      picker: "building", title: t('format.buildings'), pos: "-320px" },
+        { id: "bb_button_emoji",         picker: "emoji", title: "Emoji",                pos: "-360px" },
     ];
 
     // Build each BBCode button dynamically from the definitions above
@@ -151,8 +224,21 @@ function buildBBCodeButtonsToolbar(idPrefix = '') {
         button.id = idPrefix + btn.id;
         button.href = "#";
         button.setAttribute("data-title", btn.title);
-        button.onclick = function () {
-            BBCodes.insert(btn.open || `[${btn.tag}${btn.extra || ""}]`, btn.close || `[/${btn.tag}]`);
+        button.onclick = function (event) {
+            if (btn.picker === 'unit') {
+                BBCodes.unitPickerToggle(event);
+                positionNotepadIconPicker('unit_picker', event.currentTarget);
+            } else if (btn.picker === 'building') {
+                BBCodes.buildingPickerToggle(event);
+                positionNotepadIconPicker('building_picker', event.currentTarget);
+            } else if (btn.picker === 'emoji') {
+                BBCodes.emojiToggle(event);
+                if (typeof resetEmojiMapCache === 'function') resetEmojiMapCache();
+                positionNotepadIconPicker('emoji_picker', event.currentTarget);
+            } else {
+                BBCodes.insert(btn.open || `[${btn.tag}${btn.extra || ""}]`, btn.close || `[/${btn.tag}]`);
+            }
+            return false;
         };
 
         let span = document.createElement("span");

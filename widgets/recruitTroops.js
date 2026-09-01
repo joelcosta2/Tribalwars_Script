@@ -50,12 +50,16 @@ function createLiveRecruitContext(villageId) {
         calcDebounceTimer: null,
         resourceObserver: null,
         villageCheckInterval: null,
-        getResources: () => ({
-            wood: Math.max(0, (Number(document.getElementById('wood')?.textContent.replace(/\D/g, '')) || 0) - ctx.pendingDeduction.wood),
-            stone: Math.max(0, (Number(document.getElementById('stone')?.textContent.replace(/\D/g, '')) || 0) - ctx.pendingDeduction.stone),
-            iron: Math.max(0, (Number(document.getElementById('iron')?.textContent.replace(/\D/g, '')) || 0) - ctx.pendingDeduction.iron),
-            pop: (game_data.village?.pop_max || 0) - (game_data.village?.pop || 0)
-        }),
+        getResources: () => {
+            const snapshot = readVillageResourceSnapshot(document);
+            if (!snapshot) return null;
+            return {
+                wood: Math.max(0, snapshot.wood - ctx.pendingDeduction.wood),
+                stone: Math.max(0, snapshot.stone - ctx.pendingDeduction.stone),
+                iron: Math.max(0, snapshot.iron - ctx.pendingDeduction.iron),
+                pop: (game_data.village?.pop_max || 0) - (game_data.village?.pop || 0)
+            };
+        },
         deductResources: (cost) => {
             ['wood', 'stone', 'iron'].forEach(res => {
                 // Update game_data so the tick handler re-renders the correct value on the next tick
@@ -91,6 +95,16 @@ function calculateMaxTroops(ctx, changedUnit = null) {
     inputs.forEach(input => { currentQueued[input.dataset.unitInput] = Number(input.value) || 0; });
 
     const totalResources = ctx.getResources();
+    if (!totalResources) {
+        inputs.forEach(input => {
+            input.removeAttribute('max');
+            const maxElement = container.querySelector(`[data-unit-max="${input.dataset.unitInput}"]`);
+            if (!maxElement) return;
+            maxElement.textContent = '(?)';
+            maxElement.onclick = null;
+        });
+        return;
+    }
     const unitData = bqGet('unit_managers_costs', ctx.villageId) || {};
 
     inputs.forEach(input => {
@@ -398,7 +412,15 @@ function renderRecruitForm(ctx) {
     table.style.width = '100%';
     const tbody = document.createElement('tbody');
 
-    for (const unit in unitData) {
+    const canonicalUnitOrder = typeof getOverviewVillagesTroopUnitOrder === 'function'
+        ? getOverviewVillagesTroopUnitOrder()
+        : [];
+    const orderedUnits = canonicalUnitOrder.filter(unit => Object.prototype.hasOwnProperty.call(unitData, unit));
+    const additionalUnits = Object.keys(unitData)
+        .filter(unit => !canonicalUnitOrder.includes(unit))
+        .sort();
+
+    for (const unit of orderedUnits.concat(additionalUnits)) {
         // Only render units available in this village's training buildings
         if (!villageUnitCounts[unit]) continue;
 
@@ -528,7 +550,7 @@ function renderRecruitForm(ctx) {
         maxLink.dataset.unitMax = unit;
         // onclick is re-assigned by calculateMaxTroops after each recalculation
         maxLink.style.cssText = 'margin-left: 4px; cursor: pointer; font-size: 11px;';
-        maxLink.textContent = '(-)';
+        maxLink.textContent = '(?)';
 
         inputCell.appendChild(input);
         inputCell.appendChild(maxLink);
@@ -579,6 +601,12 @@ function injectRecruitTroopsWidget(_column, skipFetch = false) {
 
     // Always pull fresh training data before rendering so counts/queue never show stale cache
     if (!skipFetch && typeof fetchTrainInfo === 'function') {
+        const widgetConfig = settings_cookies.widgets.find(function (w) { return w.name === 'recruit_troops'; });
+        const columnToUse = widgetConfig ? widgetConfig.column : LEFT_COLUMN;
+        const loadingContainer = document.createElement('div');
+        loadingContainer.id = 'recruit_troops_loading';
+        loadingContainer.appendChild(createWidgetLoadingElement());
+        createWidgetElement({ identifier: t('button.recruit'), contents: loadingContainer, columnToUse, update: true, extra_name: 'troops', description: t('recruit.description'), widgetKey: 'recruit', loading: true });
         fetchTrainInfo(() => injectRecruitTroopsWidget(_column, true));
         return;
     }

@@ -1,4 +1,181 @@
 
+var availableSettings = [
+    // Overview Widgets
+    { "name": "show__village_list", "label": t('settings.villageListLabel'), "description": t('settings.villageListDesc'), "group": t('settings.groupWidgets') },
+    { "name": "show__recruit_troops", "label": t('settings.recruitTroopsLabel'), "description": t('settings.recruitTroopsDesc'), "group": t('settings.groupWidgets') },
+    { "name": "show__notepad", "label": t('settings.notepadLabel'), "description": t('settings.notepadDesc'), "group": t('settings.groupWidgets') },
+    { "name": "show__building_queue", "label": t('settings.buildingQueueLabel'), "description": t('settings.buildingQueueDesc'), "group": t('settings.groupWidgets') },
+    { "name": "show__village_groups", "label": t('settings.villageGroupsLabel'), "description": t('settings.villageGroupsDesc'), "group": t('settings.groupWidgets') },
+
+    // Overview Villages Premium Features
+    { "name": "show__overview_villages_queue", "label": t('settings.overviewVillagesQueueLabel'), "description": t('settings.overviewVillagesQueueDesc'), "group": t('settings.groupOverviewVillages') },
+    {
+        "name": "show__overview_villages_troops",
+        "label": t('settings.overviewVillagesTroopsLabel'),
+        "description": t('settings.overviewVillagesTroopsDesc'),
+        "group": t('settings.groupOverviewVillages'),
+        "extraSettings": {
+            "auto": {
+                "label": t('settings.overviewVillagesTroopsAutoLabel'),
+                "desc": t('settings.overviewVillagesTroopsAutoDesc'),
+                "type": "checkbox",
+                "default": false
+            },
+            "mode": {
+                "label": t('settings.overviewVillagesTroopsAutoModeLabel'),
+                "type": "select",
+                "default": "full",
+                "options": [
+                    { "value": "full", "label": t('settings.overviewVillagesTroopsAutoModeFull') },
+                    { "value": "place", "label": t('settings.overviewVillagesTroopsAutoModePlace') }
+                ]
+            }
+        }
+    },
+    {
+        "name": "show__overview_villages_quicklinks",
+        "label": t('settings.overviewVillagesQuicklinksLabel'),
+        "description": t('settings.overviewVillagesQuicklinksDesc'),
+        "group": t('settings.groupOverviewVillages'),
+        "extraSettings": {
+            "queue": {
+                "label": t('settings.overviewVillagesQuicklinksQueueLabel'),
+                "desc": t('settings.overviewVillagesQuicklinksQueueDesc'),
+                "type": "checkbox",
+                "default": true
+            },
+            "training": {
+                "label": t('settings.overviewVillagesQuicklinksTrainingLabel'),
+                "desc": t('settings.overviewVillagesQuicklinksTrainingDesc'),
+                "type": "checkbox",
+                "default": true
+            },
+            "source": {
+                "label": t('settings.overviewVillagesQuicklinksSourceLabel'),
+                "type": "select",
+                "default": "navbar",
+                "options": [
+                    { "value": "navbar", "label": t('settings.overviewVillagesQuicklinksSourceNavbar') },
+                    { "value": "custom", "label": t('settings.overviewVillagesQuicklinksSourceCustom') }
+                ]
+            },
+            "items": {
+                "label": t('settings.overviewVillagesQuicklinksItemsLabel'),
+                "type": "custom_quicklinks"
+            }
+        }
+    },
+
+    // Map Enhancements
+    {
+        "name": "show__map_ctx_buttons",
+        "label": t('settings.mapCtxButtonsLabel'),
+        "description": t('settings.mapCtxButtonsDesc'),
+        "group": t('settings.groupMap'),
+        "extraSettings": {
+            "attackButtons": {
+                "label": t('settings.mapCtxButtonsAttackLabel'),
+                "desc": t('settings.mapCtxButtonsAttackDesc'),
+                "type": "checkbox",
+                "default": true,
+                "helpLink": {
+                    "href": "place&mode=templates",
+                    "icon": "/graphic/help.png",
+                    "title": t('settings.mapCtxButtonsTemplatesHelp')
+                }
+            },
+            "reservation": { "label": t('settings.mapCtxButtonsReservationLabel'), "desc": t('settings.mapCtxButtonsReservationDesc'), "type": "checkbox", "default": true },
+            "mapGroup": { "label": t('settings.mapCtxButtonsMapGroupLabel'), "desc": t('settings.mapCtxButtonsMapGroupDesc'), "type": "checkbox", "default": true }
+        }
+    },
+    {
+        "name": "show__map_hover_info",
+        "label": t('settings.villageHoverInfoLabel'),
+        "description": t('settings.villageHoverInfoDesc'),
+        "group": t('settings.groupMap'),
+        "extraSettings": {
+            "morale": { "label": t('settings.villageHoverInfoMoraleLabel'), "desc": t('settings.villageHoverInfoMoraleDesc'), "type": "checkbox", "default": true },
+            "lastAttack": { "label": t('settings.villageHoverInfoLastAttackLabel'), "desc": t('settings.villageHoverInfoLastAttackDesc'), "type": "checkbox", "default": true },
+            "troopDistance": { "label": t('settings.villageHoverInfoTroopDistanceLabel'), "desc": t('settings.villageHoverInfoTroopDistanceDesc'), "type": "checkbox", "default": true }
+        }
+    },
+    { "name": "show__outgoingInfo_map", "label": t('settings.mapCommandOverlayLabel'), "description": t('settings.mapCommandOverlayDesc'), "group": t('settings.groupMap') },
+    {
+        "name": "show__heatmap_reports",
+        "label": t('settings.heatmapReportsLabel'),
+        "description": t('settings.heatmapReportsDesc'),
+        "group": t('settings.groupMap'),
+        "extraSettings": {
+            "mode": {
+                "label": t('settings.heatmapModeLabel'),
+                "desc": t('settings.heatmapModeDesc'),
+                "type": "select",
+                "default": "resources",
+                "options": [
+                    { "value": "resources", "label": t('settings.heatmapModeResources') },
+                    { "value": "time", "label": t('settings.heatmapModeTime') }
+                ]
+            }
+        }
+    },
+    // UI / Premium Features
+    { "name": "show__navigation_arrows", "label": t('settings.navigationArrowsLabel'), "description": t('settings.navigationArrowsDesc'), "group": t('settings.groupUiUx') },
+    {
+        "name": "show__widget_popup_shortcuts",
+        "label": t('settings.widgetPopupShortcutsLabel'),
+        "description": t('settings.widgetPopupShortcutsDesc'),
+        "group": t('settings.groupUiUx'),
+        "extraSettings": {
+            "training": { "label": t('settings.widgetPopupShortcutsTrainingLabel'), "desc": t('settings.widgetPopupShortcutsTrainingDesc'), "type": "checkbox", "default": true },
+            "queue": { "label": t('settings.widgetPopupShortcutsQueueLabel'), "desc": t('settings.widgetPopupShortcutsQueueDesc'), "type": "checkbox", "default": true },
+            "coinMinting": { "label": t('settings.widgetPopupShortcutsCoinMintingLabel'), "desc": t('settings.widgetPopupShortcutsCoinMintingDesc'), "type": "checkbox", "default": false, "disabled": true } //only widget for now
+        }
+    },
+    { "name": "show__overview_premium_info", "label": t('settings.extraOverviewInfoLabel'), "description": t('settings.extraOverviewInfoDesc'), "group": t('settings.groupUiUx') },
+    { "name": "show__player_profile_stats", "label": t('settings.playerProfileStatsLabel'), "description": t('settings.playerProfileStatsDesc'), "group": t('settings.groupUiUx') },
+    { "name": "show__navigation_bar", "label": t('settings.navigationBarLabel'), "description": t('settings.navigationBarDesc'), "group": t('settings.groupUiUx') },
+    // dark mode started but not finished, so disabled for now until it is fully implemented
+    { "name": "show__soft_dark_mode", "label": t('settings.softDarkModeLabel'), "description": t('settings.softDarkModeDesc'), "group": t('settings.groupUiUx'), disabled: true},
+
+    // Automation
+    { "name": "show__building_queue_all", "label": t('settings.buildingQueueAllLabel'), "description": t('settings.buildingQueueAllDesc'), "group": t('settings.groupAutomation') },
+    { "name": "show__auto_daily_bonus", "label": t('settings.autoDailyBonusLabel'), "description": t('settings.autoDailyBonusDesc'), "group": t('settings.groupAutomation') },
+    { "name": "show__auto_build_instant_free", "label": t('settings.autoBuildInstantFreeLabel'), "description": t('settings.autoBuildInstantFreeDesc'), "group": t('settings.groupAutomation') },
+    {
+        "name": "show__auto_paladin_train", "label": t('settings.autoPaladinTrainLabel'), "description": t('settings.autoPaladinTrainDesc'), "group": t('settings.groupAutomation'),
+        "extraSettings": {
+            "maxLevel": { "label": t('settings.autoPaladinTrainLevelLabel'), "type": "number", "default": 30 },
+        }
+    },
+
+    // Anti-Bot Protection settings
+    { "name": "antiBot__disableOnDetection", "label": t('settings.antibotDisableOnDetectionLabel'), "description": t('settings.antibotDisableOnDetectionDesc'), "group": t('settings.groupAntiBot') },
+
+    // General / Utility
+    { "name": "keep_awake", "label": t('settings.keepAwakeLabel'), "description": t('settings.keepAwakeDesc'), "group": t('settings.groupGeneral') },
+    { "name": "redirect__train_buildings", "label": t('settings.redirectTrainBuildingsLabel'), "description": t('settings.redirectTrainBuildingsDesc'), "group": t('settings.groupGeneral') },
+    { "name": "remove__premium_promo", "label": t('settings.hidePremiumAdsLabel'), "description": t('settings.hidePremiumAdsDesc'), "group": t('settings.groupGeneral') }, {
+        "name": "language", "label": t('settings.language'), "description": t('settings.languageDesc'), "type": "select", "group": t('settings.groupGeneral'),
+        "options": [
+            { "value": "en", "label": "English" },
+            { "value": "pt", "label": "Portugu\u00eas" }
+        ]
+    },
+];
+
+/**
+ * Fixed tab display order; each setting declares its own group via availableSettings[].group.
+ */
+var SETTINGS_GROUPS_ORDER = [
+    t('settings.groupWidgets'),
+    t('settings.groupOverviewVillages'),
+    t('settings.groupMap'),
+    t('settings.groupUiUx'),
+    t('settings.groupAutomation'),
+    t('settings.groupAntiBot'),
+    t('settings.groupGeneral')
+];
+
 
 /**
  * Serialises the current settings_cookies object to JSON and triggers a browser download.
@@ -34,7 +211,7 @@ function importSettings() {
                 if (typeof imported !== 'object' || !imported.general || !imported.widgets) {
                     throw new Error('Invalid structure');
                 }
-                localStorage.setItem('settings_cookies', JSON.stringify(imported));
+                safeLocalStorageSet('settings_cookies', JSON.stringify(imported));
                 location.reload();
             } catch (_e) {
                 alert(t('settings.invalidFile'));
@@ -103,7 +280,7 @@ function saveScriptSettings() {
     });
 
     // Persist the full settings object to localStorage, then reload
-    localStorage.setItem('settings_cookies', JSON.stringify(settings_cookies));
+    safeLocalStorageSet('settings_cookies', JSON.stringify(settings_cookies));
     location.reload();
 }
 
@@ -113,39 +290,21 @@ function saveScriptSettings() {
  * @param {HTMLElement} maincell - The game's main content container.
  */
 function injectScriptSettingsButtom(maincell) {
-    const questLog = document.querySelector('.questlog');
+    if (!window.SidebarIcons) return;
 
-    document.getElementById('settings_popup_button')?.remove();
-
-    // Create the button container
-    const btn = document.createElement('div');
-    btn.id = 'settings_popup_button';
-    btn.classList.add('script-settings-btn');
-
-    // Create the icon (using game class 'quest' + our custom class)
-    const icon = document.createElement('div');
-    icon.className = 'quest script-settings-icon';
-    btn.appendChild(icon);
-
-    // Single click handler
-    btn.onclick = () => {
-        const popup = document.getElementById('settings_popup');
-        if (typeof togglePopup === 'function') {
-            togglePopup(popup);
+    SidebarIcons.register('settings', {
+        wrapperId: 'settings_popup_button',
+        wrapperClass: 'script-settings-btn',
+        iconClass: 'quest script-settings-icon sidebar-icon-offset',
+        title: t('settings.title'),
+        onClick: () => {
+            const popup = document.getElementById('settings_popup');
+            if (typeof togglePopup === 'function') {
+                togglePopup(popup);
+            }
         }
-    };
+    });
 
-    if (questLog) {
-        // Option A: Inside the quest log (standard layout)
-        // overview_villages' wide multi-village table pushes the page into horizontal scroll,
-        // stranding the quest log off-screen via its native left:-65px gutter trick.
-        questLog.classList.toggle('questlog-pin-left', game_data.screen === 'overview_villages');
-        questLog.appendChild(btn);
-    } else if (maincell?.children[0]) {
-        // Option B: Absolute positioning (fallback layout)
-        btn.classList.add('script-settings-btn-fixed');
-        maincell.children[0].appendChild(btn);
-    }
 }
 
 /**
@@ -161,7 +320,6 @@ function injectScriptSettingsPopUp() {
     if (maincell) {
         injectScriptSettingsButtom(maincell);
     }
-
     // 2. Create UI components
     const wrapper = document.createElement('div');
     const container = createPopupContainer();
@@ -198,6 +356,7 @@ function injectScriptSettingsPopUp() {
     $(document).off('mousedown.script_settings_popup').on('mousedown.script_settings_popup', function (e) {
         const p = document.getElementById('settings_popup');
         if (!p || p.style.display === 'none') return;
+        if (e.target.closest('.custom-quicklink-editor-backdrop, .nav-icon-picker-popup')) return;
         if (!p.contains(e.target) && !e.target.closest('#settings_popup_button')) p.style.display = 'none';
     });
 }
@@ -335,8 +494,7 @@ function createTabContent(groupName, index) {
 
     // Filter and build rows
     availableSettings.forEach(setting => {
-        if (!window.PremiumFeaturesPrivateAutomations &&
-            (setting.name === 'show__auto_paladin_train' || setting.name === 'show__auto_scavenge')) return;
+        if (!window.PremiumFeaturesPrivateAutomations && setting.name === 'show__auto_paladin_train') return;
         if (!currentGroup.includes(setting.name)) return;
 
         // 1. Create Main Setting Row
@@ -371,6 +529,9 @@ function createTabContent(groupName, index) {
             return;
         }
 
+        var parentCheckbox = null;
+        var childControls = [];
+
         if (setting.type === 'section') {
             const description = document.createElement('small');
             description.style.cssText = 'display:block;color:#555;margin-top:2px;';
@@ -388,6 +549,7 @@ function createTabContent(groupName, index) {
                     ? settings_cookies.general[setting.name].enabled
                     : !!settings_cookies.general[setting.name]
             });
+            parentCheckbox = checkbox;
 
             labelWrapper.append(checkbox, document.createTextNode(` ${setting.description}`));
             cellInput.appendChild(labelWrapper);
@@ -404,19 +566,21 @@ function createTabContent(groupName, index) {
                 const exCell1 = extraRow.insertCell(0);
                 const exCell2 = extraRow.insertCell(1);
 
-                exCell1.textContent = extraData.label;
-
-                if (extraData.desc) {
-                    const extraDescription = document.createElement('small');
-                    extraDescription.style.cssText = 'display:block;color:#555;margin-top:2px;';
-                    extraDescription.textContent = extraData.desc;
-                    exCell1.appendChild(extraDescription);
-                }
-
                 if (extraData.type === 'select') {
+                    exCell1.textContent = extraData.label;
+                    appendSettingHelpLink(exCell1, extraData.helpLink);
+                    if (extraData.desc) {
+                        const extraDescription = document.createElement('small');
+                        extraDescription.style.cssText = 'display:block;color:#555;margin-top:2px;';
+                        extraDescription.textContent = extraData.desc;
+                        exCell1.appendChild(extraDescription);
+                    }
+
                     const extraSelect = document.createElement('select');
                     extraSelect.name = `${setting.name}__${extraKey}`;
-                    extraSelect.disabled = !!setting.disabled || !!extraData.disabled;
+                    const extraSelectDisabled = !!setting.disabled || !!extraData.disabled;
+                    extraSelect.disabled = extraSelectDisabled;
+                    childControls.push({ element: extraSelect, disabled: extraSelectDisabled });
                     (extraData.options || []).forEach(opt => {
                         const optionEl = document.createElement('option');
                         optionEl.value = opt.value;
@@ -425,22 +589,296 @@ function createTabContent(groupName, index) {
                         extraSelect.appendChild(optionEl);
                     });
                     exCell2.appendChild(extraSelect);
-                } else {
-                    const extraInput = Object.assign(document.createElement('input'), {
-                        type: extraData.type,
-                        name: `${setting.name}__${extraKey}`,
-                        disabled: !!setting.disabled || !!extraData.disabled,
-                        value: settings_cookies.general[setting.name]?.[extraKey] ?? extraData.default
+                    if (extraData.type === 'select' && setting.name === 'show__overview_villages_quicklinks' && extraKey === 'source') {
+                        extraSelect.addEventListener('change', function () {
+                            const customRow = table.querySelector('.custom-quicklinks-settings-row');
+                            if (customRow) customRow.style.display = extraSelect.value === 'custom' ? '' : 'none';
+                        });
+                    }
+                } else if (extraData.type === 'custom_quicklinks') {
+                    exCell1.textContent = extraData.label;
+                    const quicklinksGrid = renderCustomQuicklinksSettings();
+                    exCell2.appendChild(quicklinksGrid);
+                    quicklinksGrid.querySelectorAll('button').forEach(function (button) {
+                        childControls.push({ element: button, disabled: !!setting.disabled || !!extraData.disabled });
                     });
-
-                    exCell2.appendChild(extraInput);
+                    extraRow.classList.add('custom-quicklinks-settings-row');
+                    const quicklinksSetting = settings_cookies.general.show__overview_villages_quicklinks;
+                    extraRow.style.display = quicklinksSetting?.source === 'custom' ? '' : 'none';
+                } else {
+                    const extraInput = document.createElement('input');
+                    extraInput.type = extraData.type;
+                    extraInput.name = `${setting.name}__${extraKey}`;
+                    const worldKey = 'world_settings_' + (game_data?.world || window.location.hostname);
+                    let worldSettings = null;
+                    try { worldSettings = JSON.parse(localStorage.getItem(worldKey) || 'null'); } catch { }
+                    const coinMintingUnsupported = setting.name === 'show__widget_popup_shortcuts' &&
+                        extraKey === 'coinMinting' && !(worldSettings?.coin_enabled === true &&
+                            [worldSettings.coin_wood, worldSettings.coin_stone, worldSettings.coin_iron]
+                                .every(value => Number.isFinite(value) && value > 0));
+                    const extraInputDisabled = !!setting.disabled || !!extraData.disabled || coinMintingUnsupported;
+                    extraInput.disabled = extraInputDisabled;
+                    childControls.push({ element: extraInput, disabled: extraInputDisabled });
+                    if (extraData.type === 'checkbox') {
+                        extraInput.checked = settings_cookies.general[setting.name]?.[extraKey] ?? extraData.default ?? true;
+                        exCell1.textContent = extraData.label;
+                        const extraLabel = document.createElement('label');
+                        extraLabel.append(extraInput, document.createTextNode(extraData.desc || ''));
+                        exCell2.appendChild(extraLabel);
+                        appendSettingHelpLink(exCell2, extraData.helpLink);
+                    } else {
+                        extraInput.value = settings_cookies.general[setting.name]?.[extraKey] ?? extraData.default;
+                        exCell1.textContent = extraData.label;
+                        appendSettingHelpLink(exCell1, extraData.helpLink);
+                        if (extraData.desc) {
+                            const extraDescription = document.createElement('small');
+                            extraDescription.style.cssText = 'display:block;color:#555;margin-top:2px;';
+                            extraDescription.textContent = extraData.desc;
+                            exCell1.appendChild(extraDescription);
+                        }
+                        exCell2.appendChild(extraInput);
+                    }
                 }
             });
+        }
+
+        if (parentCheckbox && setting.extraSettings) {
+            const updateChildControls = function () {
+                childControls.forEach(function (control) {
+                    control.element.disabled = control.disabled || !parentCheckbox.checked;
+                });
+                const customRow = table.querySelector('.custom-quicklinks-settings-row');
+                if (customRow && setting.name === 'show__overview_villages_quicklinks') {
+                    customRow.style.opacity = parentCheckbox.checked ? '' : '0.55';
+                }
+            };
+            parentCheckbox.addEventListener('change', updateChildControls);
+            updateChildControls();
         }
     });
 
     tabContent.appendChild(table);
     return tabContent;
+}
+
+function getCustomQuicklinksItems() {
+    const setting = settings_cookies.general.show__overview_villages_quicklinks;
+    if (!setting || typeof setting !== 'object' || !Array.isArray(setting.items)) return [];
+    return setting.items;
+}
+
+function getQuicklinkImageUrl(image) {
+    if (!image) return '';
+    return image.startsWith('http') ? image : (typeof _getNavAssetBase === 'function' ? _getNavAssetBase() + image : image);
+}
+
+function renderCustomQuicklinksSettings() {
+    const grid = document.createElement('div');
+    grid.className = 'custom-quicklinks-settings-grid';
+
+    getCustomQuicklinksItems().forEach(function (item, index) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'custom-quicklink-settings-item';
+        button.title = item.label || t('settings.overviewVillagesQuicklinksEdit');
+
+        if (item.img) {
+            const image = document.createElement('img');
+            image.src = getQuicklinkImageUrl(item.img);
+            image.alt = item.label || '';
+            button.appendChild(image);
+        } else {
+            button.textContent = '+';
+        }
+        button.addEventListener('click', function () {
+            openCustomQuicklinkEditor(index);
+        });
+        grid.appendChild(button);
+    });
+
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'custom-quicklink-settings-item custom-quicklink-settings-add';
+    addButton.textContent = '+';
+    addButton.title = t('settings.overviewVillagesQuicklinksAdd');
+    addButton.addEventListener('click', function () {
+        openCustomQuicklinkEditor(-1);
+    });
+    grid.appendChild(addButton);
+    return grid;
+}
+
+function refreshCustomQuicklinksSettings() {
+    const row = document.querySelector('.custom-quicklinks-settings-row');
+    if (!row) return;
+    const cell = row.cells[1];
+    if (!cell) return;
+    cell.replaceChildren(renderCustomQuicklinksSettings());
+}
+
+function openCustomQuicklinkEditor(itemIndex) {
+    document.querySelector('.custom-quicklink-editor-backdrop')?.remove();
+
+    const items = getCustomQuicklinksItems();
+    const item = itemIndex >= 0 ? items[itemIndex] : { label: '', href: '', img: '' };
+    if (!item) return;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'custom-quicklink-editor-backdrop';
+    const closeEditor = function () {
+        document.removeEventListener('keydown', closeOnEscape);
+        backdrop.remove();
+    };
+    const closeOnEscape = function (event) {
+        if (event.key === 'Escape') closeEditor();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+
+    const popup = document.createElement('div');
+    popup.className = 'popup_style custom-quicklink-editor-popup';
+    popup.style.display = 'block';
+
+    const header = document.createElement('div');
+    header.className = 'popup_menu';
+    header.textContent = itemIndex >= 0
+        ? t('settings.overviewVillagesQuicklinksEdit')
+        : t('settings.overviewVillagesQuicklinksAdd');
+
+    const close = document.createElement('a');
+    close.href = '#';
+    close.textContent = t('button.close');
+    close.className = 'custom-quicklink-editor-close';
+    close.addEventListener('click', function (event) {
+        event.preventDefault();
+        closeEditor();
+    });
+    header.appendChild(close);
+
+    const content = document.createElement('div');
+    content.className = 'popup_content custom-quicklink-editor-content';
+    const form = document.createElement('form');
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.value = item.label || '';
+    labelInput.placeholder = t('settings.overviewVillagesQuicklinksTitlePlaceholder');
+
+    const hrefInput = document.createElement('input');
+    hrefInput.type = 'text';
+    hrefInput.value = item.href || '';
+    hrefInput.placeholder = t('settings.overviewVillagesQuicklinksUrlPlaceholder');
+
+    const imgInput = document.createElement('input');
+    imgInput.type = 'text';
+    imgInput.value = item.img || '';
+    imgInput.placeholder = t('settings.overviewVillagesQuicklinksIconPlaceholder');
+
+    const imgPreview = document.createElement('img');
+    imgPreview.className = 'custom-quicklink-editor-preview';
+    const updatePreview = function () {
+        imgPreview.src = getQuicklinkImageUrl(imgInput.value.trim());
+        imgPreview.style.display = imgInput.value.trim() ? '' : 'none';
+    };
+    updatePreview();
+    imgInput.addEventListener('input', updatePreview);
+
+    function appendField(label, input) {
+        const field = document.createElement('label');
+        field.className = 'custom-quicklink-editor-field';
+        field.append(document.createTextNode(label), input);
+        form.appendChild(field);
+    }
+    appendField(t('settings.overviewVillagesQuicklinksTitleLabel'), labelInput);
+    appendField(t('settings.overviewVillagesQuicklinksUrlLabel'), hrefInput);
+
+    const iconField = document.createElement('label');
+    iconField.className = 'custom-quicklink-editor-field';
+    iconField.append(document.createTextNode(t('settings.overviewVillagesQuicklinksIconLabel')));
+    const iconControls = document.createElement('span');
+    iconControls.className = 'custom-quicklink-editor-icon-controls';
+    iconControls.append(imgPreview, imgInput);
+    const pickerButton = document.createElement('img');
+    pickerButton.src = getQuicklinkImageUrl('icons/slide_down.png');
+    pickerButton.alt = t('nav.selectIcon');
+    pickerButton.title = t('nav.selectIcon');
+    pickerButton.className = 'custom-quicklink-editor-picker';
+    pickerButton.addEventListener('click', function () {
+        if (typeof _openNavIconPicker !== 'function') return;
+        _openNavIconPicker(imgInput, pickerButton, updatePreview);
+        const picker = document.querySelector('.nav-icon-picker-popup');
+        if (picker) picker.style.zIndex = '100001';
+    });
+    iconControls.appendChild(pickerButton);
+    iconField.appendChild(iconControls);
+    form.appendChild(iconField);
+
+    const actions = document.createElement('div');
+    actions.className = 'custom-quicklink-editor-actions';
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'btn btn-confirm';
+    saveButton.textContent = t('button.saveChanges');
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'btn';
+    cancelButton.textContent = t('button.cancel');
+    cancelButton.addEventListener('click', closeEditor);
+    actions.append(saveButton, cancelButton);
+
+    if (itemIndex >= 0) {
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'btn custom-quicklink-editor-delete';
+        deleteButton.textContent = t('button.remove');
+        deleteButton.addEventListener('click', function () {
+            items.splice(itemIndex, 1);
+            refreshCustomQuicklinksSettings();
+            closeEditor();
+        });
+        actions.appendChild(deleteButton);
+    }
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const label = labelInput.value.trim();
+        const href = hrefInput.value.trim();
+        if (!label || !href) return;
+        const newItem = { label, href, img: imgInput.value.trim() };
+        if (itemIndex >= 0) items[itemIndex] = newItem;
+        else items.push(newItem);
+        refreshCustomQuicklinksSettings();
+        closeEditor();
+    });
+
+    form.appendChild(actions);
+    content.appendChild(form);
+    popup.append(header, content);
+    backdrop.appendChild(popup);
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('mousedown', function (event) {
+        if (event.target === backdrop) closeEditor();
+    });
+}
+
+function appendSettingHelpLink(labelCell, helpLink) {
+    if (!helpLink || !helpLink.href) return;
+
+    const link = document.createElement('a');
+    link.className = 'twpf-settings-help-link';
+    link.href = helpLink.href.charAt(0) === '/'
+        ? helpLink.href
+        : game_data.link_base_pure + helpLink.href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    if (helpLink.icon) {
+        const icon = document.createElement('img');
+        icon.src = helpLink.icon;
+        icon.alt = '';
+        link.appendChild(icon);
+    }
+    link.title = helpLink.title || '';
+    link.setAttribute('aria-label', helpLink.title || 'Help');
+    labelCell.appendChild(link);
 }
 
 /**
@@ -480,102 +918,6 @@ function createSaveButton() {
     saveButtonDiv.append(saveButton, exportButton, importButton);
     return saveButtonDiv;
 }
-
-var availableSettings = [
-    // Overview Widgets
-    { "name": "show__village_list", "label": t('settings.villageListLabel'), "description": t('settings.villageListDesc'), "group": t('settings.groupWidgets') },
-    { "name": "show__recruit_troops", "label": t('settings.recruitTroopsLabel'), "description": t('settings.recruitTroopsDesc'), "group": t('settings.groupWidgets') },
-    { "name": "show__notepad", "label": t('settings.notepadLabel'), "description": t('settings.notepadDesc'), "group": t('settings.groupWidgets') },
-    { "name": "show__building_queue", "label": t('settings.buildingQueueLabel'), "description": t('settings.buildingQueueDesc'), "group": t('settings.groupWidgets') },
-
-    // Overview Villages Premium Features
-    { "name": "show__overview_villages_queue", "label": t('settings.overviewVillagesQueueLabel'), "description": t('settings.overviewVillagesQueueDesc'), "group": t('settings.groupOverviewVillages') },
-    { "name": "show__overview_villages_troops", "label": t('settings.overviewVillagesTroopsLabel'), "description": t('settings.overviewVillagesTroopsDesc'), "group": t('settings.groupOverviewVillages') },
-    {
-        "name": "show__overview_villages_quicklinks",
-        "label": t('settings.overviewVillagesQuicklinksLabel'),
-        "description": t('settings.overviewVillagesQuicklinksDesc'),
-        "group": t('settings.groupOverviewVillages'),
-        "extraSettings": {
-            "source": {
-                "label": t('settings.overviewVillagesQuicklinksSourceLabel'),
-                "type": "select",
-                "default": "navbar",
-                "options": [
-                    { "value": "navbar", "label": t('settings.overviewVillagesQuicklinksSourceNavbar') },
-                    { "value": "custom", "label": t('settings.overviewVillagesQuicklinksSourceCustom') + '- NOT IMPLEMENTED' }
-                ]
-            }
-        }
-    },
-
-    // Map Enhancements
-    { "name": "show__extra_options_map_hover", "label": t('settings.mapHoverLabel'), "description": t('settings.mapHoverDesc'), "group": t('settings.groupMap') },
-    //adicionar opçoes para cada tipo
-    //morale, last saque, last ressources, troops time,
-    { "name": "show__outgoingInfo_map", "label": t('settings.mapCommandOverlayLabel'), "description": t('settings.mapCommandOverlayDesc'), "group": t('settings.groupMap') },
-    //not finished yet
-    { "name": "show__heatmap_reports", "label": t('settings.heatmapReportsLabel'), "description": t('settings.heatmapReportsDesc'), "group": t('settings.groupMap'), disabled: true },
-    { "name": "show__ctx_attack_buttons", "label": t('settings.ctxAttackButtonsLabel'), "description": t('settings.ctxAttackButtonsDesc'), "group": t('settings.groupMap') },
-    { "name": "show__ally_reservations", "label": t('settings.allyReservationsLabel'), "description": t('settings.allyReservationsDesc'), "group": t('settings.groupMap') },
-
-    // UI / Premium Features
-    { "name": "show__navigation_arrows", "label": t('settings.navigationArrowsLabel'), "description": t('settings.navigationArrowsDesc'), "group": t('settings.groupUiUx') },
-    { "name": "show__overview_premium_info", "label": t('settings.visualBuildingOverviewLabel'), "description": t('settings.visualBuildingOverviewDesc'), "group": t('settings.groupUiUx') },
-    //not finished yet
-    { "name": "show__soft_dark_mode", "label": t('settings.softDarkModeLabel'), "description": t('settings.softDarkModeDesc'), "group": t('settings.groupUiUx'), disabled: true},
-    { "name": "show__navigation_bar", "label": t('settings.navigationBarLabel'), "description": t('settings.navigationBarDesc'), "group": t('settings.groupUiUx') },
-    { "name": "show__time_storage_full_hover", "label": t('settings.storageTimerLabel'), "description": t('settings.storageTimerDesc'), "group": t('settings.groupUiUx') },
-    { "name": "show__player_profile_stats", "label": t('settings.playerProfileStatsLabel'), "description": t('settings.playerProfileStatsDesc'), "group": t('settings.groupUiUx') },
-
-    // Automation
-    { "name": "show__building_queue_all", "label": t('settings.buildingQueueAllLabel'), "description": t('settings.buildingQueueAllDesc'), "group": t('settings.groupAutomation') },
-    { "name": "show__auto_daily_bonus", "label": t('settings.autoDailyBonusLabel'), "description": t('settings.autoDailyBonusDesc'), "group": t('settings.groupAutomation') },
-    { "name": "show__auto_build_instant_free", "label": t('settings.autoBuildInstantFreeLabel'), "description": t('settings.autoBuildInstantFreeDesc'), "group": t('settings.groupAutomation') },
-    {
-        "name": "show__auto_paladin_train", "label": t('settings.autoPaladinTrainLabel'), "description": t('settings.autoPaladinTrainDesc') + ' - ONLY WITH 1 VILLAGE', "group": t('settings.groupAutomation'),
-        "extraSettings": {
-            "maxLevel": { "label": t('settings.autoPaladinTrainLevelLabel'), "type": "number", "default": 30 },
-        }
-    },
-
-    // Anti-Bot Protection settings
-    { "name": "antiBot__disableOnDetection", "label": t('settings.antibot.disableOnDetection.label'), "description": t('settings.antibot.disableOnDetection.desc'), "group": t('settings.groupAntiBot') },
-    { "name": "antiBot__offlineMode", "label": t('settings.antibot.offlineMode.label'), "description": t('settings.antibot.offlineMode.desc') + '- NOT IMPLEMENTED', "group": t('settings.groupAntiBot'), disabled: true },
-    {
-        "name": "antiBot__cacheIntervals", "label": t('settings.antibot.cache.label'), "description": t('settings.antibot.cache.desc') + '- NOT IMPLEMENTED', "group": t('settings.groupAntiBot'),
-        "type": "section",
-        "extraSettings": {
-            "overviewMain": { "label": t('settings.antibot.cache.overviewMain.label'), "desc": t('settings.antibot.cache.overviewMain.desc'), "type": "number", "default": 1 , disabled: true},
-            "overviewTroops": { "label": t('settings.antibot.cache.overviewTroops.label'), "desc": t('settings.antibot.cache.overviewTroops.desc'), "type": "number", "default": 1 , disabled: true}
-        },
-        disabled: true
-    },
-
-    // General / Utility
-    { "name": "keep_awake", "label": t('settings.keepAwakeLabel'), "description": t('settings.keepAwakeDesc'), "group": t('settings.groupGeneral') },
-    { "name": "redirect__train_buildings", "label": t('settings.redirectTrainBuildingsLabel'), "description": t('settings.redirectTrainBuildingsDesc'), "group": t('settings.groupGeneral') },
-    { "name": "remove__premium_promo", "label": t('settings.hidePremiumAdsLabel'), "description": t('settings.hidePremiumAdsDesc'), "group": t('settings.groupGeneral') }, {
-        "name": "language", "label": t('settings.language'), "description": t('settings.languageDesc'), "type": "select", "group": t('settings.groupGeneral'),
-        "options": [
-            { "value": "en", "label": "English" },
-            { "value": "pt", "label": "Portugu\u00eas" }
-        ]
-    },
-];
-
-/**
- * Fixed tab display order; each setting declares its own group via availableSettings[].group.
- */
-var SETTINGS_GROUPS_ORDER = [
-    t('settings.groupWidgets'),
-    t('settings.groupOverviewVillages'),
-    t('settings.groupMap'),
-    t('settings.groupUiUx'),
-    t('settings.groupAutomation'),
-    t('settings.groupAntiBot'),
-    t('settings.groupGeneral')
-];
 
 /**
  * Groups setting names into categories for tabbed navigation, derived from

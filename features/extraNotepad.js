@@ -2,39 +2,39 @@
 // Notepad Page — view/edit every village's Notepad-widget note directly from the native screen=memo page.
 // Reuses the custom Notepad widget's own IndexedDB-backed cache, not the native TW memo.
 
-const EXTRA_MEMO_TOGGLE_KEY = 'extra_memo_show_all_villages';
-
-function isExtraMemoEnabled() {
-    return localStorage.getItem(EXTRA_MEMO_TOGGLE_KEY) === '1';
-}
-
-function setExtraMemoEnabled(enabled) {
-    localStorage.setItem(EXTRA_MEMO_TOGGLE_KEY, enabled ? '1' : '0');
-}
-
 /**
- * Returns the village name for a village id using the cached villages_info list, or the raw id
- * when the village isn't known.
+ * Returns the village name for a village id using the cached villages_info list, falling back to
+ * its coordinates in X|Y format when the name is unavailable.
  * @param {string|number} villageId
  * @returns {string}
  */
 function getVillageTabLabel(villageId) {
     const villages = JSON.parse(localStorage.getItem('villages_info') || '[]');
     const village = villages.find(v => (v.url.match(/village=(\d+)/) || [])[1] == villageId);
-    if (!village) return String(villageId);
-    return village.name;
+    if (village?.name) return village.name;
+    if (village?.coords) return village.coords;
+
+    const raw = typeof mapDataGetRaw === 'function' ? mapDataGetRaw('map_villages') : '';
+    const escapedVillageId = String(villageId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = raw && raw.match(new RegExp('^' + escapedVillageId + ',[^,]*,(\\d{1,3}),(\\d{1,3}),', 'm'));
+    return match ? match[1] + '|' + match[2] : String(villageId);
 }
 
 // Tracks which village's note is currently shown/edited in #extra_memo_display.
 var currentExtraMemoVillageId = null;
+var currentExtraMemoSource = 'own';
+var currentExtraMemoType = 'own';
 
 function renderExtraMemoView(villageId) {
     currentExtraMemoVillageId = villageId;
+    closeNotepadBBCodePickers();
     document.getElementById('extra_memo_edit_row').style.display = 'none';
     document.getElementById('extra_memo_view_row').style.display = '';
 
-    const notepadByVillageId = getNotepadStorage();
-    const noteText = notepadByVillageId[villageId];
+    const notes = currentExtraMemoSource === 'profile'
+        ? villageProfileNoteGetAll()
+        : getNotepadStorage();
+    const noteText = notes[villageId];
     const body = document.getElementById('extra_memo_view_body');
 
     if (noteText) {
@@ -50,9 +50,11 @@ function renderExtraMemoView(villageId) {
 
 function openExtraMemoEditMode(villageId) {
     currentExtraMemoVillageId = villageId;
-    const notepadByVillageId = getNotepadStorage();
+    const notes = currentExtraMemoSource === 'profile'
+        ? villageProfileNoteGetAll()
+        : getNotepadStorage();
     const textarea = document.getElementById('extra_memo_message');
-    textarea.value = notepadByVillageId[villageId] || '';
+    textarea.value = notes[villageId] || '';
     // Duck-typed jQuery-like target, same pattern openEditModeNote() uses for the native BBCodes.insert().
     BBCodes.target = { 0: textarea };
 
@@ -63,26 +65,67 @@ function openExtraMemoEditMode(villageId) {
 
 function saveExtraMemoNote(villageId) {
     const text = document.getElementById('extra_memo_message').value;
-    notepadSet(villageId, text);
+    if (currentExtraMemoSource === 'profile') {
+        villageProfileNoteSet(villageId, text);
+    } else {
+        notepadSet(villageId, text);
+    }
     renderExtraMemoView(villageId);
 }
 
-function exportAllVillageNotes() {
+function deleteExtraMemoNote(villageId) {
+    UI.ConfirmationBox(
+        t('memo.deleteNoteConfirm'),
+        [{
+            text: t('button.delete'),
+            callback: async function () {
+                if (currentExtraMemoSource === 'profile') {
+                    await villageProfileNoteSet(villageId, '');
+                } else {
+                    await notepadSet(villageId, '');
+                }
+                renderExtraMemoVillageTabs();
+                hideExtraMemoDisplay();
+            },
+            confirm: true
+        }],
+        'tw_delete_note_' + currentExtraMemoSource + '_' + villageId,
+        false,
+        true
+    );
+}
+
+function downloadExtraMemoBackup(notes, filename) {
     const payload = {
         version: 1,
         exportedAt: new Date().toISOString(),
-        notes: Object.assign({}, getNotepadStorage())
+        notes: Object.assign({}, notes)
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'tribalwars-village-notes.json';
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+function exportAllVillageNotes() {
+    downloadExtraMemoBackup(getNotepadStorage(), 'tribalwars-village-notes.json');
+}
+
+function exportAllProfileNotes() {
+    downloadExtraMemoBackup(villageProfileNoteGetAll(), 'tribalwars-profile-notes.json');
+}
+
+function exportCurrentExtraMemoNotes() {
+    downloadExtraMemoBackup({
+        ownVillageNotes: getNotepadStorage(),
+        profileNotes: villageProfileNoteGetAll()
+    }, 'tribalwars-all-notes.json');
 }
 
 function parseImportedVillageNotes(payload) {
@@ -103,6 +146,65 @@ function parseImportedVillageNotes(payload) {
     });
 
     return notes;
+}
+
+function parseImportedAllMemoNotes(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new Error('Invalid notes file');
+    }
+
+    const combinedNotes = payload.notes && typeof payload.notes === 'object' && !Array.isArray(payload.notes)
+        ? payload.notes
+        : payload;
+
+    if (Object.prototype.hasOwnProperty.call(combinedNotes, 'ownVillageNotes') ||
+        Object.prototype.hasOwnProperty.call(combinedNotes, 'profileNotes')) {
+        return {
+            ownVillageNotes: parseImportedVillageNotes(combinedNotes.ownVillageNotes || {}),
+            profileNotes: parseImportedVillageNotes(combinedNotes.profileNotes || {})
+        };
+    }
+
+    return {
+        ownVillageNotes: parseImportedVillageNotes(payload),
+        profileNotes: {}
+    };
+}
+
+async function importAllMemoNotesFromFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const payload = JSON.parse(event.target.result);
+            const notes = parseImportedAllMemoNotes(payload);
+
+            UI.ConfirmationBox(
+                t('memo.importAllNotesConfirm'),
+                [{
+                    text: t('button.import'),
+                    callback: async function () {
+                        await notepadReplaceAll(notes.ownVillageNotes);
+                        await villageProfileNoteReplaceAll(notes.profileNotes);
+                        renderExtraMemoVillageTabs();
+                        if (currentExtraMemoVillageId != null) {
+                            renderExtraMemoView(currentExtraMemoVillageId);
+                        }
+                        alert(t('memo.importAllNotesSuccess'));
+                    },
+                    confirm: true
+                }],
+                'tw_import_all_notes',
+                false,
+                true
+            );
+        } catch (error) {
+            console.warn('[ExtraMemo] Failed to import all notes', error);
+            alert(t('memo.importAllNotesInvalid'));
+        }
+    };
+    reader.readAsText(file);
 }
 
 async function importVillageNotesFromFile(file) {
@@ -129,8 +231,40 @@ async function importVillageNotesFromFile(file) {
     reader.readAsText(file);
 }
 
-function showExtraMemoDisplay(villageId) {
+async function importProfileNotesFromFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const payload = JSON.parse(event.target.result);
+            const notes = parseImportedVillageNotes(payload);
+
+            if (!confirm(t('memo.importProfileNotesConfirm'))) return;
+
+            await villageProfileNoteReplaceAll(notes);
+            renderExtraMemoVillageTabs();
+            if (currentExtraMemoVillageId != null && currentExtraMemoSource === 'profile') {
+                renderExtraMemoView(currentExtraMemoVillageId);
+            }
+            alert(t('memo.importProfileNotesSuccess'));
+        } catch (error) {
+            console.warn('[ExtraMemo] Failed to import profile notes', error);
+            alert(t('memo.importProfileNotesInvalid'));
+        }
+    };
+    reader.readAsText(file);
+}
+
+function importCurrentExtraMemoNotes(file) {
+    importAllMemoNotesFromFile(file);
+}
+
+function showExtraMemoDisplay(villageId, source = 'own') {
     document.getElementById('extra_memo_display').style.display = '';
+    currentExtraMemoSource = source;
+    const deleteLink = document.querySelector('#extra_memo_display [data-extra-delete]');
+    if (deleteLink) deleteLink.style.display = '';
     renderExtraMemoView(villageId);
 }
 
@@ -143,13 +277,39 @@ function hideExtraMemoDisplay() {
     });
 }
 
-function selectExtraMemoTab(villageId, tabEl) {
-    document.querySelectorAll('#tab-bar .memo-tab').forEach(t => t.classList.remove('memo-tab-selected'));
+function setNativeMemoVisibility(visible) {
+    document.querySelectorAll('#tab-bar .memo-tab:not([data-extra-memo-tab]):not([data-extra-profile-memo-tab])')
+        .forEach(tab => tab.style.display = visible ? '' : 'none');
+    document.querySelectorAll('.memo_container:not(#extra_memo_display)')
+        .forEach(container => container.style.display = visible ? '' : 'none');
+}
+
+function selectExtraMemoTab(villageId, tabEl, source = 'own') {
+    document.querySelectorAll('#tab-bar [data-extra-memo-tab], #tab-bar [data-extra-profile-memo-tab]')
+        .forEach(t => t.classList.remove('memo-tab-selected'));
     tabEl.classList.add('memo-tab-selected');
     document.querySelectorAll('.memo_container').forEach(c => {
         if (c.id !== 'extra_memo_display') c.style.display = 'none';
     });
-    showExtraMemoDisplay(villageId);
+    showExtraMemoDisplay(villageId, source);
+}
+
+function selectExtraMemoType(type, button) {
+    currentExtraMemoType = type;
+    document.querySelectorAll('[data-extra-memo-type-button]').forEach(tab => {
+        tab.classList.remove('selected');
+    });
+    document.querySelectorAll('[data-extra-memo-type-panel]').forEach(panel => panel.classList.remove('active'));
+    button.classList.add('selected');
+    const panel = document.querySelector('[data-extra-memo-type-panel="' + type + '"]');
+    if (panel) panel.classList.add('active');
+    const exportButton = document.getElementById('extra_memo_export');
+    const importButton = document.getElementById('extra_memo_import');
+    if (exportButton) exportButton.title = t('memo.exportAllNotesTitle');
+    if (importButton) importButton.title = t('memo.importAllNotesTitle');
+    hideExtraMemoDisplay();
+    setNativeMemoVisibility(type === 'own');
+    renderExtraMemoVillageTabs();
 }
 
 /**
@@ -176,6 +336,17 @@ function buildExtraMemoDisplay() {
         openExtraMemoEditMode(currentExtraMemoVillageId);
     });
     scriptDiv.appendChild(editLink);
+
+    const deleteLink = document.createElement('a');
+    deleteLink.className = 'btn';
+    deleteLink.href = '#';
+    deleteLink.dataset.extraDelete = '1';
+    deleteLink.textContent = t('button.delete');
+    deleteLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        deleteExtraMemoNote(currentExtraMemoVillageId);
+    });
+    scriptDiv.appendChild(deleteLink);
     scriptDiv.appendChild(document.createElement('br'));
 
     const table = document.createElement('table');
@@ -233,17 +404,17 @@ function buildExtraMemoDisplay() {
     return container;
 }
 
-function removeExtraMemoVillageTabs() {
-    document.querySelectorAll('[data-extra-memo-tab]').forEach(el => el.remove());
-    hideExtraMemoDisplay();
+function removeExtraMemoVillageTabs(hideDisplay = true) {
+    document.querySelectorAll('[data-extra-memo-tab], [data-extra-profile-memo-tab]').forEach(el => el.remove());
+    if (hideDisplay) hideExtraMemoDisplay();
 }
 
 function renderExtraMemoVillageTabs() {
-    removeExtraMemoVillageTabs();
+    removeExtraMemoVillageTabs(false);
     const tabBar = document.getElementById('tab-bar');
     if (!tabBar) return;
 
-    getAllVillageIds().forEach(villageId => {
+    if (currentExtraMemoType === 'own') getAllVillageIds().forEach(villageId => {
         const tab = document.createElement('div');
         tab.className = 'memo-tab';
         tab.dataset.extraMemoTab = '1';
@@ -258,19 +429,38 @@ function renderExtraMemoVillageTabs() {
         // to a tab id it doesn't recognize.
         tab.addEventListener('click', (e) => {
             e.stopPropagation();
-            selectExtraMemoTab(villageId, tab);
+            selectExtraMemoTab(villageId, tab, 'own');
         });
 
         tabBar.appendChild(tab);
     });
+
+    if (currentExtraMemoType === 'profile') {
+        Object.keys(villageProfileNoteGetAll()).forEach(villageId => {
+            const tab = document.createElement('div');
+            tab.className = 'memo-tab';
+            tab.dataset.extraProfileMemoTab = '1';
+            tab.dataset.villageId = villageId;
+
+            const label = document.createElement('span');
+            label.className = 'memo-tab-label';
+            label.innerHTML = '<strong>' + escapeHtml(getVillageTabLabel(villageId)) + '</strong>';
+            tab.appendChild(label);
+            tab.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectExtraMemoTab(villageId, tab, 'profile');
+            });
+            tabBar.appendChild(tab);
+        });
+    }
 }
 
 /**
- * Entry point for screen=memo. Injects the "show all villages" toggle next to the title and,
- * when enabled, one extra tab per other village backed by the Notepad widget's own storage.
+ * Entry point for screen=memo. Injects note-type tabs next to the title and village tabs backed
+ * by the custom notepad/profile-note stores.
  */
 function injectExtraMemoFeature() {
-    if (document.getElementById('extra_memo_toggle')) return;
+    if (document.getElementById('extra_memo_type_tabs')) return;
 
     const titleHeading = document.querySelector('#content_value h2');
     const tabBar = document.getElementById('tab-bar');
@@ -279,33 +469,34 @@ function injectExtraMemoFeature() {
     const isPremium = !!game_data?.features?.Premium?.active;
 
     const controls = document.createElement('div');
-    controls.style.cssText = 'float:right; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
-
-    const label = document.createElement('label');
-    label.id = 'extra_memo_toggle_label';
-    label.style.cssText = 'font-weight:normal; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = 'extra_memo_toggle';
-    checkbox.disabled = isPremium;
-    checkbox.checked = !isPremium && isExtraMemoEnabled();
+    controls.id = 'extra_memo_type_tabs';
+    controls.className = 'extra-memo-type-tabs';
+    if (isPremium) {
+        controls.setAttribute('data-title', t('memo.premiumDisabledHint'));
+        controls.addEventListener('mouseenter', (e) => toggleTooltip(e.currentTarget, true));
+        controls.addEventListener('mouseleave', (e) => toggleTooltip(e.currentTarget, false));
+    }
 
     const backupActions = document.createElement('span');
-    backupActions.style.cssText = 'display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap;';
+    backupActions.className = 'extra-memo-backup-actions';
+    backupActions.style.cssText = 'float:right; display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center;';
 
     const exportBtn = document.createElement('input');
+    exportBtn.id = 'extra_memo_export';
     exportBtn.type = 'button';
     exportBtn.className = 'btn';
     exportBtn.value = t('button.export');
-    exportBtn.title = t('memo.exportNotesTitle');
-    exportBtn.addEventListener('click', exportAllVillageNotes);
+    exportBtn.title = t('memo.exportAllNotesTitle');
+    exportBtn.disabled = isPremium;
+    exportBtn.addEventListener('click', exportCurrentExtraMemoNotes);
 
     const importBtn = document.createElement('input');
+    importBtn.id = 'extra_memo_import';
     importBtn.type = 'button';
     importBtn.className = 'btn';
     importBtn.value = t('button.import');
-    importBtn.title = t('memo.importNotesTitle');
+    importBtn.title = t('memo.importAllNotesTitle');
+    importBtn.disabled = isPremium;
 
     const importInput = document.createElement('input');
     importInput.type = 'file';
@@ -314,27 +505,46 @@ function injectExtraMemoFeature() {
     importInput.addEventListener('change', () => {
         const file = importInput.files?.[0];
         importInput.value = '';
-        importVillageNotesFromFile(file);
+        importCurrentExtraMemoNotes(file);
     });
-
     importBtn.addEventListener('click', () => importInput.click());
-
-    backupActions.appendChild(exportBtn);
-    backupActions.appendChild(importBtn);
-    backupActions.appendChild(importInput);
-    backupActions.style.display = checkbox.checked ? 'inline-flex' : 'none';
-
+    backupActions.append(exportBtn, importBtn, importInput);
     controls.appendChild(backupActions);
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(' ' + t('memo.showAllVillages')));
-    controls.appendChild(label);
 
-    if (isPremium) {
-        label.setAttribute('data-title', t('memo.premiumDisabledHint'));
-        label.addEventListener('mouseenter', (e) => toggleTooltip(e.currentTarget, true));
-        label.addEventListener('mouseleave', (e) => toggleTooltip(e.currentTarget, false));
-    }
+    const tabMenu = document.createElement('table');
+    tabMenu.className = 'vis modemenu';
+    tabMenu.id = 'extra_memo_type_menu';
+    tabMenu.style.width = '100%';
+    const tabMenuBody = document.createElement('tbody');
+    const tabMenuRow = document.createElement('tr');
+    tabMenuBody.appendChild(tabMenuRow);
+    tabMenu.appendChild(tabMenuBody);
+    const panels = document.createElement('div');
+    panels.className = 'extra-memo-type-panels';
 
+    const createBackupPanel = (type, title) => {
+        const tab = document.createElement('td');
+        tab.className = 'center';
+        tab.dataset.extraMemoTypeButton = type;
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = title;
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (!isPremium) selectExtraMemoType(type, tab);
+        });
+        tab.appendChild(link);
+        tabMenuRow.appendChild(tab);
+
+        const panel = document.createElement('div');
+        panel.className = 'extra-memo-type-panel';
+        panel.dataset.extraMemoTypePanel = type;
+        panels.appendChild(panel);
+    };
+
+    createBackupPanel('own', t('memo.showOwnVillageNotes'));
+    createBackupPanel('profile', t('memo.showOtherVillageProfileNotes'));
+    controls.append(tabMenu, panels);
     titleHeading.insertAdjacentElement('afterend', controls);
 
     // Additive listener on the real native tabs so switching back to one hides our overlay.
@@ -344,18 +554,9 @@ function injectExtraMemoFeature() {
 
     tabBar.insertAdjacentElement('afterend', buildExtraMemoDisplay());
 
-    checkbox.addEventListener('change', () => {
-        if (isPremium) return;
-        setExtraMemoEnabled(checkbox.checked);
-        backupActions.style.display = checkbox.checked ? 'inline-flex' : 'none';
-        if (checkbox.checked) {
-            renderExtraMemoVillageTabs();
-        } else {
-            removeExtraMemoVillageTabs();
-        }
-    });
-
-    if (!isPremium && isExtraMemoEnabled()) {
+    if (!isPremium) {
+        const firstButton = tabMenu.querySelector('[data-extra-memo-type-button="own"]');
+        if (firstButton) selectExtraMemoType('own', firstButton);
         renderExtraMemoVillageTabs();
     }
 }

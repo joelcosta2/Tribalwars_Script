@@ -259,6 +259,40 @@ function getMapContextSubjects(village, x, y) {
 }
 
 /**
+ * Resolves the same group subjects for a native .village_anchor context outside the map.
+ * Coordinates remain available even when the map data caches are cold.
+ * @param {{ownerId:string, x:number, y:number, coords:string}} context
+ * @returns {Array<{matchType:'players'|'tribes'|'villages', value:string}>}
+ */
+function getExternalContextSubjects(context) {
+    if (context.x === null || context.y === null) return [];
+
+    const subjects = [{ matchType: 'villages', value: context.coords }];
+    const cachedVillage = getCachedVillageByCoords(context.x, context.y);
+    const ownerId = cachedVillage?.ownerId || context.ownerId;
+    const player = getCachedPlayerById(ownerId);
+    if (player?.name) subjects.push({ matchType: 'players', value: player.name.trim() });
+
+    const ally = getCachedAllyById(player?.allyId);
+    if (ally?.tag) subjects.push({ matchType: 'tribes', value: ally.tag.trim() });
+    return subjects;
+}
+
+registerCtxCustomAction({
+    id: 'map-groups',
+    slot: 2,
+    title: t('map.contextGroupsButtonTitle'),
+    className: 'custom-map-ctx-button',
+    spriteClass: 'mp_invite',
+    onClick: context => {
+        const popup = getOrCreateMapGroupQuickAddPopup();
+        popup.querySelector('#map_group_quick_add_popup_title').textContent = t('map.contextGroupsPopupTitle');
+        renderMapContextGroupList(popup.querySelector('#map_group_quick_add_popup_body'), getExternalContextSubjects(context));
+        popup.style.display = 'block';
+    }
+});
+
+/**
  * Renders all subject sections for a map-context village into the existing quick-add popup.
  * @param {Element} container
  * @param {Array<{matchType:string, value:string}>} subjects
@@ -370,9 +404,17 @@ function startMapGroupContextWatcher() {
     TWMap.context.spawn = function (village, x, y) {
         previousSpawn(village, x, y);
 
+        const ctxButton = document.getElementById(MAP_GROUP_CTX_BUTTON_ID);
+        if (!isMapContextButtonEnabled('mapGroup')) {
+            if (ctxButton) {
+                ctxButton.style.display = 'none';
+                ctxButton.style.opacity = '0';
+            }
+            return;
+        }
+
         const nativeFavorites = [document.getElementById('mp_fav'), document.getElementById('mp_unfav')];
         const nativeFavorite = nativeFavorites.find(anchor => anchor?.style.display !== 'none') || nativeFavorites[0];
-        const ctxButton = document.getElementById(MAP_GROUP_CTX_BUTTON_ID);
         const position = getMapGroupContextPosition(nativeFavorite);
         if (!ctxButton || !position) return;
 
@@ -412,4 +454,4 @@ function startMapGroupContextWatcher() {
     };
 }
 
-if (typeof TWMap !== 'undefined') startMapGroupContextWatcher();
+if (typeof TWMap !== 'undefined' && !isPremiumAccount()) startMapGroupContextWatcher();

@@ -5,18 +5,34 @@ const TW_DB_NAME = 'tw_premium_features';
 const BUILD_QUEUE_STORE_NAME = 'build_queue';
 const WORLD_REPORTS_STORE_NAME = 'world_reports';
 const VILLAGE_NOTEPAD_STORE_NAME = 'village_notepad';
+const VILLAGE_PROFILE_NOTES_STORE_NAME = 'village_profile_notes';
 const MAP_DATA_STORE_NAME = 'map_data';
 const ALLY_RESERVATIONS_STORE_NAME = 'ally_reservations';
+const QUICK_FARM_ATTACKS_STORE_NAME = 'quick_farm_ongoing_attacks';
 
 var twDbPromise = null;
 // One entry per village: { [villageId]: { building_queue, building_queue_active, ... } }
 var buildQueueMemoryCache = {};
 // One entry per village: { [villageId]: noteText }
 var notepadMemoryCache = {};
+// One entry per village profile: { [villageId]: noteText }
+var villageProfileNotesMemoryCache = {};
 // One entry per map/*.txt dump: { 'map_villages': rawText, 'map_players': rawText, 'map_allies': rawText }
 var mapDataMemoryCache = {};
 // One entry per reserved village: { [villageId]: { reservationId, villageId, coords, targetPlayerId, reservingPlayerId, reservingPlayerName, expiresAtMs } }
 var allyReservationsMemoryCache = {};
+
+/**
+ * Returns the canonical cache/IndexedDB key for a village.
+ * IndexedDB treats numeric and string keys as different values, so village ids
+ * must use one type at every storage boundary.
+ * @param {string|number} [villageId]
+ * @returns {string}
+ */
+function normalizeBuildQueueVillageId(villageId) {
+    const resolvedId = villageId ?? game_data?.village?.id;
+    return resolvedId == null || resolvedId === '' ? '_no_village' : String(resolvedId);
+}
 
 /**
  * Opens (or returns the cached open) shared IndexedDB database used by all script features.
@@ -31,7 +47,7 @@ function openTwDb() {
             reject(new Error('IndexedDB unavailable'));
             return;
         }
-        const request = indexedDB.open(TW_DB_NAME, 5);
+        const request = indexedDB.open(TW_DB_NAME, 7);
         request.onupgradeneeded = function () {
             const db = request.result;
             if (!db.objectStoreNames.contains(BUILD_QUEUE_STORE_NAME)) {
@@ -43,17 +59,240 @@ function openTwDb() {
             if (!db.objectStoreNames.contains(VILLAGE_NOTEPAD_STORE_NAME)) {
                 db.createObjectStore(VILLAGE_NOTEPAD_STORE_NAME);
             }
+            if (!db.objectStoreNames.contains(VILLAGE_PROFILE_NOTES_STORE_NAME)) {
+                db.createObjectStore(VILLAGE_PROFILE_NOTES_STORE_NAME);
+            }
             if (!db.objectStoreNames.contains(MAP_DATA_STORE_NAME)) {
                 db.createObjectStore(MAP_DATA_STORE_NAME);
             }
             if (!db.objectStoreNames.contains(ALLY_RESERVATIONS_STORE_NAME)) {
                 db.createObjectStore(ALLY_RESERVATIONS_STORE_NAME);
             }
+            if (!db.objectStoreNames.contains(QUICK_FARM_ATTACKS_STORE_NAME)) {
+                const store = db.createObjectStore(QUICK_FARM_ATTACKS_STORE_NAME, { keyPath: 'id' });
+                store.createIndex('sourceVillageKey', 'sourceVillageKey', { unique: false });
+                store.createIndex('status', 'status', { unique: false });
+                store.createIndex('sentAtMs', 'sentAtMs', { unique: false });
+                store.createIndex('targetVillageId', 'targetVillageId', { unique: false });
+            }
         };
         request.onsuccess = function () { resolve(request.result); };
         request.onerror = function () { reject(request.error); };
     });
     return twDbPromise;
+}
+
+function createQuickFarmAttackId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return 'qfa_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+}
+
+/**
+ * Shared boilerplate for every single-key store/delete helper below (idbSet, reportSet,
+ * notepadSet, ...): opens the request-building callback against the given store, resolves once
+ * the request settles, and reports (never throws) any failure via reportStorageError. Also
+ * catches a rejected openTwDb() (e.g. IndexedDB unavailable) the same way.
+ * @param {string} storeName
+ * @param {IDBTransactionMode} mode
+ * @param {(store: IDBObjectStore) => IDBRequest} buildRequest
+ * @param {string} context - Passed to reportStorageError, e.g. 'saving notepad for village 123'.
+ * @returns {Promise<void>} Never rejects.
+ */
+function performIdbWrite(storeName, mode, buildRequest, context) {
+    return openTwDb().then(db => new Promise(resolve => {
+        const request = buildRequest(db.transaction(storeName, mode).objectStore(storeName));
+        request.onsuccess = function () { resolve(); };
+        request.onerror = function () { resolve(request.error); };
+    })).then(error => {
+        if (error) reportStorageError(error, context);
+    }).catch(e => reportStorageError(e, context));
+}
+
+/**
+ * Shared boilerplate for hydrate*Cache() functions: fetches every key+value from storeName in
+ * parallel, then calls populate(keys, values) once both requests settle. Logs and resolves
+ * (never rejects) on any IndexedDB failure.
+ * @param {string} storeName
+ * @param {string} logLabel - Used in the console.warn message on failure, e.g. '[TW Notepad]'.
+ * @param {(keys: Array, values: Array) => void} populate
+ * @returns {Promise<void>}
+ */
+function hydrateStoreToCache(storeName, logLabel, populate) {
+    return openTwDb().then(db => new Promise(resolve => {
+        const store = db.transaction(storeName, 'readonly').objectStore(storeName);
+        const keysRequest = store.getAllKeys();
+        const valuesRequest = store.getAll();
+        let pending = 2;
+        let keys, values;
+        function done() {
+            pending--;
+            if (pending === 0) {
+                populate(keys || [], values || []);
+                resolve();
+            }
+        }
+        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
+        keysRequest.onerror = done;
+        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
+        valuesRequest.onerror = done;
+    })).catch(e => console.warn(logLabel + ' hydrate failed', e));
+}
+
+/**
+ * Shared boilerplate for *ReplaceAll() functions: clears storeName then bulk-writes every entry
+ * in normalizedEntries (already validated/filtered by the caller, and already applied to the
+ * in-memory cache). Logs and resolves (never rejects) on any IndexedDB failure.
+ * @param {string} storeName
+ * @param {{[key:string]: *}} normalizedEntries
+ * @param {string} contextLabel - Passed to reportStorageError on a mid-transaction failure.
+ * @param {string} logLabel - Used in the console.warn message on a promise-chain failure.
+ * @returns {Promise<void>}
+ */
+function replaceAllInStore(storeName, normalizedEntries, contextLabel, logLabel) {
+    return openTwDb().then(db => new Promise(resolve => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function (event) {
+            reportStorageError(event.target.error, contextLabel);
+            resolve();
+        };
+
+        const clearRequest = store.clear();
+        clearRequest.onsuccess = function () {
+            Object.entries(normalizedEntries).forEach(([key, value]) => {
+                store.put(value, key);
+            });
+        };
+        clearRequest.onerror = function () { resolve(); };
+    })).catch(e => console.warn(logLabel + ' replaceAll failed', e));
+}
+
+/**
+ * Persists a successful quick-farm attack without affecting the attack result if storage fails.
+ * The record is intentionally created at the call site, where template and origin metadata exist.
+ * @param {Object} attack
+ * @returns {Promise<void>}
+ */
+function recordQuickFarmAttack(attack) {
+    const world = String(attack?.world || game_data?.world || window.location.hostname || 'unknown_world');
+    const playerId = String(attack?.playerId || game_data?.player?.id || 'unknown_player');
+    const sourceVillageId = String(attack?.sourceVillageId || game_data?.village?.id || 'unknown_village');
+    const targetVillageId = String(attack?.targetVillageId || '');
+    const units = Object.keys(attack?.units || {}).reduce((result, unit) => {
+        const amount = parseInt(attack.units[unit], 10);
+        if (Number.isFinite(amount) && amount > 0) result[unit] = amount;
+        return result;
+    }, {});
+    const sentAtMs = Number.isFinite(attack?.sentAtMs) ? attack.sentAtMs : Date.now();
+    const baseline = attack?.previousReportId
+        ? { previousReportId: attack.previousReportId, previousReportAtMs: attack.previousReportAtMs }
+        : getQuickFarmAttackReportBaseline(targetCoords);
+    const record = {
+        id: createQuickFarmAttackId(),
+        sourceVillageKey: world + '|' + playerId + '|' + sourceVillageId,
+        sourceVillageId,
+        targetVillageId,
+        targetCoords: String(attack?.targetCoords || ''),
+        units,
+        sentAtMs,
+        previousReportId: String(baseline.previousReportId || ''),
+        previousReportAtMs: Number.isFinite(baseline.previousReportAtMs) ? baseline.previousReportAtMs : null,
+        status: 'ongoing',
+        origin: String(attack?.origin || 'unknown'),
+        templateSlot: String(attack?.templateSlot || 'unknown'),
+        templateName: String(attack?.templateName || ''),
+        world,
+        playerId
+    };
+
+    return performIdbWrite(QUICK_FARM_ATTACKS_STORE_NAME, 'readwrite',
+        store => store.put(record),
+        'saving quick-farm attack record');
+}
+
+function updateQuickFarmAttackStatus(attackId, status, extraFields = {}) {
+    return openTwDb().then(db => new Promise(resolve => {
+        const transaction = db.transaction(QUICK_FARM_ATTACKS_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(QUICK_FARM_ATTACKS_STORE_NAME);
+        let updated = false;
+        transaction.oncomplete = function () { resolve(updated); };
+        transaction.onerror = function (event) {
+            reportStorageError(event.target.error, 'updating quick-farm attack status');
+            resolve(false);
+        };
+        const request = store.get(attackId);
+        request.onsuccess = function () {
+            const attack = request.result;
+            if (!attack) {
+                return;
+            }
+            store.put(Object.assign({}, attack, extraFields, { status }));
+            updated = true;
+        };
+        request.onerror = function () { updated = false; };
+    })).catch(() => false);
+}
+
+function getQuickFarmAttackReportBaseline(coords) {
+    const reportsManager = window.TWPFMapReports;
+    const report = reportsManager?.getAll?.()?.find(item => item.coords === coords);
+    if (!report || !reportsManager.convertDateToISO) return {};
+
+    const reportAtMs = new Date(reportsManager.convertDateToISO(report.date) || 0).getTime();
+    return {
+        previousReportId: String(report.id || ''),
+        previousReportAtMs: Number.isFinite(reportAtMs) && reportAtMs > 0 ? reportAtMs : null
+    };
+}
+
+async function reconcileQuickFarmAttacks(attacks, reports) {
+    const reportsByCoords = new Map((reports || []).filter(report => report?.coords).map(report => [report.coords, report]));
+    const reconciled = [];
+
+    const ongoingAttacks = (attacks || [])
+        .filter(attack => attack.status === 'ongoing' && attack.targetCoords && attack.previousReportId)
+        .sort((left, right) => left.sentAtMs - right.sentAtMs);
+
+    for (const attack of ongoingAttacks) {
+        const report = reportsByCoords.get(attack.targetCoords);
+        if (!report || String(report.id || '') === String(attack.previousReportId)) continue;
+
+        const reportAtMs = new Date(window.TWPFMapReports?.convertDateToISO(report.date) || 0).getTime();
+        if (!Number.isFinite(reportAtMs) || reportAtMs <= attack.sentAtMs) continue;
+
+        const completed = await updateQuickFarmAttackStatus(attack.id, 'completed', {
+            completedReportId: String(report.id || ''),
+            completedAtMs: Date.now()
+        });
+        if (completed) {
+            attack.status = 'completed';
+            attack.completedReportId = String(report.id || '');
+            reconciled.push(attack.id);
+        }
+    }
+
+    return reconciled;
+}
+
+function getQuickFarmAttacksBySourceVillage(sourceVillageId, world, playerId) {
+    const resolvedWorld = String(world || game_data?.world || window.location.hostname || 'unknown_world');
+    const resolvedPlayerId = String(playerId || game_data?.player?.id || 'unknown_player');
+    const sourceVillageKey = resolvedWorld + '|' + resolvedPlayerId + '|' + String(sourceVillageId);
+
+    return openTwDb().then(db => new Promise(resolve => {
+        const request = db.transaction(QUICK_FARM_ATTACKS_STORE_NAME, 'readonly')
+            .objectStore(QUICK_FARM_ATTACKS_STORE_NAME)
+            .index('sourceVillageKey')
+            .getAll(sourceVillageKey);
+        request.onsuccess = function () {
+            resolve((request.result || []).sort((left, right) => left.sentAtMs - right.sentAtMs));
+        };
+        request.onerror = function () { resolve([]); };
+    })).catch(() => []);
 }
 
 /**
@@ -63,11 +302,10 @@ function openTwDb() {
  * @returns {Promise<void>} Never rejects — persistence failures are logged, not thrown.
  */
 function idbSet(villageId, record) {
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(BUILD_QUEUE_STORE_NAME, 'readwrite').objectStore(BUILD_QUEUE_STORE_NAME).put(record, villageId);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW BuildQueue] idbSet failed for village ' + villageId, e));
+    const normalizedVillageId = normalizeBuildQueueVillageId(villageId);
+    return performIdbWrite(BUILD_QUEUE_STORE_NAME, 'readwrite',
+        store => store.put(record, normalizedVillageId),
+        'saving build queue for village ' + normalizedVillageId);
 }
 
 /**
@@ -78,7 +316,7 @@ function idbSet(villageId, record) {
  * @returns {*} The stored value (array/object/number/etc), or null if absent.
  */
 function bqGet(field, villageId) {
-    const vId = villageId || game_data?.village?.id || '_no_village';
+    const vId = normalizeBuildQueueVillageId(villageId);
     return buildQueueMemoryCache[vId]?.[field] ?? null;
 }
 
@@ -92,7 +330,7 @@ function bqGet(field, villageId) {
  * @param {*} value - Any structured-clonable value (array, object, number, string, etc).
  */
 function bqSet(field, villageId, value) {
-    const vId = villageId || game_data?.village?.id || '_no_village';
+    const vId = normalizeBuildQueueVillageId(villageId);
     if (!buildQueueMemoryCache[vId]) buildQueueMemoryCache[vId] = {};
     buildQueueMemoryCache[vId][field] = value;
     idbSet(vId, buildQueueMemoryCache[vId]);
@@ -104,7 +342,7 @@ function bqSet(field, villageId, value) {
  * @param {string|number} [villageId] - Defaults to the currently loaded village.
  */
 function bqRemove(field, villageId) {
-    const vId = villageId || game_data?.village?.id || '_no_village';
+    const vId = normalizeBuildQueueVillageId(villageId);
     if (!buildQueueMemoryCache[vId]) return;
     delete buildQueueMemoryCache[vId][field];
     idbSet(vId, buildQueueMemoryCache[vId]);
@@ -116,25 +354,13 @@ function bqRemove(field, villageId) {
  * @returns {Promise<void>} Resolves even if IndexedDB is unavailable (cache just stays empty).
  */
 function hydrateBuildQueueCache() {
-    return openTwDb().then(db => new Promise(resolve => {
-        const store = db.transaction(BUILD_QUEUE_STORE_NAME, 'readonly').objectStore(BUILD_QUEUE_STORE_NAME);
-        const keysRequest = store.getAllKeys();
-        const valuesRequest = store.getAll();
-        let pending = 2;
-        let keys, values;
-        function done() {
-            pending--;
-            if (pending === 0) {
-                (keys || []).forEach((villageId, index) => { buildQueueMemoryCache[villageId] = values[index]; });
-                migrateBuildQueueRecordsToNative();
-                resolve();
-            }
-        }
-        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
-        keysRequest.onerror = done;
-        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
-        valuesRequest.onerror = done;
-    })).catch(e => console.warn('[TW BuildQueue] hydrateBuildQueueCache failed', e));
+    return hydrateStoreToCache(BUILD_QUEUE_STORE_NAME, '[TW BuildQueue]', (keys, values) => {
+        keys.forEach((villageId, index) => {
+            const normalizedVillageId = normalizeBuildQueueVillageId(villageId);
+            buildQueueMemoryCache[normalizedVillageId] = values[index];
+        });
+        migrateBuildQueueRecordsToNative();
+    });
 }
 
 // Fields that used to be JSON.stringify'd before being stored (a leftover from the original
@@ -204,11 +430,9 @@ function cleanupLegacyRecruitQueueLocalStorage() {
  * @returns {Promise<void>} Never rejects — persistence failures are logged, not thrown.
  */
 function reportSet(coords, record) {
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(WORLD_REPORTS_STORE_NAME, 'readwrite').objectStore(WORLD_REPORTS_STORE_NAME).put(record, coords);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Reports] reportSet failed for ' + coords, e));
+    return performIdbWrite(WORLD_REPORTS_STORE_NAME, 'readwrite',
+        store => store.put(record, coords),
+        'saving report for ' + coords);
 }
 
 /**
@@ -217,11 +441,41 @@ function reportSet(coords, record) {
  * @returns {Promise<void>} Never rejects.
  */
 function reportRemove(coords) {
+    return performIdbWrite(WORLD_REPORTS_STORE_NAME, 'readwrite',
+        store => store.delete(coords),
+        'deleting report for ' + coords);
+}
+
+/**
+ * Removes cached reports only when their stored report ID is in the confirmed ID set.
+ * The store is keyed by coordinates, so deleting by coordinates alone could remove a
+ * newer report that replaced the report deleted on the server.
+ * @param {Iterable<string|number>} reportIds
+ * @returns {Promise<Array>} The records removed from IndexedDB.
+ */
+function reportRemoveByIds(reportIds) {
+    const ids = new Set(Array.from(reportIds || [], id => String(id)));
+    if (ids.size === 0) return Promise.resolve([]);
+
     return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(WORLD_REPORTS_STORE_NAME, 'readwrite').objectStore(WORLD_REPORTS_STORE_NAME).delete(coords);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Reports] reportRemove failed for ' + coords, e));
+        const removed = [];
+        const transaction = db.transaction(WORLD_REPORTS_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(WORLD_REPORTS_STORE_NAME);
+        const request = store.openCursor();
+
+        request.onsuccess = function (event) {
+            const cursor = event.target.result;
+            if (!cursor) return;
+            if (ids.has(String(cursor.value?.id || ''))) {
+                removed.push(cursor.value);
+                cursor.delete();
+            }
+            cursor.continue();
+        };
+        request.onerror = function () { resolve([]); };
+        transaction.oncomplete = function () { resolve(removed); };
+        transaction.onerror = function () { resolve([]); };
+    })).catch(() => []);
 }
 
 /**
@@ -263,6 +517,60 @@ function notepadGetAll() {
     return notepadMemoryCache;
 }
 
+function villageProfileNoteGet(villageId) {
+    return villageProfileNotesMemoryCache[String(villageId)] ?? '';
+}
+
+function villageProfileNoteGetAll() {
+    return villageProfileNotesMemoryCache;
+}
+
+function villageProfileNoteSet(villageId, noteText) {
+    const vId = String(villageId);
+    if (noteText == null || noteText === '') {
+        delete villageProfileNotesMemoryCache[vId];
+        return performIdbWrite(VILLAGE_PROFILE_NOTES_STORE_NAME, 'readwrite',
+            store => store.delete(vId),
+            'deleting village profile note for village ' + vId);
+    }
+
+    villageProfileNotesMemoryCache[vId] = noteText;
+    return performIdbWrite(VILLAGE_PROFILE_NOTES_STORE_NAME, 'readwrite',
+        store => store.put(noteText, vId),
+        'saving village profile note for village ' + vId);
+}
+
+/**
+ * Replaces every village profile note with the provided map and persists the full replacement.
+ * @param {{[villageId: string]: string}} nextNotes
+ * @returns {Promise<void>} Never rejects.
+ */
+function villageProfileNoteReplaceAll(nextNotes) {
+    const normalizedNotes = {};
+    Object.keys(nextNotes || {}).forEach(villageId => {
+        const noteText = nextNotes[villageId];
+        if (typeof noteText === 'string' && noteText !== '') {
+            normalizedNotes[String(villageId)] = noteText;
+        }
+    });
+
+    Object.keys(villageProfileNotesMemoryCache).forEach(key => delete villageProfileNotesMemoryCache[key]);
+    Object.assign(villageProfileNotesMemoryCache, normalizedNotes);
+
+    return replaceAllInStore(VILLAGE_PROFILE_NOTES_STORE_NAME, normalizedNotes, 'replacing village profile notes', '[TW VillageProfile]');
+}
+
+function hydrateVillageProfileNotesCache() {
+    return hydrateStoreToCache(VILLAGE_PROFILE_NOTES_STORE_NAME, '[TW VillageProfile]', (keys, values) => {
+        villageProfileNotesMemoryCache = {};
+        keys.forEach((villageId, index) => {
+            if (values[index] != null && values[index] !== '') {
+                villageProfileNotesMemoryCache[String(villageId)] = values[index];
+            }
+        });
+    });
+}
+
 /**
  * Reads one notepad entry from the in-memory cache.
  * @param {string|number} [villageId]
@@ -285,11 +593,9 @@ function notepadSet(villageId, noteText) {
         return notepadDelete(vId);
     }
     notepadMemoryCache[vId] = noteText;
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(VILLAGE_NOTEPAD_STORE_NAME, 'readwrite').objectStore(VILLAGE_NOTEPAD_STORE_NAME).put(noteText, vId);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Notepad] notepadSet failed for village ' + vId, e));
+    return performIdbWrite(VILLAGE_NOTEPAD_STORE_NAME, 'readwrite',
+        store => store.put(noteText, vId),
+        'saving notepad for village ' + vId);
 }
 
 /**
@@ -300,11 +606,9 @@ function notepadSet(villageId, noteText) {
 function notepadDelete(villageId) {
     const vId = String(villageId);
     delete notepadMemoryCache[vId];
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(VILLAGE_NOTEPAD_STORE_NAME, 'readwrite').objectStore(VILLAGE_NOTEPAD_STORE_NAME).delete(vId);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Notepad] notepadDelete failed for village ' + vId, e));
+    return performIdbWrite(VILLAGE_NOTEPAD_STORE_NAME, 'readwrite',
+        store => store.delete(vId),
+        'deleting notepad for village ' + vId);
 }
 
 /**
@@ -324,21 +628,7 @@ function notepadReplaceAll(nextNotes) {
     Object.keys(notepadMemoryCache).forEach(key => delete notepadMemoryCache[key]);
     Object.assign(notepadMemoryCache, normalizedNotes);
 
-    return openTwDb().then(db => new Promise(resolve => {
-        const tx = db.transaction(VILLAGE_NOTEPAD_STORE_NAME, 'readwrite');
-        const store = tx.objectStore(VILLAGE_NOTEPAD_STORE_NAME);
-
-        tx.oncomplete = function () { resolve(); };
-        tx.onerror = function () { resolve(); };
-
-        const clearRequest = store.clear();
-        clearRequest.onsuccess = function () {
-            Object.entries(normalizedNotes).forEach(([villageId, noteText]) => {
-                store.put(noteText, villageId);
-            });
-        };
-        clearRequest.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Notepad] notepadReplaceAll failed', e));
+    return replaceAllInStore(VILLAGE_NOTEPAD_STORE_NAME, normalizedNotes, 'replacing notepad data', '[TW Notepad]');
 }
 
 /**
@@ -346,30 +636,15 @@ function notepadReplaceAll(nextNotes) {
  * @returns {Promise<void>} Resolves even if IndexedDB is unavailable.
  */
 function hydrateNotepadCache() {
-    return openTwDb().then(db => new Promise(resolve => {
-        const store = db.transaction(VILLAGE_NOTEPAD_STORE_NAME, 'readonly').objectStore(VILLAGE_NOTEPAD_STORE_NAME);
-        const keysRequest = store.getAllKeys();
-        const valuesRequest = store.getAll();
-        let pending = 2;
-        let keys, values;
-        function done() {
-            pending--;
-            if (pending === 0) {
-                Object.keys(notepadMemoryCache).forEach(key => delete notepadMemoryCache[key]);
-                (keys || []).forEach((villageId, index) => {
-                    const noteText = values[index];
-                    if (noteText != null && noteText !== '') {
-                        notepadMemoryCache[villageId] = noteText;
-                    }
-                });
-                resolve();
+    return hydrateStoreToCache(VILLAGE_NOTEPAD_STORE_NAME, '[TW Notepad]', (keys, values) => {
+        Object.keys(notepadMemoryCache).forEach(key => delete notepadMemoryCache[key]);
+        keys.forEach((villageId, index) => {
+            const noteText = values[index];
+            if (noteText != null && noteText !== '') {
+                notepadMemoryCache[villageId] = noteText;
             }
-        }
-        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
-        keysRequest.onerror = done;
-        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
-        valuesRequest.onerror = done;
-    })).catch(e => console.warn('[TW Notepad] hydrateNotepadCache failed', e));
+        });
+    });
 }
 
 /**
@@ -414,11 +689,9 @@ function mapDataGetRaw(key) {
  */
 function mapDataSet(key, text) {
     mapDataMemoryCache[key] = text;
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(MAP_DATA_STORE_NAME, 'readwrite').objectStore(MAP_DATA_STORE_NAME).put(text, key);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW MapData] mapDataSet failed for ' + key, e));
+    return performIdbWrite(MAP_DATA_STORE_NAME, 'readwrite',
+        store => store.put(text, key),
+        'saving map data ' + key);
 }
 
 /**
@@ -427,24 +700,9 @@ function mapDataSet(key, text) {
  * @returns {Promise<void>} Resolves even if IndexedDB is unavailable.
  */
 function hydrateMapDataCache() {
-    return openTwDb().then(db => new Promise(resolve => {
-        const store = db.transaction(MAP_DATA_STORE_NAME, 'readonly').objectStore(MAP_DATA_STORE_NAME);
-        const keysRequest = store.getAllKeys();
-        const valuesRequest = store.getAll();
-        let pending = 2;
-        let keys, values;
-        function done() {
-            pending--;
-            if (pending === 0) {
-                (keys || []).forEach((key, index) => { mapDataMemoryCache[key] = values[index]; });
-                resolve();
-            }
-        }
-        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
-        keysRequest.onerror = done;
-        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
-        valuesRequest.onerror = done;
-    })).catch(e => console.warn('[TW MapData] hydrateMapDataCache failed', e));
+    return hydrateStoreToCache(MAP_DATA_STORE_NAME, '[TW MapData]', (keys, values) => {
+        keys.forEach((key, index) => { mapDataMemoryCache[key] = values[index]; });
+    });
 }
 
 const MAP_DATA_CLEANUP_FLAG = 'idb_map_data_cleanup_v1_done';
@@ -479,11 +737,9 @@ function reservationsGetAll() {
 function reservationSet(villageId, record) {
     const vId = String(villageId);
     allyReservationsMemoryCache[vId] = record;
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite').objectStore(ALLY_RESERVATIONS_STORE_NAME).put(record, vId);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Reservations] reservationSet failed for village ' + vId, e));
+    return performIdbWrite(ALLY_RESERVATIONS_STORE_NAME, 'readwrite',
+        store => store.put(record, vId),
+        'saving reservation for village ' + vId);
 }
 
 /**
@@ -495,11 +751,9 @@ function reservationSet(villageId, record) {
 function reservationRemove(villageId) {
     const vId = String(villageId);
     delete allyReservationsMemoryCache[vId];
-    return openTwDb().then(db => new Promise(resolve => {
-        const request = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite').objectStore(ALLY_RESERVATIONS_STORE_NAME).delete(vId);
-        request.onsuccess = function () { resolve(); };
-        request.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Reservations] reservationRemove failed for village ' + vId, e));
+    return performIdbWrite(ALLY_RESERVATIONS_STORE_NAME, 'readwrite',
+        store => store.delete(vId),
+        'deleting reservation for village ' + vId);
 }
 
 /**
@@ -517,21 +771,7 @@ function reservationsReplaceAll(nextReservations) {
     Object.keys(allyReservationsMemoryCache).forEach(key => delete allyReservationsMemoryCache[key]);
     Object.assign(allyReservationsMemoryCache, normalized);
 
-    return openTwDb().then(db => new Promise(resolve => {
-        const tx = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readwrite');
-        const store = tx.objectStore(ALLY_RESERVATIONS_STORE_NAME);
-
-        tx.oncomplete = function () { resolve(); };
-        tx.onerror = function () { resolve(); };
-
-        const clearRequest = store.clear();
-        clearRequest.onsuccess = function () {
-            Object.entries(normalized).forEach(([villageId, record]) => {
-                store.put(record, villageId);
-            });
-        };
-        clearRequest.onerror = function () { resolve(); };
-    })).catch(e => console.warn('[TW Reservations] reservationsReplaceAll failed', e));
+    return replaceAllInStore(ALLY_RESERVATIONS_STORE_NAME, normalized, 'replacing reservation data', '[TW Reservations]');
 }
 
 /**
@@ -539,23 +779,8 @@ function reservationsReplaceAll(nextReservations) {
  * @returns {Promise<void>} Resolves even if IndexedDB is unavailable.
  */
 function hydrateReservationsCache() {
-    return openTwDb().then(db => new Promise(resolve => {
-        const store = db.transaction(ALLY_RESERVATIONS_STORE_NAME, 'readonly').objectStore(ALLY_RESERVATIONS_STORE_NAME);
-        const keysRequest = store.getAllKeys();
-        const valuesRequest = store.getAll();
-        let pending = 2;
-        let keys, values;
-        function done() {
-            pending--;
-            if (pending === 0) {
-                Object.keys(allyReservationsMemoryCache).forEach(key => delete allyReservationsMemoryCache[key]);
-                (keys || []).forEach((villageId, index) => { allyReservationsMemoryCache[villageId] = values[index]; });
-                resolve();
-            }
-        }
-        keysRequest.onsuccess = function () { keys = keysRequest.result; done(); };
-        keysRequest.onerror = done;
-        valuesRequest.onsuccess = function () { values = valuesRequest.result; done(); };
-        valuesRequest.onerror = done;
-    })).catch(e => console.warn('[TW Reservations] hydrateReservationsCache failed', e));
+    return hydrateStoreToCache(ALLY_RESERVATIONS_STORE_NAME, '[TW Reservations]', (keys, values) => {
+        Object.keys(allyReservationsMemoryCache).forEach(key => delete allyReservationsMemoryCache[key]);
+        keys.forEach((villageId, index) => { allyReservationsMemoryCache[villageId] = values[index]; });
+    });
 }

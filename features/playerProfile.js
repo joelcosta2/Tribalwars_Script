@@ -19,33 +19,18 @@ var TWSTATS_CACHE_TTL_MS = 45 * 60 * 1000; // 45 minutes
  * @returns {string|null} Full URL, or null if world/market can't be determined.
  */
 function getTWStatsPlayerUrl(playerId) {
-    var world = game_data && game_data.world;
-    var market = (game_data && game_data.market) || (world ? world.replace(/\d+$/, '') : null);
-
-    if (!world || !market) {
-        console.warn('[TW PlayerProfile] Cannot determine world/market from game_data — skipping fetch');
-        return null;
-    }
-
-    return 'https://' + market + '.twstats.com/' + world + '/index.php?page=player&id=' + playerId;
+    const baseUrl = getTWStatsBaseUrl();
+    return baseUrl ? baseUrl + '?page=player&id=' + playerId : null;
 }
 
 /**
  * Builds the TWStats player history URL (daily view) for the current world/market.
- * Mirrors the same market/world detection used by fetchAndCacheBuildingsData() in core_utils.
  * @param {string|number} playerId
  * @returns {string|null} Full URL, or null if world/market can't be determined.
  */
 function getTWStatsPlayerHistoryUrl(playerId) {
-    var world = game_data && game_data.world;
-    var market = (game_data && game_data.market) || (world ? world.replace(/\d+$/, '') : null);
-
-    if (!world || !market) {
-        console.warn('[TW PlayerProfile] Cannot determine world/market from game_data — skipping fetch');
-        return null;
-    }
-
-    return 'https://' + market + '.twstats.com/' + world + '/index.php?page=player&id=' + playerId + '&tab=history&view=daily';
+    const baseUrl = getTWStatsBaseUrl();
+    return baseUrl ? baseUrl + '?page=player&id=' + playerId + '&tab=history&view=daily' : null;
 }
 
 /**
@@ -113,10 +98,17 @@ function renderTWStatsPlayerHistory(historyTableEl, profileUrl, historyPageUrl) 
     if (!wrapper) return;
 
     var existingTable = wrapper.querySelector('table[data-twstats-history]');
+    var existingError = wrapper.querySelector('[data-twstats-history-error]');
     if (existingTable) existingTable.remove();
+    if (existingError) existingError.remove();
 
     if (!historyTableEl) {
-        wrapper.remove(); // nothing to show (e.g. TWStats hasn't indexed this player yet)
+        var errorBox = document.createElement('div');
+        errorBox.className = 'error_box';
+        errorBox.setAttribute('data-twstats-history-error', '1');
+        errorBox.innerHTML = '<div class="content"></div>';
+        errorBox.querySelector('.content').textContent = t('playerProfile.historyUnavailable');
+        wrapper.appendChild(errorBox);
         return;
     }
 
@@ -176,13 +168,21 @@ async function injectPlayerProfileTWStats() {
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var historyTableEl = doc.querySelector('table#history');
 
-        // TODO: change caching to use GM.setValue() instead of localStorage, because os storage max constrains. This will require refactoring the caching logic to be async as well.
-        /* localStorage.setItem(cacheKey, JSON.stringify({
-            timestamp: Date.now(),
-            html: historyTableEl ? historyTableEl.outerHTML : null
-        })); */
+        if (historyTableEl) {
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify({
+                    timestamp: Date.now(),
+                    html: historyTableEl.outerHTML
+                }));
+            } catch (e) {
+                console.warn('[TW PlayerProfile] Failed to cache TWStats data:', e.message);
+            }
+        }
         renderTWStatsPlayerHistory(historyTableEl, profileUrl, historyPageUrl);
     } catch (e) {
         console.warn('[TW PlayerProfile] Failed to fetch TWStats data:', e.message);
+        if (!document.querySelector('#twstats_player_history table[data-twstats-history]')) {
+            renderTWStatsPlayerHistory(null, profileUrl, historyPageUrl);
+        }
     }
 }

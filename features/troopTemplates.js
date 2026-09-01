@@ -18,7 +18,16 @@ function loadCustomTroopTemplates() {
 }
 
 function saveCustomTroopTemplates(templates) {
-	localStorage.setItem(getTroopTemplatesCustomStorageKey(), JSON.stringify(templates || []));
+	localStorage.setItem(getTroopTemplatesCustomStorageKey(), JSON.stringify(normalizeCustomTroopTemplates(templates || [])));
+}
+
+function normalizeCustomTroopTemplates(templates) {
+	var selectedCount = 0;
+	return (templates || []).map(function (template) {
+		var showOnMap = template.showOnMap === true && selectedCount < 2;
+		if (showOnMap) selectedCount++;
+		return Object.assign({}, template, { showOnMap: showOnMap });
+	});
 }
 
 function removeCustomTroopTemplateById(templateId) {
@@ -87,6 +96,7 @@ function createCustomTroopTemplateModel() {
 		id: 'custom_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
 		name: getTroopTemplateFormName(),
 		units: readTroopTemplateFormUnits(),
+		showOnMap: false,
 		updatedAt: Date.now()
 	};
 }
@@ -136,7 +146,8 @@ function renderCustomTroopTemplateList() {
 	if (currentList) currentList.remove();
 
 	var state = getCustomTroopTemplateState();
-	var templates = loadCustomTroopTemplates();
+	var templates = normalizeCustomTroopTemplates(loadCustomTroopTemplates());
+	var selectedCount = templates.filter(function (template) { return template.showOnMap; }).length;
 	var ul = document.createElement('ul');
 	ul.id = 'twpf_custom_template_list';
 	ul.style.marginTop = '8px';
@@ -165,12 +176,41 @@ function renderCustomTroopTemplateList() {
 
 	templates.forEach(function (template) {
 		var li = document.createElement('li');
+		li.style.display = 'flex';
+		li.style.alignItems = 'center';
 		if (state.active && state.selectedTemplateId === template.id) {
 			li.classList.add('selected');
 		}
 
+		var mapCheckbox = document.createElement('input');
+		mapCheckbox.type = 'checkbox';
+		mapCheckbox.checked = template.showOnMap === true;
+		mapCheckbox.title = t('troopTemplates.showOnMap');
+		mapCheckbox.setAttribute('aria-label', t('troopTemplates.showOnMap'));
+		mapCheckbox.disabled = !mapCheckbox.checked && selectedCount >= 2;
+		mapCheckbox.style.marginRight = '4px';
+		mapCheckbox.addEventListener('click', function (event) {
+			event.stopPropagation();
+		});
+		mapCheckbox.addEventListener('change', function (event) {
+			event.stopPropagation();
+			var currentTemplates = normalizeCustomTroopTemplates(loadCustomTroopTemplates());
+			var currentTemplate = currentTemplates.find(function (item) { return item.id === template.id; });
+			if (!currentTemplate) return;
+
+			if (mapCheckbox.checked && currentTemplates.filter(function (item) { return item.showOnMap; }).length >= 2) {
+				mapCheckbox.checked = false;
+				return;
+			}
+
+			currentTemplate.showOnMap = mapCheckbox.checked;
+			saveCustomTroopTemplates(currentTemplates);
+			renderCustomTroopTemplateList();
+		});
+
 		var anchor = document.createElement('a');
 		anchor.href = '#custom_' + template.id;
+		anchor.style.flex = '1';
 		anchor.addEventListener('click', function (event) {
 			event.preventDefault();
 			var localState = getCustomTroopTemplateState();
@@ -195,6 +235,7 @@ function renderCustomTroopTemplateList() {
 
 		anchor.appendChild(deleteImg);
 		anchor.appendChild(document.createTextNode(template.name || t('troopTemplates.unnamedTemplate')));
+		li.appendChild(mapCheckbox);
 		li.appendChild(anchor);
 		ul.appendChild(li);
 	});

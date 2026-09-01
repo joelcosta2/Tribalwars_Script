@@ -13,6 +13,10 @@ Some features reproduce conveniences normally associated with a Premium Account.
 		<td><img src=".github/images/overviewVillages21.png" alt="Overview Villages" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
 		<td><img src=".github/images/mapGroups.png" alt="Custom Map Groups" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
 	</tr>
+	<tr>
+		<td><img src=".github/images/farmAssistant.png" alt="Overview Villages" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+		<td><img src=".github/images/mapCtxButtons.png" alt="Custom Map Groups" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover;"></td>
+	</tr>
 </table>
 
 > **Important:** This project is intended for players **without** an active Premium Account. Some features may not work at all or may have compatibility issues.
@@ -37,20 +41,15 @@ After installation, open the script settings in TribalWars and enable the featur
 ### Navigation and Widgets
 
 <details>
-<summary>Village List</summary>
-
-> Shows all villages in a quick-access widget. The list is refreshed when the cached data is incomplete.
-
-![Village List](.github/images/villageList.png)
-![Village List2](.github/images/villageListPopup.png)
-</details>
-
-<details>
 <summary>Village Navigation</summary>
 
 > Adds previous and next village controls. The `A` and `D` keys can also be used to switch villages.
+> Adds popup village list by groups.
 
 ![Village Navigation Arrows](.github/images/navigationArrows.png)
+
+![Village List](.github/images/villageList.png)
+![Village List2](.github/images/villageListPopup.png)
 </details>
 
 <details>
@@ -72,9 +71,9 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 <details>
-<summary>Notepad Page</summary>
+<summary>Notepad Features</summary>
 
-> Notes for every village can be managed from the notepad page. Notes can be exported and imported as JSON.
+> Notes can be added not only to your own villages, but to any village's profile page, including villages belonging to other players. All notes, for your own and other villages, can be viewed, edited, exported and imported as JSON from the notepad page.
 
 ![Notepad Page](.github/images/extraMemo.png)
 </details>
@@ -95,34 +94,38 @@ After installation, open the script settings in TribalWars and enable the featur
 ![Building Queue](.github/images/extraBuildQueue2.png)
 </details>
 
+<details>
+<summary>Coin Minting</summary>
+
+> Mint coins from any village with a built Academy, from a sidebar quick-link popup. Shows available resources per village and blocks minting when resources are insufficient.
+</details>
+
+<details>
+<summary>Village Groups Widget</summary>
+
+> Shows which Custom Map Groups and manual Overview Villages groups the current village belongs to, from the sidebar. - EXPERIMENTAL, NOT TESTED
+</details>
+
 ### Overview
 
 <details>
 <summary>Visual Building Overview</summary>
 
-> Adds building levels, resource information and queue timers to the overview page.
+> Adds building levels, resource information and queue timers to the overview page. Also supports non visual screen.
 
-![Visual Building Overview](.github/images/overviewExtraInfo.png)
 ![Visual Building Overview Details](.github/images/overviewExtraInfo2.png)
+![Visual Building Overview NonVisual](.github/images/overviewNonPremiumExtraInfo.png)
 </details>
 
 <details>
 <summary>Overview Villages</summary>
 
-> Enhances the all-villages overview with building queues, one troop column per unit type, storage fill times, village notes and quick links.
+> Enhances the all-villages overview with building queues, one troop column per unit type, storage fill times, a trader/market tab, manually assignable village groups, village notes and customizable quick links.
 
 > This view requires at least two villages. Troop values may need a manual refresh and can be temporarily stale.
 
 ![Overview Villages2](.github/images/overviewVillages21.png)
 ![Overview Villages](.github/images/overviewVillages0.png)
-</details>
-
-<details>
-<summary>Storage Timer</summary>
-
-> Hover over the resource bars or storage values to see the estimated time until storage is full.
-
-![Storage Fill Time](.github/images/ressourceFullHover.png)
 </details>
 
 ### Map and Commands
@@ -137,17 +140,18 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 <details>
-<summary>Map Hover Information</summary>
+<summary>Village Hover Information</summary>
 
-> Shows recent attack information, loot, discovered resources, morale and other village details when hovering over the map.
+> Adds extra village information, including recent attacks, loot, discovered resources and morale, when hovering over a village on the map.
 
-![Map Hover Information](.github/images/mapVillageHoverExtraInfo.png)
+![Village Hover Own Information](.github/images/mapHoverOwn.png)
+![Village Hover Information](.github/images/mapVillageHoverExtraInfo.png)
 </details>
 
 <details>
-<summary>Outgoing Commands and Travel Times</summary>
+<summary>Village Outgoing Commands and Travel Times</summary>
 
-> Displays outgoing command icons and calculates travel times for available unit types.
+> Displays outgoing command icons from your selected village and calculates travel times for available unit types.
 
 ![Outgoing Commands](.github/images/outgoingCommands.png)
 </details>
@@ -155,7 +159,7 @@ After installation, open the script settings in TribalWars and enable the featur
 <details>
 <summary>Attack Heatmap</summary>
 
-> Highlights villages according to the frequency and recency of attacks found in stored reports. - NOT WORKING
+> Highlights enemy villages from stored attack reports using one of two modes: Resources shows three levels of discovered resources plus empty or possibly stocked villages, while Time shows attacks from the last 3 days in red, yellow and green bands. Own villages are excluded. Resource thresholds are defined as constants in `features/mapHeatOverlay.js`.
 
 ![Attack Heatmap](.github/images/heatmap.png)
 </details>
@@ -165,8 +169,16 @@ After installation, open the script settings in TribalWars and enable the featur
 
 > Create coloured groups matching village coordinates, players or tribes. Groups are stored per world and player, and the first matching group takes priority.
 
+> The Map Groups action is also available from the native village context menu wherever a village is listed, including reports, reservation lists and notepad links. A quick-add link next to the TWStats link on player, tribe and village profile pages also lets you toggle groups.
+
 ![Custom Map Groups](.github/images/mapGroups.png)
 ![Custom Map Groups2](.github/images/mapGroups2.png)
+</details>
+
+<details>
+<summary>Village Reservations</summary>
+
+> Reserve or release villages from the native village context menu. The action is available on the map and wherever the game displays a village context link, using the reservation planner and local reservation cache.
 </details>
 
 <details>
@@ -178,7 +190,7 @@ After installation, open the script settings in TribalWars and enable the featur
 </details>
 
 <details>
-<summary>Map Quick Action Buttons</summary>
+<summary>Map Context Action Buttons</summary>
 
 > Adds quick action buttons to the map context menu for quick attacks using saved troop templates, quick reservations and quick addition of villages to map groups.
 
@@ -189,6 +201,16 @@ After installation, open the script settings in TribalWars and enable the featur
 <summary>Map SDK</summary>
 
 > The local SDK adaptation is based on the Map SDK by Thomas "Sass" Ameye: https://shinko-to-kuma.com/scripts/mapSdk.js. Thank you to the author for providing the original foundation.
+</details>
+
+<details>
+<summary>Farm Assistant (Local)</summary>
+
+> A free alternative to the Premium Farm Assistant. Navigate to `screen=am_farm_twp` to see a list of previously attacked villages (built entirely from cached attack reports), with one-click troops sending from the current village.
+
+> Only villages that already have a cached attack report are listed — there is no automatic discovery of new targets, and building-target selection for catapults/rams is not supported.
+
+![Farm Assistant](.github/images/farmAssistant.png)
 </details>
 
 ### Reports and Simulator
@@ -267,6 +289,7 @@ After installation, open the script settings in TribalWars and enable the featur
 - The script includes server-timezone handling and is expected to work across different countries and worlds. Some features scrape HTML text, so language or markup changes may cause problems. Please report them so they can be investigated.
 - The custom quick-link source and some anti-bot cache/offline settings are not implemented.
 - The dark-mode module exists in the codebase but is not currently exposed as an active setting.
+- The Farm Assistant (`screen=am_farm_twp`) relies on TribalWars serving its normal page layout for an unrecognised screen name; only targets with an existing cached attack report are shown, and there is no in-page navigation link — the URL must be opened manually.
 
 ## Local Development
 
